@@ -83,6 +83,7 @@ set(LIBS
         ${dialect_libs}
         ${conversion_libs}
         ${Z3_LIBRARIES}
+        Yosys::Yosys
         CIRCTLogicalEquivalence
         CIRCTExportVerilog
         MLIROptLib
@@ -109,7 +110,6 @@ set(LIBS
         CIRCTSystemC
         CIRCTTransforms
         CIRCTSupport
-        yosys
 )
 add_llvm_executable(spechls-opt spechls-opt.cpp)
 

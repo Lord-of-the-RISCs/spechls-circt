@@ -21,7 +21,7 @@ set(LIBS
         ${mlir_dialect_libs}
         ${mlir_conversion_libs}
         ${Z3_LIBRARIES}
-        ${Z3_LIBRARIES}
+        Yosys::Yosys
         CIRCTLogicalEquivalence
         CIRCTExportVerilog
 
@@ -122,7 +122,6 @@ set(LIBS
         MLIRCAPITransforms
         #        MLIRCAPIVector
         MLIRCAPISCF
-        yosys
 )
 
 
