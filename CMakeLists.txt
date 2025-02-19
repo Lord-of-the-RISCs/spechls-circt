@@ -55,6 +55,7 @@ include(AddCIRCT)
 include(HandleLLVMOptions)
 
 include_directories(${LLVM_INCLUDE_DIRS})
+include_directories(${Yosys_INCLUDE_DIRS})
 
 include_directories(${MLIR_INCLUDE_DIRS})
 include_directories(${CIRCT_INCLUDE_DIRS})
