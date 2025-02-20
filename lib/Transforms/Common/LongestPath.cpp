@@ -10,6 +10,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include <cstdio>
 #include <map>
 #include <stack>
 
@@ -19,146 +20,136 @@
 #include "Transforms/Passes.h"
 #include "circt/Dialect/HW/HWOpInterfaces.h"
 #include "circt/Dialect/HW/HWOps.h"
-#include "mlir/Pass/PassManager.h"
 #include "mlir/IR/PatternMatch.h"
 #include "mlir/IR/Verifier.h"
-#include "mlir/Transforms/Passes.h"
+#include "mlir/Pass/PassManager.h"
 #include "mlir/Transforms/DialectConversion.h"
 #include "mlir/Transforms/GreedyPatternRewriteDriver.h"
-
+#include "mlir/Transforms/Passes.h"
 
 using namespace mlir;
 using namespace circt;
 using namespace SpecHLS;
 
-void topologicalSort(Operation * op, std::stack<Value> &stack, DenseMap<Operation *, bool> &visited);
+void topologicalSort(Operation *op, std::stack<Value> &stack,
+                     DenseMap<Operation *, bool> &visited);
 
 namespace SpecHLS {
 
-    struct LongestPathPattern : OpRewritePattern<hw::HWModuleOp>
-    {
+struct LongestPathPattern : OpRewritePattern<hw::HWModuleOp> {
 
-        LongestPathPattern(MLIRContext * ctx) :
-            OpRewritePattern<hw::HWModuleOp>(ctx){}
+  LongestPathPattern(MLIRContext *ctx)
+      : OpRewritePattern<hw::HWModuleOp>(ctx) {}
 
-        LogicalResult matchAndRewrite(hw::HWModuleOp top,
-                                PatternRewriter &rewriter) const override
-        {
-            auto inits = top.getOps<InitOp>();
-            InitOp starting_point;
-            bool find = false;
-            for (InitOp init : inits)
-            {
-                if (hasPragmaContaining(init, "MU_INITAL"))
-                {
-                    starting_point = init;
-                    find = true;
-                    break;
-                }
-            }
-            if (!find)
-            {
-                return failure();
-            }
-            DenseMap<Operation *, int> dists;
-            DenseMap<Operation *, bool> visited;
-            std::stack<Value> stack;
-            for (Operation &op : top.getBody().front().getOperations())
-            {
-                dists[&op] = INT_MIN;
-                visited[&op] = false;
-            }
-            for (Operation &op : top.getBody().front().getOperations())
-            {
-                if (!visited[&op])
-                {
-                    topologicalSort(&op, stack, visited);
-                }
-            }
-            dists[starting_point] = 0;
-            while (!stack.empty())
-            {
-                Value v = stack.top();
-                stack.pop();
-
-                // Get the delay of the Operation
-                int delay = 0;
-                DelayOp delta = v.getDefiningOp<DelayOp>();
-                if (delta)
-                {
-                    delay = delta.getDepth();
-                }
-
-                // Get the attribute
-                Operation * op = v.getDefiningOp();
-                auto dist = dists[op];
-
-                // Check attribute's Value
-                if (dist == INT_MIN)
-                {
-                    continue;
-                }
-            
-                // Save all uses & update all uses' value
-                for (Operation * use : v.getUsers())
-                {
-                    auto use_d = dists[use]; 
-                    if (use_d < (dist + delay))
-                    {
-                        dists[use] = dist + delay;
-                    }
-                }
-            }
-            Operation * output = top.getBody().front().getTerminator();
-            output->setAttr("#dist", rewriter.getI32IntegerAttr(dists[output]));
-            removePragmaAttr(starting_point, "MU_INITAL");
-            return success();
-        }
-
-    };
-
-
-    struct LongestPathPass : public impl::LongestPathPassBase<LongestPathPass>
-    {
-
-        public:
-            void runOnOperation() override
-            {
-                auto *ctx = &getContext();
-
-                RewritePatternSet patterns(ctx);
-                patterns.add<LongestPathPattern>(ctx);
-
-                if (failed(applyPatternsAndFoldGreedily(getOperation(),
-                                std::move(patterns))))
-                {
-                    llvm::errs() << "failed\n";
-                    signalPassFailure();
-                }
-            }
-    };
-
-    std::unique_ptr<OperationPass<ModuleOp>> createLongestPathPass() 
-    {
-        return std::make_unique<LongestPathPass>();
+  LogicalResult matchAndRewrite(hw::HWModuleOp top,
+                                PatternRewriter &rewriter) const override {
+    if (!hasPragmaContaining(top, "TOP")) {
+      return failure();
     }
+    auto inits = top.getOps<InitOp>();
+    InitOp starting_point;
+    bool find = false;
+    for (InitOp init : inits) {
+      if (hasPragmaContaining(init, "MU_INITIAL")) {
+        starting_point = init;
+        find = true;
+        break;
+      }
+    }
+    if (!find) {
+      return failure();
+    }
+    DenseMap<Operation *, int> dists;
+    DenseMap<Operation *, bool> visited;
+    std::stack<Value> stack;
+    for (Operation &op : top.getBody().front().getOperations()) {
+      dists[&op] = INT_MIN;
+      visited[&op] = false;
+    }
+    for (Operation &op : top.getBody().front().getOperations()) {
+      if (!visited[&op]) {
+        topologicalSort(&op, stack, visited);
+      }
+    }
+    dists[starting_point] = 0;
+    while (!stack.empty()) {
+      Value v = stack.top();
+      stack.pop();
+
+      // Get the delay of the Operation
+      int delay = 0;
+      DelayOp delta = v.getDefiningOp<DelayOp>();
+      if (delta) {
+        delay = delta.getDepth();
+      } else {
+        auto unknown = v.getDefiningOp();
+        if (unknown->hasAttr("delay")) {
+          delay = unknown->getAttr("delay").cast<IntegerAttr>().getInt();
+        }
+      }
+
+      // Get the attribute
+      Operation *op = v.getDefiningOp();
+      auto dist = dists[op];
+
+      // Check attribute's Value
+      if (dist == INT_MIN) {
+        continue;
+      }
+
+      // Save all uses & update all uses' value
+      for (Operation *use : v.getUsers()) {
+        auto use_d = dists[use];
+        if (use_d < (dist + delay)) {
+          dists[use] = dist + delay;
+        }
+      }
+    }
+    Operation *output = top.getBody().front().getTerminator();
+    output->setAttr("#dist", rewriter.getI32IntegerAttr(dists[output]));
+    for (Operation &op : top.getBody().front().getOperations()) {
+      op.setAttr("#dist", rewriter.getI32IntegerAttr(dists[&op]));
+      fprintf(stderr, "WCET: %d\n", dists[&op]);
+    }
+    removePragmaAttr(starting_point, "MU_INITAL");
+    removePragmaAttr(top, "TOP");
+    return success();
+  }
+};
+
+struct LongestPathPass : public impl::LongestPathPassBase<LongestPathPass> {
+
+public:
+  void runOnOperation() override {
+    auto *ctx = &getContext();
+
+    RewritePatternSet patterns(ctx);
+    patterns.add<LongestPathPattern>(ctx);
+
+    if (failed(applyPatternsAndFoldGreedily(getOperation(),
+                                            std::move(patterns)))) {
+      llvm::errs() << "failed\n";
+      signalPassFailure();
+    }
+  }
+};
+
+std::unique_ptr<OperationPass<ModuleOp>> createLongestPathPass() {
+  return std::make_unique<LongestPathPass>();
+}
 
 } // namespace SpecHLS
 
+void topologicalSort(Operation *op, std::stack<Value> &stack,
+                     DenseMap<Operation *, bool> &visited) {
+  visited[op] = true;
 
-void topologicalSort(Operation * op, std::stack<Value> &stack, DenseMap<Operation *, bool> &visited)
-{
-    visited[op] = true;
-
-    for ( Operation * use : op->getUsers())
-    {
-        if (!visited[use])
-        {
-            topologicalSort(use, stack, visited);
-        }
+  for (Operation *use : op->getUsers()) {
+    if (!visited[use]) {
+      topologicalSort(use, stack, visited);
     }
-    for (size_t i = 0; i < op->getNumResults(); i++)
-    {
-        stack.push(op->getResult(i));
-    }
+  }
+  for (size_t i = 0; i < op->getNumResults(); i++) {
+    stack.push(op->getResult(i));
+  }
 }
