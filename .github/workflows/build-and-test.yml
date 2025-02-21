@@ -3,8 +3,9 @@ name: Build and test
 on: [push, pull_request]
 
 env:
-  LLVM_COMMIT: 35e4a28f04209a25638a6ab7eea9760d41ea21b8
-  CMAKE_FLAGS: '-DCMAKE_LINKER=lld -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ -DMLIR_DIR=$GITHUB_WORKSPACE/llvm-project/prefix/lib/cmake/mlir/ -DLLVM_DIR=$GITHUB_WORKSPACE/llvm-project/prefix/lib/cmake/llvm/ -DLLVM_EXTERNAL_LIT=$GITHUB_WORKSPACE/llvm-project/build/bin/llvm-lit'
+  YOSYS_COMMIT: e0d2eb90b5377133e28008f31add8988e14ca99f
+  CIRCT_COMMIT: c0270171400f82a3194ca90faf03ff57f3d52e0d
+  CMAKE_FLAGS: '-DYosys_LIBRARY="$GITHUB_WORKSPACE/yosys/libyosys.so" -DYosys_INCLUDE_DIR="$GITHUB_WORKSPACE/yosys" -DMLIR_DIR="$GITHUB_WORKSPACE/circt/llvm/build/lib/cmake/mlir" -DCIRCT_DIR="$GITHUB_WORKSPACE/circt/build/lib/cmake/circt" -DLLVM_EXTERNAL_LIT="$GITHUB_WORKSPACE/circt/llvm/build/bin/llvm-lit" -DLLVM_ENABLE_LLD=ON -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ -DUSE_ALTERNATE_LINKER=mold'
 
 jobs:
   lint:
@@ -26,43 +27,65 @@ jobs:
     steps:
       - name: Configure Environment
         run: |
-          echo "$GITHUB_WORKSPACE/llvm-project/prefix/bin" >> "$GITHUB_PATH"
+          echo "$GITHUB_WORKSPACE/circt/prefix/bin" >> "$GITHUB_PATH"
           pip install --upgrade cmake
-      - name: Get Template Code
-        uses: actions/checkout@v2
+      - name: Get spechls-circt
+        uses: actions/checkout@v4
         with:
-          path: 'mlir-SpecHLS-template'
-      - name: Cache LLVM
-        id: cache-llvm
+          path: 'spechls-circt'
+      - name: Cache Yosys
+        id: cache-yosys
         uses: actions/cache@v2
         with:
-          path: llvm-project
-          key: ${{ runner.os }}-llvm-install-${{ env.LLVM_COMMIT }}
-      - name: Get LLVM
-        if: steps.cache-llvm.outputs.cache-hit != 'true'
-        uses: actions/checkout@v2
+          path: yosys
+          key: ${{ runner.os }}-yosys-install-${{ env.YOSYS_COMMIT }}
+      - name: Get Yosys
+        if: steps.cache-yosys.outputs.cache-hit != 'true'
+        uses: actions/checkout@v4
         with:
-          repository: 'llvm/llvm-project'
-          ref: '${{ env.LLVM_COMMIT }}'
-          path: 'llvm-project'
-      - name: Install LLVM
-        if: steps.cache-llvm.outputs.cache-hit != 'true'
+          repository: 'Lord-of-the-RISCs/yosys'
+          ref: '${{ env.YOSYS_COMMIT }}'
+          path: 'yosys'
+      - name: Build Yosys
+        if: steps.cache-yosys.outputs.cache-hit != 'true'
         run: |
-          mkdir $GITHUB_WORKSPACE/llvm-project/build
-          mkdir $GITHUB_WORKSPACE/llvm-project/prefix
-          cd $GITHUB_WORKSPACE/llvm-project/build
-          cmake $GITHUB_WORKSPACE/llvm-project/llvm -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ -DLLVM_ENABLE_ASSERTIONS=ON -DLLVM_BUILD_EXAMPLES=OFF -DLLVM_TARGETS_TO_BUILD="host" -DCMAKE_INSTALL_PREFIX=$GITHUB_WORKSPACE/llvm-project/prefix -DLLVM_ENABLE_PROJECTS='mlir' -DLLVM_ENABLE_OCAMLDOC=OFF -DLLVM_ENABLE_BINDINGS=OFF -DLLVM_INSTALL_UTILS=ON -DLLVM_ENABLE_LLD=ON
-          cmake --build . --target install -- -j$(nproc)
+          make -C yosys -j$(nproc)
+      - name: Cache CIRCT
+        id: cache-circt
+        uses: actions/cache@v2
+        with:
+          path: circt
+          key: ${{ runner.os }}-circt-install-${{ env.CIRCT_COMMIT }}
+      - name: Get CIRCT
+        if: steps.cache-circt.outputs.cache-hit != 'true'
+        uses: actions/checkout@v4
+        with:
+          repository: 'Lord-of-the-RISCs/circt'
+          ref: '${{ env.CIRCT_COMMIT }}'
+          path: 'circt'
+          submodules: 'recursive'
+      - name: Build CIRCT
+        if: steps.cache-circt.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/circt/prefix"
+          mkdir -p "$GITHUB_WORKSPACE/circt/llvm/build"
+          mkdir -p "$GITHUB_WORKSPACE/circt/build"
+          cd "$GITHUB_WORKSPACE/circt/llvm/build"
+          cmake -G Ninja ../llvm -DLLVM_ENABLE_PROJECTS=mlir -DCMAKE_BUILD_TYPE=Release -DLLVM_ENABLE_ASSERTIONS=ON -DLLVM_BUILD_EXAMPLES=OFF -DLLVM_ENABLE_LLD=ON -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ -DLLVM_ENABLE_EH=ON -DLLVM_ENABLE_RTTI=ON -DLLVM_INSTALL_UTILS=ON -DLLVM_PARALLEL_LINK_JOBS=2 -DCMAKE_INSTALL_PREFIX="$GITHUB_WORKSPACE/circt/prefix" -DLLVM_BUILD_LLVM_DYLIB=ON -DLLVM_ENABLE_OCAMLDOC=OFF -DLLVM_ENABLE_BINDINGS=OFF
+          cmake --build . --target install
+          cd "$GITHUB_WORKSPACE/circt/build"
+          cmake -G Ninja .. -DMLIR_DIR="$GITHUB_WORKSPACE/circt/llvm/build/lib/cmake/mlir" -DLLVM_DIR="$GITHUB_WORKSPACE/circt/llvm/build/lib/cmake/llvm" -DCMAKE_BUILD_TYPE=Release -DLLVM_ENABLE_LLD=ON -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ -DCMAKE_INSTALL_PREFIX="$GITHUB_WORKSPACE/circt/prefix"
+          cmake --build . --target install
       - name: Sanitizer build
         run: |
-          mkdir $GITHUB_WORKSPACE/mlir-SpecHLS-template/sanitizer-build
-          cd $GITHUB_WORKSPACE/mlir-SpecHLS-template/sanitizer-build
-          cmake $GITHUB_WORKSPACE/mlir-SpecHLS-template -DCMAKE_BUILD_TYPE=Debug -DUSE_SANITIZER='Address;Undefined' ${{ env.CMAKE_FLAGS }}
-          cmake --build . --target check-spechls-opt -- -j$(nproc)
+          mkdir -p "$GITHUB_WORKSPACE/spechls-circt/sanitizer-build"
+          cd "$GITHUB_WORKSPACE/spechls-circt/sanitizer-build"
+          cmake -G Ninja .. -DCMAKE_BUILD_TYPE=Debug -DUSE_SANITIZER='Address;Undefined' ${{ env.CMAKE_FLAGS }}
+          cmake --build . --target check-spechls-opt
       - name: Release build
         run: |
-          mkdir $GITHUB_WORKSPACE/mlir-SpecHLS-template/build
-          cd $GITHUB_WORKSPACE/mlir-SpecHLS-template/build
-          cmake $GITHUB_WORKSPACE/mlir-SpecHLS-template -DCMAKE_BUILD_TYPE=Release ${{ env.CMAKE_FLAGS }}
-          cmake --build . --target check-spechls-opt -- -j$(nproc)
+          mkdir -p "$GITHUB_WORKSPACE/spechls-circt/build"
+          cd "$GITHUB_WORKSPACE/spechls-circt/build"
+          cmake -G Ninja .. -DCMAKE_BUILD_TYPE=Release ${{ env.CMAKE_FLAGS }}
+          cmake --build . --target check-spechls-opt
 
