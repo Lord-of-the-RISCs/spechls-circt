@@ -17,8 +17,8 @@ jobs:
       - name: clang-format
         uses: DoozyX/clang-format-lint-action@v0.6
         with:
-          source: '.'
-          extensions: 'h,cpp'
+          source: "."
+          extensions: "h,cpp"
           clangFormatVersion: 9
 
   build:
@@ -63,7 +63,7 @@ jobs:
       - name: Get spechls-circt
         uses: actions/checkout@v4
         with:
-          path: 'spechls-circt'
+          path: "spechls-circt"
       - name: Cache Yosys
         id: cache-yosys
         uses: actions/cache@v4
@@ -74,10 +74,10 @@ jobs:
         if: steps.cache-yosys.outputs.cache-hit != 'true'
         uses: actions/checkout@v4
         with:
-          repository: 'Lord-of-the-RISCs/yosys'
-          ref: '${{ env.YOSYS_COMMIT }}'
-          path: 'yosys'
-          submodules: 'recursive'
+          repository: "Lord-of-the-RISCs/yosys"
+          ref: "${{ env.YOSYS_COMMIT }}"
+          path: "yosys"
+          submodules: "recursive"
       - name: Build Yosys
         if: steps.cache-yosys.outputs.cache-hit != 'true'
         run: |
@@ -92,10 +92,10 @@ jobs:
         if: steps.cache-circt.outputs.cache-hit != 'true'
         uses: actions/checkout@v4
         with:
-          repository: 'Lord-of-the-RISCs/circt'
-          ref: '${{ env.CIRCT_COMMIT }}'
-          path: 'circt'
-          submodules: 'recursive'
+          repository: "Lord-of-the-RISCs/circt"
+          ref: "${{ env.CIRCT_COMMIT }}"
+          path: "circt"
+          submodules: "recursive"
       - name: Build CIRCT
         if: steps.cache-circt.outputs.cache-hit != 'true'
         run: |
