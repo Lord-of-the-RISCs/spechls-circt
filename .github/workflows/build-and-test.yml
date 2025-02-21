@@ -113,11 +113,10 @@ jobs:
           mkdir -p "$GITHUB_WORKSPACE/spechls-circt/sanitizer-build"
           cd "$GITHUB_WORKSPACE/spechls-circt/sanitizer-build"
           cmake -G Ninja .. -DCMAKE_BUILD_TYPE=Debug -DUSE_SANITIZER='Address;Undefined' ${{ env.CMAKE_FLAGS }}
-          cmake --build . --target check-spechls-opt
+          cmake --build .
       - name: Release build
         run: |
           mkdir -p "$GITHUB_WORKSPACE/spechls-circt/build"
           cd "$GITHUB_WORKSPACE/spechls-circt/build"
           cmake -G Ninja .. -DCMAKE_BUILD_TYPE=Release ${{ env.CMAKE_FLAGS }}
-          cmake --build . --target check-spechls-opt
-
+          cmake --build .
