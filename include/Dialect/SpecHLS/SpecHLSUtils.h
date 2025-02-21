@@ -6,16 +6,17 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "mlir/IR/Operation.h"
 #include "circt/Dialect/HW/HWOps.h"
+#include "mlir/IR/Operation.h"
 
 namespace SpecHLS {
 
-  bool isControlLogicOperation(mlir::Operation *op);
-  bool hasControlNodePragma( mlir::Operation *op);
-  bool hasPragmaContaining(mlir::Operation *op, llvm::StringRef keyword);
-  std::string getPragma(mlir::Operation *op) ;
-  bool hasConstantOutputs(circt::hw::HWModuleOp op);
-  void removePragmaAttr(mlir::Operation * op, llvm::StringRef name);
-  void setPragmaAttr(mlir::Operation * op, mlir::StringAttr value);
-}
+bool isControlLogicOperation(mlir::Operation *op);
+bool hasControlNodePragma(mlir::Operation *op);
+bool hasPragmaContaining(mlir::Operation *op, llvm::StringRef keyword);
+std::string getPragma(mlir::Operation *op);
+bool hasConstantOutputs(circt::hw::HWModuleOp op);
+void removePragmaAttr(mlir::Operation *op, llvm::StringRef name);
+void setPragmaAttr(mlir::Operation *op, mlir::StringAttr value);
+
+} // namespace SpecHLS

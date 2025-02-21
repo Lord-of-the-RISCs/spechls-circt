@@ -33,7 +33,8 @@ DominanceInfoBase<IsPostDom>::~DominanceInfoBase() {
     delete entry.second.getPointer();
 }
 
-template <bool IsPostDom> void DominanceInfoBase<IsPostDom>::invalidate() {
+template <bool IsPostDom>
+void DominanceInfoBase<IsPostDom>::invalidate() {
   for (auto entry : dominanceInfos)
     delete entry.second.getPointer();
   dominanceInfos.clear();
@@ -213,7 +214,8 @@ DominanceInfoBase<IsPostDom>::findNearestCommonDominator(Operation *a,
 
 /// Return true if the specified block A properly dominates block B.
 template <bool IsPostDom>
-bool DominanceInfoBase<IsPostDom>::properlyDominates(Operation *a, Operation *b) const {
+bool DominanceInfoBase<IsPostDom>::properlyDominates(Operation *a,
+                                                     Operation *b) const {
   assert(a && b && "null blocks not allowed");
 
   // A block dominates itself but does not properly dominate itself.

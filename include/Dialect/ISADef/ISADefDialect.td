@@ -16,20 +16,20 @@ include "mlir/IR/OpBase.td"
 //===----------------------------------------------------------------------===//
 
 def ISADecl_Dialect : Dialect {
-    let name = "ISADecl";
-    let summary = "A Dialect for defining ISA .";
-    let description = [{
+  let name = "ISADecl";
+  let summary = "A Dialect for defining ISA .";
+  let description = [{
         This dialect is to allow the definition of ISA in MLIR/CIRCT .
     }];
-    let cppNamespace = "ISADecl";
-  }
+  let cppNamespace = "ISADecl";
+}
 
 //===----------------------------------------------------------------------===//
 // Base ISADecl operation definition.
 //===----------------------------------------------------------------------===//
 
 // Base class for the operation in this dialect.
-class ISADeclOp<string mnemonic, list<Trait> traits = []> :
-    Op<ISADecl_Dialect, mnemonic, traits>;
+class ISADeclOp<string mnemonic, list<Trait> traits = []>
+    : Op<ISADecl_Dialect, mnemonic, traits>;
 
 #endif // ISADecl_DIALECT

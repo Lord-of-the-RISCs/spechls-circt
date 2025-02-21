@@ -40,13 +40,15 @@ struct EncoderToCombOpConversion : OpConversionPattern<EncoderOp> {
     return false;
   }
 
-  LogicalResult matchAndRewrite(EncoderOp op, OpAdaptor adaptor, ConversionPatternRewriter &rewriter) const override {
+  LogicalResult
+  matchAndRewrite(EncoderOp op, OpAdaptor adaptor,
+                  ConversionPatternRewriter &rewriter) const override {
 
     uint32_t uiwidth = op.getData().getType().getWidth();
     auto loc = op.getLoc();
     APInt width = APInt(32, uiwidth);
     int bw = width.exactLogBase2();
-    auto resType= op.getResult().getType();
+    auto resType = op.getResult().getType();
 
     auto concatInput = rewriter.create<ConcatOp>(loc, op->getOperands());
 
@@ -59,10 +61,12 @@ struct EncoderToCombOpConversion : OpConversionPattern<EncoderOp> {
       }
       auto content = rewriter.getArrayAttr(ArrayRef(table));
       auto value = concatInput->getResults()[0];
-      auto selBit = rewriter.create<LookUpTableOp>(loc, resType, value, content);
+      auto selBit =
+          rewriter.create<LookUpTableOp>(loc, resType, value, content);
     }
 
-    auto extractBit = rewriter.create<ExtractOp>(loc, op.getData(), 0, width.getZExtValue() / 2);
+    auto extractBit = rewriter.create<ExtractOp>(loc, op.getData(), 0,
+                                                 width.getZExtValue() / 2);
 
     return success();
   }

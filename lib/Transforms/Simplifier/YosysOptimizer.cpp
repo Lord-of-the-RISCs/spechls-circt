@@ -192,7 +192,8 @@ circt::hw::HWModuleOp yosysBackend(MLIRContext *context,
   auto stop = std::chrono::high_resolution_clock::now();
   Yosys::log_streams.push_back(&cellOrder);
   Yosys::run_pass("torder -stop * P*;");
-  Yosys::run_pass("write_verilog " + string(op.getName().str()) + "_yosys.sv ;");
+  Yosys::run_pass("write_verilog " + string(op.getName().str()) +
+                  "_yosys.sv ;");
   Yosys::log_streams.clear();
   auto topologicalOrder = getTopologicalOrder(cellOrder);
   RTLILImporter lutImporter = RTLILImporter(context);

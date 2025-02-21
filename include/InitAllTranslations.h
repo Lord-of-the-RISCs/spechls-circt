@@ -16,14 +16,11 @@
 
 namespace SpecHLS {
 
-
 // This function should be called before creating any MLIRContext if one
 // expects all the possible translations to be made available to the context
 // automatically.
 inline void registerAllTranslations() {
-  static bool initOnce = []() {
-    return true;
-  }();
+  static bool initOnce = []() { return true; }();
   (void)initOnce;
 }
 } // namespace SpecHLS

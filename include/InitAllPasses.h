@@ -22,7 +22,6 @@
 namespace SpecHLS {
 
 inline void registerAllPasses() {
-
   static bool initOnce = []() {
     registerSpecHLSToCombPass();
     registerSpecHLSLUTToComb();
@@ -39,7 +38,7 @@ inline void registerAllPasses() {
     registerSchedulePass();
     registerConfigurationExcluderPass();
     registerExportVitisHLS();
-    //registerGuardLogicAnalyzerPass();
+    // registerGuardLogicAnalyzerPass();
     registerUnrollInstrPass();
     registerLongestPathPass();
     return true;

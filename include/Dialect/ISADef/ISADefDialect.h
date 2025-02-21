@@ -12,4 +12,5 @@
 #include "mlir/IR/Dialect.h"
 
 #include "ISADecl/ISADeclOpsDialect.h.inc"
+
 #endif // ISADecl_ISADeclDIALECT_H

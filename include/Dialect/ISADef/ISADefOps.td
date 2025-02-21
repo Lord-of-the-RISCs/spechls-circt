@@ -21,8 +21,8 @@ include "mlir/Interfaces/SideEffectInterfaces.td"
 include "mlir/IR/AttrTypeBase.td"
 
 def ISADecl_ISAOp : ISADeclOp<"instruction_set"> {
-    let summary = "Defines an instruction set";
-    let description = [{
+  let summary = "Defines an instruction set";
+  let description = [{
         The `ISADecl.instruction_set` defines an instruction set.
 
         ```mlir
@@ -32,17 +32,17 @@ def ISADecl_ISAOp : ISADeclOp<"instruction_set"> {
         }
         ```
     }];
-    let regions = (region AnyRegion<1>:$instructions);
+  let regions = (region AnyRegion<1>:$instructions);
 
-    let arguments = (ins StringAttribute:$name);
-    let results = (outs );
+  let arguments = (ins StringAttribute:$name);
+  let results = (outs);
 
-    let hasCustomAssemblyFormat = 1;
+  let hasCustomAssemblyFormat = 1;
 }
 
 def ISADecl_InsnOp : ISADeclOp<"instruction"> {
-    let summary = "Illustrates how to define an instruction.";
-    let description = [{
+  let summary = "Illustrates how to define an instruction.";
+  let description = [{
         The `ISADecl.instruction` operation defines a machine instruction with its encoding and its operational semantics.
 
         Example:
@@ -59,12 +59,12 @@ def ISADecl_InsnOp : ISADeclOp<"instruction"> {
             }
         ```
     }];
-    let regions = (region SizedRegion<1>:$format, SizedRegion<1>:$opsem);
+  let regions = (region SizedRegion<1>:$format, SizedRegion<1>:$opsem);
 
-    let arguments = (ins StringAttribute:$name, Variadic<AnyType>:$fields);
-    let results = (outs );
+  let arguments = (ins StringAttribute:$name, Variadic<AnyType>:$fields);
+  let results = (outs);
 
-    let hasCustomAssemblyFormat = 1;
+  let hasCustomAssemblyFormat = 1;
 }
 
 #endif // ISADecl_OPS

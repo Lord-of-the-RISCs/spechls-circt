@@ -16,21 +16,21 @@ include "mlir/IR/OpBase.td"
 //===----------------------------------------------------------------------===//
 
 def SpecHLS_Dialect : Dialect {
-    let name = "SpecHLS";
-    let summary = "A Dialect for Speculative HLS.";
-    let description = [{
+  let name = "SpecHLS";
+  let summary = "A Dialect for Speculative HLS.";
+  let description = [{
         This dialect is tu support speculative pipelining in CIRCT .
     }];
-    let cppNamespace = "SpecHLS";
-    let hasConstantMaterializer = 1;
-  }
+  let cppNamespace = "SpecHLS";
+  let hasConstantMaterializer = 1;
+}
 
 //===----------------------------------------------------------------------===//
 // Base SpecHLS operation definition.
 //===----------------------------------------------------------------------===//
 
 // Base class for the operation in this dialect.
-class SpecHLSOp<string mnemonic, list<Trait> traits = []> :
-    Op<SpecHLS_Dialect, mnemonic, traits>;
+class SpecHLSOp<string mnemonic, list<Trait> traits = []>
+    : Op<SpecHLS_Dialect, mnemonic, traits>;
 
 #endif // SpecHLS_DIALECT

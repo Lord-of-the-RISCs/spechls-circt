@@ -10,14 +10,14 @@
 #define SpecHLS_SpecHLSTYPES_H
 
 #include "mlir/Bytecode/BytecodeOpInterface.h"
-#include "mlir/IR/BuiltinTypes.h"
 #include "mlir/IR/Attributes.h"
+#include "mlir/IR/BuiltinTypes.h"
 #include "mlir/IR/Dialect.h"
 #include "mlir/IR/OpDefinition.h"
 #include "mlir/Interfaces/InferTypeOpInterface.h"
 #include "mlir/Interfaces/SideEffectInterfaces.h"
 
-//#define GET_TYPEDEF_CLASSES
-//#include "SpecHLS/SpecHLSOpsTypes.h.inc"
+// #define GET_TYPEDEF_CLASSES
+// #include "SpecHLS/SpecHLSOpsTypes.h.inc"
 
 #endif // SpecHLS_SpecHLSTYPES_H

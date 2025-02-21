@@ -15,10 +15,10 @@
 
 #include "mlir/Pass/Pass.h"
 
+#include "Common/OutliningUtils.h"
 #include "Dialect/SpecHLS/SpecHLSOps.h"
 #include "Dialect/SpecHLS/SpecHLSUtils.h"
 #include "Transforms/Passes.h"
-#include "Common/OutliningUtils.h"
 #include "circt/Dialect/Comb/CombOps.h"
 #include "circt/Dialect/HW/HWAttributes.h"
 #include "circt/Dialect/HW/HWOpInterfaces.h"
@@ -33,8 +33,6 @@
 
 using namespace mlir;
 using namespace circt;
-
-
 
 //===----------------------------------------------------------------------===//
 // StubExternalModules Pass
@@ -75,8 +73,7 @@ void GroupControlNodePass::runOnOperation() {
              * Slices control logic of gamma node
              */
             SetVector<Operation *> slice = {};
-            auto opfilter =
-             [&](Operation *op) {
+            auto opfilter = [&](Operation *op) {
               // llvm::outs() << " default filter  " << *op << "\n";
               bool res =
                   TypeSwitch<Operation *, bool>(op)
@@ -126,23 +123,24 @@ void GroupControlNodePass::runOnOperation() {
               return res;
             };
 
-           if (!opfilter(controlOp)) {
+            if (!opfilter(controlOp)) {
               continue;
-           }
-
+            }
 
             getBackwardSlice(*controlOp, slice, opfilter);
             slice.insert(controlOp);
             // Find the dataflow into the clone set
             SetVector<Value> inputs;
-            getSliceInputs(slice,inputs);
+            getSliceInputs(slice, inputs);
 
             SetVector<Value> outputs;
             for (auto res : controlOp->getResults()) {
               outputs.insert(res);
             }
-            auto newName = topModule.getName() + "_ctrl_" + std::to_string(gammaId);
-            auto newModule = outlineSliceAsHwModule(topModule,*controlOp,slice,inputs,outputs,newName);
+            auto newName =
+                topModule.getName() + "_ctrl_" + std::to_string(gammaId);
+            auto newModule = outlineSliceAsHwModule(
+                topModule, *controlOp, slice, inputs, outputs, newName);
             if (newModule) {
               auto builder = OpBuilder(topModule.getContext());
 
@@ -155,13 +153,13 @@ void GroupControlNodePass::runOnOperation() {
 
               auto inst = builder.create<hw::InstanceOp>(
                   controlOp->getLoc(), newModule,
-                  builder.getStringAttr(newModule.getName()), operands, ArrayAttr());
+                  builder.getStringAttr(newModule.getName()), operands,
+                  ArrayAttr());
 
               gamma.setOperand(0, inst.getResult(0));
 
               newModule->setAttr(builder.getStringAttr("#pragma"),
                                  builder.getStringAttr("CONTROL_NODE"));
-
             }
           }
         }

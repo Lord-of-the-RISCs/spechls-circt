@@ -42,7 +42,7 @@ FirMemType
 HLMemType
  */
 
-static MuOp* findMuSource(Value *value) {
+static MuOp *findMuSource(Value *value) {
   auto defOp = value->getDefiningOp();
   if (defOp) {
     TypeSwitch<Operation *, bool>(defOp)
@@ -142,9 +142,9 @@ AlphaOpToHLWriteConversion::matchAndRewrite(AlphaOp op,
   //  ::mlir::TypeRange resultTypes, ::mlir::ValueRange operands,
   //  ::llvm::ArrayRef<::mlir::NamedAttribute> attributes = {});
   //
-  auto memref =op.getOperand(0);
+  auto memref = op.getOperand(0);
   llvm::outs() << memref << "\n";
-  if (auto mu= findMuSource(&memref)) {
+  if (auto mu = findMuSource(&memref)) {
 
     if (auto hlmem = this->memMap.at(*mu)) {
 
@@ -152,7 +152,6 @@ AlphaOpToHLWriteConversion::matchAndRewrite(AlphaOp op,
 
       auto readop = rewriter.create<circt::seq::ReadPortOp>(
           op.getLoc(), hlmem.getResult(), op.getIndices(), _true, 1u);
-
 
       auto value = op->getResult(0);
       value.replaceAllUsesWith(readop->getResult(0));
@@ -162,7 +161,6 @@ AlphaOpToHLWriteConversion::matchAndRewrite(AlphaOp op,
     }
   }
   return failure();
-
 }
 
 ArrayReadOpToHLReadConversion::ArrayReadOpToHLReadConversion(
@@ -201,7 +199,7 @@ LogicalResult ArrayReadOpToHLReadConversion::matchAndRewrite(
   //  ::mlir::TypeRange resultTypes, ::mlir::ValueRange operands,
   //  ::llvm::ArrayRef<::mlir::NamedAttribute> attributes = {});
   //
-  auto mvalue= op.getMemref();
+  auto mvalue = op.getMemref();
   auto mu = findMuSource(&mvalue);
   auto hlmem = this->memMap.at(*mu);
 
@@ -233,28 +231,29 @@ MuOpToRegConversion::matchAndRewrite(MuOp op, PatternRewriter &rewriter) const {
   auto _false = rewriter.create<circt::hw::ConstantOp>(op.getLoc(),
                                                        rewriter.getI1Type(), 0);
   llvm::errs() << "Associated MuOp :" << op << "\n";
-  if (!clock ) {
+  if (!clock) {
     llvm::errs() << "no registerd clock\n";
     return failure();
   }
 
-
   if (auto memRefType = dyn_cast<MemRefType>(op.getType())) {
 
-//    auto reg = rewriter.create<circt::seq::CompRegOp>(op.getLoc(), op.getNext(),
-//                                                      *clock);
+    //    auto reg = rewriter.create<circt::seq::CompRegOp>(op.getLoc(),
+    //    op.getNext(),
+    //                                                      *clock);
 
-    auto hlMemType = rewriter.getType<seq::HLMemType>(memRefType.getShape(),memRefType.getElementType());
+    auto hlMemType = rewriter.getType<seq::HLMemType>(
+        memRefType.getShape(), memRefType.getElementType());
     auto mem = rewriter.create<circt::seq::HLMemOp>(
         op.getLoc(), hlMemType, *clock, *reset, op.getNameAttr().getValue());
     memMap->insert(std::make_pair(op, mem));
 
     llvm::errs() << "created memory " << mem;
-//    reg->dump();
+    //    reg->dump();
     auto value = op->getResult(0);
     value.replaceAllUsesWith(mem->getResult(0));
     rewriter.replaceOp(op, mem);
-//
+    //
     return success();
 
   } else {

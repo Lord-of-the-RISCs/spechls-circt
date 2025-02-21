@@ -31,7 +31,6 @@ struct ConfigurationExcluderPass
     llvm::DenseMap<mlir::Operation *, llvm::SmallVector<double>>
         startTimeInCycles;
 
-
     for (auto &op : region.getOps()) {
       startTimes.try_emplace(&op, llvm::SmallVector<int>());
       startTimes[&op].reserve(iterationCount);

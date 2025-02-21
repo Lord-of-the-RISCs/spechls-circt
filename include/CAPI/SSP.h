@@ -16,8 +16,7 @@ extern "C" {
 #endif
 
 MLIR_DECLARE_CAPI_DIALECT_REGISTRATION(Scheduling, ssp);
-//MLIR_CAPI_EXPORTED void registerSSPPasses(void);
-
+// MLIR_CAPI_EXPORTED void registerSSPPasses(void);
 
 #ifdef __cplusplus
 }

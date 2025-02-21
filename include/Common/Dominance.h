@@ -19,8 +19,8 @@
 #ifndef MLIR_IR_DOMINANCE_H
 #define MLIR_IR_DOMINANCE_H
 
-  #include "mlir/IR/RegionGraphTraits.h"
-  #include "llvm/Support/GenericDomTree.h"
+#include "mlir/IR/RegionGraphTraits.h"
+#include "llvm/Support/GenericDomTree.h"
 
 extern template class llvm::DominatorTreeBase<mlir::Block, false>;
 extern template class llvm::DominatorTreeBase<mlir::Block, true>;

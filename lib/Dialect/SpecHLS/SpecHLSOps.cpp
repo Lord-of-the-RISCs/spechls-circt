@@ -516,8 +516,8 @@ mlir::ParseResult PrintOp::parse(mlir::OpAsmParser &parser,
       return mlir::failure();
     typeOperands.push_back(dataType);
 
-//    llvm::errs() << "type " << dataType << "\n";
-//    llvm::errs() << nbargs << "\n";
+    //    llvm::errs() << "type " << dataType << "\n";
+    //    llvm::errs() << nbargs << "\n";
     nbargs++;
     if (parser.parseOptionalComma())
       break;
@@ -907,13 +907,14 @@ mlir::ParseResult GecosOp::parse(mlir::OpAsmParser &parser,
 /// The 'OpAsmPrinter' class is a stream that will allows for formatting
 /// strings, attributes, operands, types, etc.
 void GecosOp::print(mlir::OpAsmPrinter &printer) {
-    printer << this->getName() << " ";
-    for (int i = 0; i < this->getOperands().size(); i++) {
-      if (i > 1) printer << ",";
-      auto operand = this->getOperands()[i];
-      printer << operand << ":" << operand.getType();
-    }
-    printer.printOptionalAttrDict(this->getOperation()->getAttrs(),{});
+  printer << this->getName() << " ";
+  for (int i = 0; i < this->getOperands().size(); i++) {
+    if (i > 1)
+      printer << ",";
+    auto operand = this->getOperands()[i];
+    printer << operand << ":" << operand.getType();
+  }
+  printer.printOptionalAttrDict(this->getOperation()->getAttrs(), {});
 }
 
 /// The 'OpAsmPrinter' class is a stream that will allows for formatting
@@ -1032,11 +1033,10 @@ OpFoldResult CastOp::fold(FoldAdaptor adaptor) {
   auto op = getOperation();
 
   if (op->getOperand(0).getType() == op->getResult(0).getType()) {
-    //llvm::errs() << "simplifying " << *op << " into "<< getInput() <<"\n";
+    // llvm::errs() << "simplifying " << *op << " into "<< getInput() <<"\n";
     return getInput();
   } else {
-    //llvm::errs() << "cannot simplify " << *op << "\n";
-
+    // llvm::errs() << "cannot simplify " << *op << "\n";
   }
 
   return {};

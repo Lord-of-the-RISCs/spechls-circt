@@ -10,9 +10,9 @@ using namespace mlir;
 bool CFileContent::save() {
   ofstream oFile;
 
-  llvm::outs() << "Saving C code to " << path+"/"+name+".cpp";
+  llvm::outs() << "Saving C code to " << path + "/" + name + ".cpp";
 
-  oFile.open(path+"/"+name+".cpp");
+  oFile.open(path + "/" + name + ".cpp");
 
   for (auto &i : includes)
     oFile << i << "\n";
@@ -23,19 +23,19 @@ bool CFileContent::save() {
   oFile << "\tbool exit;\n";
 
   oFile << "\t\t // Initialisation update\n\n";
-  oFile << "void init_"<< name << "() {\n";
+  oFile << "void init_" << name << "() {\n";
   for (auto &i : init)
     oFile << "\t" << i << "\n";
   oFile << "} \n";
 
   oFile << "\t\t // Combinational update\n\n";
-  oFile << "void comb_update_"<< name << "() {\n";
+  oFile << "void comb_update_" << name << "() {\n";
   for (auto &c : combUpdate)
     oFile << "\t\t" << c << "\n";
   oFile << "} \n";
 
   oFile << "\t\t // Synchronous update\n\n";
-  oFile << "void sync_update_"<< name << "() {\n";
+  oFile << "void sync_update_" << name << "() {\n";
   for (auto &s : syncUpdate)
     oFile << "\t\t" << s << "\n";
   oFile << "}\n";
@@ -56,9 +56,9 @@ string CFileContent::getOpId(mlir::Operation *p) {
   auto key = op2str(p);
   auto it = opToId.find(key);
   string res = "";
-  if (it==opToId.end()) {
-    res = "op_"+to_string(id);
-    id = id +1;
+  if (it == opToId.end()) {
+    res = "op_" + to_string(id);
+    id = id + 1;
     opToId[key] = res;
   } else {
     res = it->second;
@@ -67,30 +67,30 @@ string CFileContent::getOpId(mlir::Operation *p) {
 }
 
 string CFileContent::getValueId(mlir::Value *p) {
-    //llvm::outs() << "searching for "<<  p<< " : " << *p << "\n";
-    auto key  = op2str(p);
-    auto it = valueToId.find(key);
-    string res = "";
-    if (it==valueToId.end()) {
-      res = "v_"+to_string(vid);
-      vid = vid +1;
-      valueToId[key] = res;
-      //llvm::outs() << "\t-adding "<< res << "->" << *p << "\n";
-    } else {
-      //llvm::outs() << "\t-found "<< it->second << " -> " << (it->first) << "\n";
-      res = it->second;
-    }
-    llvm::outs() << "\t-found "<< res << "\n";
-    return res;
-
-
+  // llvm::outs() << "searching for "<<  p<< " : " << *p << "\n";
+  auto key = op2str(p);
+  auto it = valueToId.find(key);
+  string res = "";
+  if (it == valueToId.end()) {
+    res = "v_" + to_string(vid);
+    vid = vid + 1;
+    valueToId[key] = res;
+    // llvm::outs() << "\t-adding "<< res << "->" << *p << "\n";
+  } else {
+    // llvm::outs() << "\t-found "<< it->second << " -> " << (it->first) <<
+    // "\n";
+    res = it->second;
+  }
+  llvm::outs() << "\t-found " << res << "\n";
+  return res;
 }
 
-void CFileContent::appendIncludesUpdate(string line) { includes.push_back(line);}
-void CFileContent::appendDeclarations(string line) { declarations.push_back(line);}
-void CFileContent::appendCombUpdate(string line) { combUpdate.push_back(line);}
-void CFileContent::appendSyncUpdate(string line) { syncUpdate.push_back(line);}
-void CFileContent::appendInitUpdate(string line) { init.push_back(line);}
-
-
-
+void CFileContent::appendIncludesUpdate(string line) {
+  includes.push_back(line);
+}
+void CFileContent::appendDeclarations(string line) {
+  declarations.push_back(line);
+}
+void CFileContent::appendCombUpdate(string line) { combUpdate.push_back(line); }
+void CFileContent::appendSyncUpdate(string line) { syncUpdate.push_back(line); }
+void CFileContent::appendInitUpdate(string line) { init.push_back(line); }

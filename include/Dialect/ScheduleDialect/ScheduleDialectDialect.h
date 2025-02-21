@@ -12,4 +12,5 @@
 #include "mlir/IR/Dialect.h"
 
 #include "Dialect/ScheduleDialect/ScheduleDialectOpsDialect.h.inc"
+
 #endif // SpecHLS_ScheduleDialectDIALECT_H

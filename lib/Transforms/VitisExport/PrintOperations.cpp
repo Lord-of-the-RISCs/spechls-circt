@@ -97,8 +97,9 @@ void printDelay(CFileContent *p, SpecHLS::DelayOp op) {
   p->appendDeclarations(type2str(op.getType()) + " " + p->getValueId(&res) +
                         ";");
 
-  p->appendDeclarations("spechls::Delay<" + type + "," + to_string(op.getDepth()) +
-                        "> " + p->getOpId(pop) + ";\n");
+  p->appendDeclarations("spechls::Delay<" + type + "," +
+                        to_string(op.getDepth()) + "> " + p->getOpId(pop) +
+                        ";\n");
   p->appendSyncUpdate("// " + op2str(op.getOperation()));
   p->appendSyncUpdate(p->getValueId(&res) + "=" + p->getOpId(pop) +
                       ".pop();\n");
@@ -394,7 +395,6 @@ void printOperation(CFileContent *p, Operation *op) {
       });
 }
 
-
 void printHWModule(CFileContent *p, circt::hw::HWModuleOp hwop) {
 
   auto bodyBlock = hwop.getBodyBlock();
@@ -423,7 +423,6 @@ void printHWModule(CFileContent *p, circt::hw::HWModuleOp hwop) {
   }
   moduleDecl += "};\n\n ";
 
-
   moduleDecl += "struct " + name + "_res " + name + "(";
 
   if (!hwop.getBody().getBlocks().empty()) {
@@ -438,7 +437,6 @@ void printHWModule(CFileContent *p, circt::hw::HWModuleOp hwop) {
   moduleDecl += ");";
 
   p->appendDeclarations(moduleDecl);
-
 
   for (Operation &op : *bodyBlock) {
     llvm::outs() << "\t- print for " << op << "\n";

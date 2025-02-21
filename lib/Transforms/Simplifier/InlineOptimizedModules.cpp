@@ -119,7 +119,8 @@ void InlineOptimizedModulesPass::runOnOperation() {
       if (numUsesLeft == 0)
         continue;
 
-      auto hwmodule = dyn_cast_or_null<HWModuleOp>(node->getModule().getOperation());
+      auto hwmodule =
+          dyn_cast_or_null<HWModuleOp>(node->getModule().getOperation());
       // llvm::outs() << "Analyzing  "<< hwmodule.getName() << "\n";
       if (hwmodule) {
         bool inlining = false;
@@ -141,10 +142,9 @@ void InlineOptimizedModulesPass::runOnOperation() {
             continue;
 
           if (verbose) {
-            llvm::errs() << "Trying to inline instance  "<< inst << "\n";
+            llvm::errs() << "Trying to inline instance  " << inst << "\n";
           }
           bool isLastModuleUse = --numUsesLeft == 0;
-
 
           PrefixingInliner inliner(&getContext(), inst.getInstanceName());
 

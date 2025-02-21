@@ -218,9 +218,9 @@ void GuardLogicAnalyzerPass::runOnOperation() {
             continue;
           }
 
-
           llvm::outs() << "Successors of " << gamma << "\n";
-          for (auto succ : analyzer.getTransitiveSuccessors(gamma->getOperation())) {
+          for (auto succ :
+               analyzer.getTransitiveSuccessors(gamma->getOperation())) {
             llvm::outs() << " - " << *succ << "\n";
           }
 
@@ -228,8 +228,7 @@ void GuardLogicAnalyzerPass::runOnOperation() {
             auto value = gamma->getOperand(pos);
             llvm::outs() << "Predecessors of gamma input " << value << "\n";
             if (auto definingOp = value.getDefiningOp()) {
-              for (auto pred :
-                   analyzer.getTransitivePredecessors(definingOp)) {
+              for (auto pred : analyzer.getTransitivePredecessors(definingOp)) {
                 llvm::outs() << " - " << *pred << "\n";
               }
             }
@@ -237,37 +236,39 @@ void GuardLogicAnalyzerPass::runOnOperation() {
         }
 
         for (auto read : reads) {
-          llvm::SmallVector<mlir::Operation*> lookupTables;
+          llvm::SmallVector<mlir::Operation *> lookupTables;
 
           for (auto gamma : gammas) {
             llvm::SmallVector<int> offsets;
             for (size_t pos = 1; pos < gamma->getNumOperands(); pos++) {
-              if (analyzer.isTransitivePredecessor(gamma->getOperation(),read->getOperation())) {
+              if (analyzer.isTransitivePredecessor(gamma->getOperation(),
+                                                   read->getOperation())) {
                 offsets.push_back(1);
               } else {
                 offsets.push_back(1);
               }
             }
             auto content = builder.getI32ArrayAttr(offsets);
-            auto lut = builder.create<SpecHLS::LookUpTableOp>(gamma->getLoc(),builder.getI1Type(),gamma->getOperand(0),content);
+            auto lut = builder.create<SpecHLS::LookUpTableOp>(
+                gamma->getLoc(), builder.getI1Type(), gamma->getOperand(0),
+                content);
             lookupTables.push_back(lut);
           }
 
-          mlir::Operation* current = builder.create<hw::ConstantOp>(read->getLoc(),builder.getI1Type(),1);
+          mlir::Operation *current = builder.create<hw::ConstantOp>(
+              read->getLoc(), builder.getI1Type(), 1);
           for (auto lut : lookupTables) {
-            current = builder.create<comb::AndOp>(read->getLoc(),builder.getI1Type(),current->getResult(0));
+            current = builder.create<comb::AndOp>(
+                read->getLoc(), builder.getI1Type(), current->getResult(0));
           }
 
-          SetVector<mlir::Operation*> slice;
+          SetVector<mlir::Operation *> slice;
           SetVector<mlir::Value> inputs;
           SetVector<mlir::Value> outputs;
-          auto predModule = outlineSliceAsHwModule(topModule,*current, slice, inputs,outputs, "predicate");
+          auto predModule = outlineSliceAsHwModule(
+              topModule, *current, slice, inputs, outputs, "predicate");
 
           llvm::errs() << predModule;
-
-
-
-
         }
       }
     }
@@ -275,7 +276,6 @@ void GuardLogicAnalyzerPass::runOnOperation() {
   mlir::verify(top, true);
   return;
 }
-
 
 namespace SpecHLS {
 std::unique_ptr<mlir::OperationPass<mlir::ModuleOp>>

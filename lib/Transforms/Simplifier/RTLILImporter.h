@@ -3,14 +3,6 @@
 
 #include <kernel/rtlil.h> // from @at_clifford_yosys
 
-#include "mlir/Dialect/Func/IR/FuncOps.h" // from @llvm-project
-#include "mlir/IR/ImplicitLocOpBuilder.h" // from @llvm-project
-#include "mlir/IR/MLIRContext.h"          // from @llvm-project
-#include "mlir/IR/Operation.h"            // from @llvm-project
-#include "mlir/IR/Value.h"                // from @llvm-project
-#include "mlir/Support/LLVM.h"            // from @llvm-project
-#include "llvm/ADT/MapVector.h"           // from @llvm-project
-#include "llvm/ADT/StringMap.h"           // from @llvm-project
 #include "circt/Dialect/Comb/CombOps.h"
 #include "circt/Dialect/HW/HWAttributes.h"
 #include "circt/Dialect/HW/HWInstanceGraph.h"
@@ -22,6 +14,14 @@
 #include "circt/Dialect/Seq/SeqDialect.h"
 #include "circt/Dialect/Seq/SeqOps.h"
 #include "circt/Support/Namespace.h"
+#include "mlir/Dialect/Func/IR/FuncOps.h" // from @llvm-project
+#include "mlir/IR/ImplicitLocOpBuilder.h" // from @llvm-project
+#include "mlir/IR/MLIRContext.h"          // from @llvm-project
+#include "mlir/IR/Operation.h"            // from @llvm-project
+#include "mlir/IR/Value.h"                // from @llvm-project
+#include "mlir/Support/LLVM.h"            // from @llvm-project
+#include "llvm/ADT/MapVector.h"           // from @llvm-project
+#include "llvm/ADT/StringMap.h"           // from @llvm-project
 
 namespace mlir {
 // namespace heir {
@@ -48,20 +48,21 @@ public:
   // config. cellOrdering is a topologically sorted list of cells that can be
   // used to sequentially create the MLIR representation.
   circt::hw::HWModuleOp
-  importModule(circt::hw::HWModuleOp op, Yosys::RTLIL::Module *module, const llvm::SmallVector<std::string, 10> &cellOrdering);
+  importModule(circt::hw::HWModuleOp op, Yosys::RTLIL::Module *module,
+               const llvm::SmallVector<std::string, 10> &cellOrdering);
 
 protected:
   // cellToOp converts an RTLIL cell to an MLIR operation.
-   mlir::Operation *createOp(Yosys::RTLIL::Cell *cell,
-                                    llvm::SmallVector<mlir::Value, 4> &inputs,
-                                    mlir::ImplicitLocOpBuilder &b) ;
+  mlir::Operation *createOp(Yosys::RTLIL::Cell *cell,
+                            llvm::SmallVector<mlir::Value, 4> &inputs,
+                            mlir::ImplicitLocOpBuilder &b);
 
   // Returns a list of RTLIL cell inputs.
-   llvm::SmallVector<Yosys::RTLIL::SigSpec, 4>
-  getInputs(Yosys::RTLIL::Cell *cell) ;
+  llvm::SmallVector<Yosys::RTLIL::SigSpec, 4>
+  getInputs(Yosys::RTLIL::Cell *cell);
 
   // Returns an RTLIL cell output.
-   Yosys::RTLIL::SigSpec getOutput(Yosys::RTLIL::Cell *cell) ;
+  Yosys::RTLIL::SigSpec getOutput(Yosys::RTLIL::Cell *cell);
 
 private:
   mlir::MLIRContext *context;

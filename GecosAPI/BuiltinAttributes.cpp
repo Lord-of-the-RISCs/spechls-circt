@@ -20,7 +20,7 @@
 #include "SpecHLSGecosUtils.h"
 using namespace mlir;
 
-void error(int i, char* message);
+void error(int i, char *message);
 MlirAttribute mlirAttributeGetNull() { return {nullptr}; }
 
 //===----------------------------------------------------------------------===//
@@ -150,15 +150,13 @@ bool foobar(MlirAttribute attr);
 
 bool mlirAttributeIsAArrayAttr(MlirAttribute attr);
 
-size_t mlirArrayAttrGetSize(MlirAttribute attr) ;
+size_t mlirArrayAttrGetSize(MlirAttribute attr);
 
 Attribute mlirArrayAttrGetAt(MlirAttribute attr, int pos);
 
 #ifdef __cplusplus
 }
 #endif
-
-
 
 bool mlirAttributeIsAArrayAttr(MlirAttribute attr) {
   return llvm::isa<ArrayAttr>(unwrap(attr));
@@ -170,7 +168,7 @@ size_t mlirArrayAttrGetSize(MlirAttribute attr) {
     return arrayAttr.size();
   } else {
 
-    fprintf(stderr,"Attribute is not ArrayAttr %X",unwrap(attr));
+    fprintf(stderr, "Attribute is not ArrayAttr %X", unwrap(attr));
     return -1;
   }
 }
@@ -178,7 +176,7 @@ size_t mlirArrayAttrGetSize(MlirAttribute attr) {
 Attribute mlirArrayAttrGetAt(MlirAttribute attr, int pos) {
   auto arrayAttr = dyn_cast<ArrayAttr>(unwrap(attr));
   if (arrayAttr) {
-    if (pos< mlirArrayAttrGetSize(attr)) {
+    if (pos < mlirArrayAttrGetSize(attr)) {
       return arrayAttr[pos];
     }
   }
@@ -199,31 +197,30 @@ MlirAttribute mlirIntegerAttrGet(MlirType type, int64_t value) {
 
 int64_t mlirIntegerAttrGetValueInt(MlirAttribute attr) {
   auto intAttr = dyn_cast<IntegerAttr>(unwrap(attr));
-  if (intAttr!=NULL) {
+  if (intAttr != NULL) {
     return intAttr.getInt();
   } else {
-   // error(10, "Error in mlirIntegerAttrGetValueInt : \n");
+    // error(10, "Error in mlirIntegerAttrGetValueInt : \n");
     return -1;
   }
 }
 
 int64_t mlirIntegerAttrGetValueSInt(MlirAttribute attr) {
   auto intAttr = dyn_cast<IntegerAttr>(unwrap(attr));
-  if (intAttr!=NULL) {
+  if (intAttr != NULL) {
     if (intAttr.getType().isSignedInteger()) {
       return intAttr.getAPSInt().getSExtValue();
     } else {
       return intAttr.getInt();
     }
   } else {
-    //error(10, "Error in mlirIntegerAttrGetValueSInt : \n");
+    // error(10, "Error in mlirIntegerAttrGetValueSInt : \n");
   }
-
 }
 
 uint64_t mlirIntegerAttrGetValueUInt(MlirAttribute attr) {
   auto intAttr = dyn_cast<IntegerAttr>(unwrap(attr));
-  if (intAttr!=NULL) {
+  if (intAttr != NULL) {
     auto apint = intAttr.getAPSInt().getZExtValue();
   } else {
     fprintf(stderr, "Error in mlirIntegerAttrGetValueSInt\n");
@@ -513,14 +510,13 @@ MlirAttribute mlirDenseF64ArrayGet(MlirContext ctx, intptr_t size,
 
 intptr_t mlirDenseArrayGetNumElements(MlirAttribute attr) {
   auto denseArray = dyn_cast<DenseArrayAttr>(unwrap(attr));
-  if (denseArray!=NULL) {
+  if (denseArray != NULL) {
     return llvm::cast<DenseArrayAttr>(unwrap(attr)).size();
   } else {
     llvm::errs() << attr.ptr << " is not DenseArray \n";
     return -1;
   }
 }
-
 
 //===----------------------------------------------------------------------===//
 // Indexed accessors.

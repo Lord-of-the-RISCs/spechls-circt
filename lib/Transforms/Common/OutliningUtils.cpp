@@ -206,7 +206,7 @@ hw::HWModuleOp outlineSliceAsHwModule(hw::HWModuleOp op, Operation &root,
 
   for (auto port : enumerate(outputs)) {
     auto newVal = cutMap.getValueMap().at(port.value());
-    outputOp->insertOperands(port.index(),newVal);
+    outputOp->insertOperands(port.index(), newVal);
   }
 
   mlir::verify(newModule, true);

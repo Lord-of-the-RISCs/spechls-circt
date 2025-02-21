@@ -47,8 +47,7 @@ using namespace circt::hw;
 
 namespace SpecHLS {
 
-struct ExportElkPass
-    : public impl::ExportVitisHLSBase<ExportElkPass> {
+struct ExportElkPass : public impl::ExportVitisHLSBase<ExportElkPass> {
 
 public:
   void runOnOperation() {
@@ -60,18 +59,19 @@ public:
 
     for (auto hwop : module.getOps<circt::hw::HWModuleOp>()) {
       auto moduleName = hwop.getNameAttr().str();
-      for (Operation* op : hwop.getBodyBlock()->getOperations()) {
+      for (Operation *op : hwop.getBodyBlock()->getOperations()) {
 
-         llvm::outs() <<  "node "<< op.getName() << " {\n"                            ;
-         for (auto arg : op.getOperands()) {
-           llvm::outs() <<  "    port " << arg.getName() << " { ^port.side: WEST }\n"            ;
-         }
-         llvm::outs() <<  "    node n1 {\n"                               ;
-         llvm::outs() <<  "        portConstraints: FIXED_SIDE\n"         ;
-         llvm::outs() <<  "        port p1 { ^port.side: WEST }\n"        ;
-         llvm::outs() <<  "        port p2 { ^port.side: EAST }\n"        ;
-         llvm::outs() <<  "    }\n"                                       ;
-         llvm::outs() <<  "}"                                             ;
+        llvm::outs() << "node " << op.getName() << " {\n";
+        for (auto arg : op.getOperands()) {
+          llvm::outs() << "    port " << arg.getName()
+                       << " { ^port.side: WEST }\n";
+        }
+        llvm::outs() << "    node n1 {\n";
+        llvm::outs() << "        portConstraints: FIXED_SIDE\n";
+        llvm::outs() << "        port p1 { ^port.side: WEST }\n";
+        llvm::outs() << "        port p2 { ^port.side: EAST }\n";
+        llvm::outs() << "    }\n";
+        llvm::outs() << "}";
       }
     }
   }

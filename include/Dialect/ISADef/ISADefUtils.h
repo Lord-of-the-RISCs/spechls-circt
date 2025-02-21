@@ -9,4 +9,5 @@
 namespace ISADecl {
 
 int getBitWidth(int value);
+
 }

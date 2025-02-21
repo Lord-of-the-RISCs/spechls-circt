@@ -1,13 +1,14 @@
-//===- EliminateRedundantGammaInputs.cpp - Arith-to-comb mapping pass -*- C++ -*-===//
-//  
+//===- EliminateRedundantGammaInputs.cpp - Arith-to-comb mapping pass -*- C++
+//-*-===//
+//
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
-//  
+//
 //===----------------------------------------------------------------------------===//
-//  
+//
 // Contains the definitions of the EliminateRedundantGammaInputs pass.
-//  
+//
 //===----------------------------------------------------------------------------===//
 
 #include "Dialect/SpecHLS/SpecHLSDialect.h"
@@ -27,8 +28,7 @@ using namespace mlir;
 using namespace circt;
 using namespace SpecHLS;
 
-namespace SpecHLS 
-{
+namespace SpecHLS {
 
 struct EliminateRedundantGammaInputs : OpRewritePattern<GammaOp> {
   using OpRewritePattern<GammaOp>::OpRewritePattern;
@@ -83,24 +83,21 @@ private:
                         [&](const auto &item) { return (k == item); })) {
         outerLutContent.push_back(firstMatchIndex);
       } else {
-        if (pos == firstMatchIndex)
-        {
+        if (pos == firstMatchIndex) {
           pos++;
         }
         outerLutContent.push_back(pos++);
       }
     }
-    for (size_t k = nbInputs; k < outerLutSize; k++)
-    {
+    for (size_t k = nbInputs; k < outerLutSize; k++) {
       outerLutContent.push_back(pos);
     }
 
-    if (verbose)
-    {
+    if (verbose) {
       llvm::outs() << "Outer gamma " << op << " reindexing  \n";
       for (int k = 0; k < nbInputs; k++) {
         llvm::outs() << " - input " << k << " reindexed to "
-          << outerLutContent[k] << " \n";
+                     << outerLutContent[k] << " \n";
       }
     }
 
@@ -155,7 +152,6 @@ public:
   }
 };
 
-
 struct EliminateRedundantGammaInputsPass
     : public impl::EliminateRedundantGammaInputsPassBase<
           EliminateRedundantGammaInputsPass> {
@@ -165,7 +161,7 @@ public:
 
     RewritePatternSet patterns(ctx);
 
-//    patterns.insert<FactorGammaInputsPattern>(ctx);
+    //    patterns.insert<FactorGammaInputsPattern>(ctx);
     patterns.insert<EliminateRedundantGammaInputs>(ctx);
 
     if (failed(applyPatternsAndFoldGreedily(getOperation(),

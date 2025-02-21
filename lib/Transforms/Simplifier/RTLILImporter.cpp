@@ -106,7 +106,7 @@ RTLILImporter::createOp(Yosys::RTLIL::Cell *cell,
     } else if (type == "$_XOR_") {
       return b.create<circt::comb::XorOp>(b.getIntegerType(1), inputs);
     } else if (type == "$_NOT_") {
-        auto allOnes = b.create<circt::hw::ConstantOp>(b.getIntegerType(1), -1);
+      auto allOnes = b.create<circt::hw::ConstantOp>(b.getIntegerType(1), -1);
       llvm::SmallVector<circt::Value> args = {inputs[0], allOnes};
       return b.create<circt::comb::XorOp>(b.getIntegerType(1), args);
     } else if (type == "$and") {

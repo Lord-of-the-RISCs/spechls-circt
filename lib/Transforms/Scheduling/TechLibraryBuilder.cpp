@@ -10,7 +10,8 @@
 
 namespace SpecHLS {
 
-struct TechLibraryBuilderPass : public impl::TechLibraryBuilderPassBase<TechLibraryBuilderPass> {
+struct TechLibraryBuilderPass
+    : public impl::TechLibraryBuilderPassBase<TechLibraryBuilderPass> {
   void runOnOperation() override {
     auto moduleOp = getOperation();
     float period;
@@ -25,7 +26,8 @@ struct TechLibraryBuilderPass : public impl::TechLibraryBuilderPassBase<TechLibr
       }
     }
     mlir::OpPassManager dynamicPM("builtin.module");
-    std::unique_ptr<mlir::Pass> pass = circt::ssp::createTechLibraryBuilderPass();
+    std::unique_ptr<mlir::Pass> pass =
+        circt::ssp::createTechLibraryBuilderPass();
     auto optionsResults =
         pass->initializeOptions("options=cycle-time=" + std::to_string(period));
     if (failed(optionsResults)) {

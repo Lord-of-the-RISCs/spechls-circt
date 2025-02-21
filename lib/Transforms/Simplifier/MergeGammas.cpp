@@ -52,17 +52,17 @@ struct GammaMergingPattern : OpRewritePattern<GammaOp> {
           Operation::operand_range in = innerGamma.getInputs();
           SmallVector<Value, 8> muxOperands;
 
-          /* The pass first collects both inner and outer gamma operands and store
-           * them into the muxOperands vector*/
+          /* The pass first collects both inner and outer gamma operands and
+           * store them into the muxOperands vector*/
 
           for (int pos = 0; pos < i; pos++) {
-              muxOperands.push_back(outerGamma.getInputs()[pos]);
+            muxOperands.push_back(outerGamma.getInputs()[pos]);
           }
           for (int pos = 0; pos < nbInnerInputs; pos++) {
             muxOperands.push_back(innerGamma.getInputs()[pos]);
           }
           for (int pos = i + 1; pos < nbOuterInputs; pos++) {
-              muxOperands.push_back(outerGamma.getInputs()[pos]);
+            muxOperands.push_back(outerGamma.getInputs()[pos]);
           }
 
           auto outerGammaSelType = outerGamma.getSelect().getType();
@@ -72,16 +72,24 @@ struct GammaMergingPattern : OpRewritePattern<GammaOp> {
               outerGammaSelType.getIntOrFloatBitWidth() +
               innerGammaSelType.getIntOrFloatBitWidth());
 
-          /* Cast select inputs into standard integers (in case they are unisgned) */
-          auto castLeft = rewriter.create<SpecHLS::CastOp>(outerGamma.getLoc(),rewriter.getIntegerType(outerGammaSelType.getIntOrFloatBitWidth()), outerGamma.getSelect());
-          auto castRight = rewriter.create<SpecHLS::CastOp>(innerGamma.getLoc(),rewriter.getIntegerType(innerGammaSelType.getIntOrFloatBitWidth()),innerGamma.getSelect());
+          /* Cast select inputs into standard integers (in case they are
+           * unisgned) */
+          auto castLeft = rewriter.create<SpecHLS::CastOp>(
+              outerGamma.getLoc(),
+              rewriter.getIntegerType(
+                  outerGammaSelType.getIntOrFloatBitWidth()),
+              outerGamma.getSelect());
+          auto castRight = rewriter.create<SpecHLS::CastOp>(
+              innerGamma.getLoc(),
+              rewriter.getIntegerType(
+                  innerGammaSelType.getIntOrFloatBitWidth()),
+              innerGamma.getSelect());
 
-
-          /* Create merged select command from inner and  outer gamma select inputs */
+          /* Create merged select command from inner and  outer gamma select
+           * inputs */
           auto concatOp = rewriter.create<comb::ConcatOp>(
               outerGamma.getLoc(), controlType,
               ValueRange({castLeft, castRight}));
-
 
           ArrayAttr tab;
           SmallVector<int, 1024> content;
@@ -101,57 +109,61 @@ struct GammaMergingPattern : OpRewritePattern<GammaOp> {
 
           for (int o = 0; o < i; o++) {
             for (int inner = 0; inner < innerPow2Inputs; inner++) {
-              if (verbose) 
-                  llvm::errs() << "rewiring outer " << o << " to " << offset << " at " << content.size() << "\n";
+              if (verbose)
+                llvm::errs() << "rewiring outer " << o << " to " << offset
+                             << " at " << content.size() << "\n";
               content.push_back(offset);
             }
-            //if (o < outerUB)
+            // if (o < outerUB)
             offset++;
           }
 
           for (int inner = 0; inner < innerPow2Inputs; inner++) {
-            if (verbose) 
-                llvm::errs() << "rewiring inner " << inner << " to " << offset << " at " << content.size() << "\n";
+            if (verbose)
+              llvm::errs() << "rewiring inner " << inner << " to " << offset
+                           << " at " << content.size() << "\n";
             content.push_back(offset);
-            //if (inner < innerUB)
+            // if (inner < innerUB)
             offset++;
           }
 
           for (int o = i + 1; o < outerPow2Inputs; o++) {
             for (int inner = 0; inner < innerPow2Inputs; inner++) {
-              if (verbose) 
-                  llvm::errs() << "rewiring outer " << o << " to " << offset << " at " << content.size() << "\n";
+              if (verbose)
+                llvm::errs() << "rewiring outer " << o << " to " << offset
+                             << " at " << content.size() << "\n";
               content.push_back(offset);
             }
-            //if (o < outerUB)
+            // if (o < outerUB)
             offset++;
           }
 
-
           int lutWidth = APInt(32, content.size() - 1).getActiveBits();
-          if (verbose) 
-              llvm::errs() << "LUT content size " << content.size() << " -> address width " << lutWidth << "\n";
+          if (verbose)
+            llvm::errs() << "LUT content size " << content.size()
+                         << " -> address width " << lutWidth << "\n";
 
-          for (int o = content.size(); o < (1<<lutWidth); o++) {
+          for (int o = content.size(); o < (1 << lutWidth); o++) {
             if (verbose)
-                llvm::errs() << "padding lut content at " << content.size() << "with"  << offset << "\n";
+              llvm::errs() << "padding lut content at " << content.size()
+                           << "with" << offset << "\n";
             content.push_back(offset);
           }
 
-
           mlir::Type lutType = rewriter.getIntegerType(lutWidth);
-
 
           auto lutSelect = rewriter.create<LookUpTableOp>(
               outerGamma.getLoc(), lutType, concatOp.getResult(),
               rewriter.getI32ArrayAttr(content));
 
           auto newGammaOp = rewriter.create<GammaOp>(
-              outerGamma.getLoc(), outerGamma.getResult().getType(), outerGamma.getNameAttr(),
-              lutSelect.getResult(), ValueRange(muxOperands));
+              outerGamma.getLoc(), outerGamma.getResult().getType(),
+              outerGamma.getNameAttr(), lutSelect.getResult(),
+              ValueRange(muxOperands));
 
-          if (verbose) llvm::errs() << "Merging " << innerGamma << " with " << outerGamma << " into "
-                       << newGammaOp << "\n";
+          if (verbose)
+            llvm::errs() << "Merging " << innerGamma << " with " << outerGamma
+                         << " into " << newGammaOp << "\n";
 
           auto parent = outerGamma->getParentOp();
           rewriter.replaceOp(outerGamma, newGammaOp);

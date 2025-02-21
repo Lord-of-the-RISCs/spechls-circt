@@ -48,14 +48,14 @@ void ConvertSpecHLSToSeqPass::runOnOperation() {
   if (!clock) {
     auto clkType = builder.getType<circt::seq::ClockType>();
 
-    hwmodule.insertInput(0,"en",builder.getI1Type());
-    hwmodule.insertInput(0,"clk",clkType);
+    hwmodule.insertInput(0, "en", builder.getI1Type());
+    hwmodule.insertInput(0, "clk", clkType);
 
     clock = &hwmodule.getBody().getArguments()[0]; // assume single clock signal
     reset = &hwmodule.getBody().getArguments()[1]; // assume single clock signal
   }
 
-  DelayOpToShiftRegOpConversion pat(&getContext(),clock,reset);
+  DelayOpToShiftRegOpConversion pat(&getContext(), clock, reset);
 
   llvm::DenseMap<MuOp, circt::seq::HLMemOp> memMap;
 
@@ -67,16 +67,14 @@ void ConvertSpecHLSToSeqPass::runOnOperation() {
   }
   llvm::errs() << "There\n";
 
-
   mlir::RewritePatternSet patterns2(&getContext());
-
 
   DelayOpToShiftRegOpConversion d2s(&getContext(), clock, reset);
   AlphaOpToHLWriteConversion a2w(&getContext(), clock, reset, memMap);
   ArrayReadOpToHLReadConversion a2r(&getContext(), clock, reset, memMap);
   llvm::errs() << "Here\n";
-//
-//
+  //
+  //
   patterns2.add(std::make_unique<DelayOpToShiftRegOpConversion>(d2s));
   patterns2.add(std::make_unique<AlphaOpToHLWriteConversion>(a2w));
   patterns2.add(std::make_unique<ArrayReadOpToHLReadConversion>(a2r));

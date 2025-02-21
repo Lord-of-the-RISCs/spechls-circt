@@ -42,7 +42,6 @@ ArrayRefParameter<"int64_t">:$nbPendingWrites,
 //  $maxPendingWrites, $maxPendingAddresses `}`";
 
 mlir::Type SpecArrayType::parse(mlir::AsmParser &parser) {
-
   int64_t size;
   Type baseType;
   int64_t nbDiscardedWrites;
@@ -95,7 +94,6 @@ ArrayRefParameter<"int64_t">:$nbPendingWrites,
 // The 'OpAsmPrinter' class is a stream that will allows for formatting
 /// strings, attributes, operands, types, etc.
 void SpecArrayType::print(mlir::AsmPrinter &printer) const {
-
   printer << "<" << getSize() << "x" << getElementType() << ">";
 
   printer << "{" << (getNbDiscardedWrites());

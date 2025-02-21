@@ -26,7 +26,9 @@ def MergeGammasPass : Pass<"merge-gammas"> {
 
   }];
   let constructor = "SpecHLS::createMergeGammasPass()";
-  let dependentDialects = ["circt::hw::HWDialect, mlir::arith::ArithDialect, circt::comb::CombDialect,circt::seq::SeqDialect,SpecHLS::SpecHLSDialect"];
+  let dependentDialects = ["circt::hw::HWDialect, mlir::arith::ArithDialect, "
+                           "circt::comb::CombDialect,circt::seq::SeqDialect,"
+                           "SpecHLS::SpecHLSDialect"];
 }
 
 def AutoPipelinePass : Pass<"auto-pipeline"> {
@@ -36,11 +38,14 @@ def AutoPipelinePass : Pass<"auto-pipeline"> {
 
   }];
   let constructor = "SpecHLS::createAutoPipelinePass()";
-  let dependentDialects = ["circt::ssp::SSPDialect","circt::hw::HWDialect, mlir::arith::ArithDialect, circt::comb::CombDialect,circt::seq::SeqDialect,SpecHLS::SpecHLSDialect"];
+  let dependentDialects = ["circt::ssp::SSPDialect",
+                           "circt::hw::HWDialect, mlir::arith::ArithDialect, "
+                           "circt::comb::CombDialect,circt::seq::SeqDialect,"
+                           "SpecHLS::SpecHLSDialect"];
 }
 
-
-def EliminateRedundantGammaInputsPass : Pass<"eliminate-redundant-gamma-inputs"> {
+def EliminateRedundantGammaInputsPass
+    : Pass<"eliminate-redundant-gamma-inputs"> {
   let summary = "Simplify Gamma ops which have multiple identical inputs";
 
   let description = [{
@@ -55,16 +60,19 @@ def EliminateRedundantGammaInputsPass : Pass<"eliminate-redundant-gamma-inputs">
 
    }];
   let constructor = "SpecHLS::createEliminateRedundantGammaInputsPass()";
-  let dependentDialects = ["circt::hw::HWDialect, mlir::arith::ArithDialect, circt::comb::CombDialect,circt::seq::SeqDialect,SpecHLS::SpecHLSDialect"];
+  let dependentDialects = ["circt::hw::HWDialect, mlir::arith::ArithDialect, "
+                           "circt::comb::CombDialect,circt::seq::SeqDialect,"
+                           "SpecHLS::SpecHLSDialect"];
 }
 
 def FactorGammaInputsPass : Pass<"factor-gamma-inputs"> {
   let summary = "Merge connected gamma ops";
   let description = [{ }];
   let constructor = "SpecHLS::createFactorGammaInputsPass()";
-  let dependentDialects = ["circt::hw::HWDialect, mlir::arith::ArithDialect, circt::comb::CombDialect,circt::seq::SeqDialect,SpecHLS::SpecHLSDialect"];
+  let dependentDialects = ["circt::hw::HWDialect, mlir::arith::ArithDialect, "
+                           "circt::comb::CombDialect,circt::seq::SeqDialect,"
+                           "SpecHLS::SpecHLSDialect"];
 }
-
 
 def MergeLookUpTablesPass : Pass<"merge-luts"> {
   let summary = "Merge connected LUTs ops";
@@ -73,66 +81,68 @@ def MergeLookUpTablesPass : Pass<"merge-luts"> {
 
   }];
   let constructor = "SpecHLS::createMergeLookUpTablesPass()";
-  let dependentDialects = ["circt::hw::HWDialect, mlir::arith::ArithDialect, circt::comb::CombDialect,circt::seq::SeqDialect,SpecHLS::SpecHLSDialect"];
+  let dependentDialects = ["circt::hw::HWDialect, mlir::arith::ArithDialect, "
+                           "circt::comb::CombDialect,circt::seq::SeqDialect,"
+                           "SpecHLS::SpecHLSDialect"];
 }
 
-
-
-def GroupControlNodePass : Pass<"group-control","mlir::ModuleOp"> {
+def GroupControlNodePass : Pass<"group-control", "mlir::ModuleOp"> {
   let summary = "";
   let description = [{
     statement.
   }];
   let constructor = "SpecHLS::createGroupControlNodePass()";
-  let dependentDialects = ["circt::hw::HWDialect, mlir::arith::ArithDialect, circt::comb::CombDialect,circt::seq::SeqDialect,SpecHLS::SpecHLSDialect"];
-/*  let options = [
-    Option<"disableInstanceExtraction", "disable-instance-extraction", "bool",
-           "false", "Disable extracting instances only that feed test code">,
-    Option<"disableRegisterExtraction", "disable-register-extraction", "bool",
-           "false", "Disable extracting registers only that feed test code">,
-    Option<"disableModuleInlining", "disable-module-inlining", "bool",
-           "false", "Disable inlining modules that only feed test code">
-  ];*/
-  let statistics = [
-    Statistic<"numOpsExtracted", "num-ops-extracted", "Number of ops extracted">,
-    Statistic<"numOpsErased", "num-ops-erased", "Number of ops erased">
-  ];
+  let dependentDialects = ["circt::hw::HWDialect, mlir::arith::ArithDialect, "
+                           "circt::comb::CombDialect,circt::seq::SeqDialect,"
+                           "SpecHLS::SpecHLSDialect"];
+  /*  let options = [
+      Option<"disableInstanceExtraction", "disable-instance-extraction", "bool",
+             "false", "Disable extracting instances only that feed test code">,
+      Option<"disableRegisterExtraction", "disable-register-extraction", "bool",
+             "false", "Disable extracting registers only that feed test code">,
+      Option<"disableModuleInlining", "disable-module-inlining", "bool",
+             "false", "Disable inlining modules that only feed test code">
+    ];*/
+  let statistics = [Statistic<"numOpsExtracted", "num-ops-extracted",
+                              "Number of ops extracted">,
+                    Statistic<"numOpsErased", "num-ops-erased",
+                              "Number of ops erased">];
 }
 
-
-def GuardLogicAnalyzerPass : Pass<"guard-analyzer","mlir::ModuleOp"> {
+def GuardLogicAnalyzerPass : Pass<"guard-analyzer", "mlir::ModuleOp"> {
   let summary = "";
   let description = [{}];
   let constructor = "SpecHLS::createGuardLogicAnalyzerPass()";
-  let dependentDialects = ["circt::hw::HWDialect, mlir::arith::ArithDialect, circt::comb::CombDialect,circt::seq::SeqDialect,SpecHLS::SpecHLSDialect"];
+  let dependentDialects = ["circt::hw::HWDialect, mlir::arith::ArithDialect, "
+                           "circt::comb::CombDialect,circt::seq::SeqDialect,"
+                           "SpecHLS::SpecHLSDialect"];
 }
 
-
-
-def YosysOptimizer : Pass<"yosys-optimizer","mlir::ModuleOp"> {
+def YosysOptimizer : Pass<"yosys-optimizer", "mlir::ModuleOp"> {
   let summary = "Invoke Yosys to perform circuit optimization.";
 
   let constructor = "SpecHLS::createYosysOptimizerPass()";
 
-
-  let options = [
-    Option<"replace", "replace-with-optimized-module", "bool",
-           "false", "Disable inlining modules that only feed test code">,
-    Option<"abc", "use-abc", "bool",
-           "false", "Enable ABC synthesis">
-  ];
+  let options =
+      [Option<"replace", "replace-with-optimized-module", "bool", "false",
+              "Disable inlining modules that only feed test code">,
+       Option<"abc", "use-abc", "bool", "false", "Enable ABC synthesis">];
 
   let description = [{ }];
 
-   let dependentDialects = ["circt::hw::HWDialect, circt::sv::SVDialect,SpecHLS::SpecHLSDialect, mlir::arith::ArithDialect, circt::comb::CombDialect,circt::seq::SeqDialect"];
-
+  let dependentDialects =
+      ["circt::hw::HWDialect, circt::sv::SVDialect,SpecHLS::SpecHLSDialect, "
+       "mlir::arith::ArithDialect, "
+       "circt::comb::CombDialect,circt::seq::SeqDialect"];
 }
 /*
 def ControlOptimizer : Pass<"control-optimizer","circt::hw::HWModuleOp"> {
   let summary = "Invoke Yosys to perform circuit optimization.";
   let constructor = "SpecHLS::createControlOptimizer()";
   let description = [{ }];
-  let dependentDialects = ["circt::hw::HWDialect, circt::sv::SVDialect,SpecHLS::SpecHLSDialect, mlir::arith::ArithDialect, circt::comb::CombDialect,circt::seq::SeqDialect"];
+  let dependentDialects = ["circt::hw::HWDialect,
+circt::sv::SVDialect,SpecHLS::SpecHLSDialect, mlir::arith::ArithDialect,
+circt::comb::CombDialect,circt::seq::SeqDialect"];
 }
 */
 
@@ -141,14 +151,11 @@ def InlineModules : Pass<"inline-opt-modules", "mlir::ModuleOp"> {
   let description = [{
 
   }];
-   let dependentDialects = [
-      "mlir::arith::ArithDialect",
-      "circt::comb::CombDialect",
-      "SpecHLS::SpecHLSDialect"
-    ];
+  let dependentDialects = ["mlir::arith::ArithDialect",
+                           "circt::comb::CombDialect",
+                           "SpecHLS::SpecHLSDialect"];
   let constructor = "SpecHLS::createInlineModulesPass()";
 }
-
 
 def ExportVitisHLS : Pass<"export-vitis-hls", "mlir::ModuleOp"> {
   let summary = "Export C code for Vitis HLS.";
@@ -157,8 +164,10 @@ def ExportVitisHLS : Pass<"export-vitis-hls", "mlir::ModuleOp"> {
 
   let description = [{ }];
 
-  let dependentDialects = ["circt::hw::HWDialect, circt::sv::SVDialect,SpecHLS::SpecHLSDialect, mlir::arith::ArithDialect, circt::comb::CombDialect,circt::seq::SeqDialect"];
-
+  let dependentDialects =
+      ["circt::hw::HWDialect, circt::sv::SVDialect,SpecHLS::SpecHLSDialect, "
+       "mlir::arith::ArithDialect, "
+       "circt::comb::CombDialect,circt::seq::SeqDialect"];
 }
 
 def ExportElkJS : Pass<"export-elkjs", "mlir::ModuleOp"> {
@@ -168,32 +177,32 @@ def ExportElkJS : Pass<"export-elkjs", "mlir::ModuleOp"> {
 
   let description = [{ }];
 
-  let dependentDialects = ["circt::hw::HWDialect, circt::sv::SVDialect,SpecHLS::SpecHLSDialect, mlir::arith::ArithDialect, circt::comb::CombDialect,circt::seq::SeqDialect"];
-
+  let dependentDialects =
+      ["circt::hw::HWDialect, circt::sv::SVDialect,SpecHLS::SpecHLSDialect, "
+       "mlir::arith::ArithDialect, "
+       "circt::comb::CombDialect,circt::seq::SeqDialect"];
 }
 
 def SpecHLSToComb : Pass<"lower-spechls-to-comb", "circt::hw::HWModuleOp"> {
   let summary = "Lower SPECHLS to comb";
   let constructor = "createConvertSpecHLSToCombPass()";
-  let dependentDialects = [
-    "circt::hw::HWDialect,circt::comb::CombDialect,SpecHLS::SpecHLSDialect"
-  ];
+  let dependentDialects =
+      ["circt::hw::HWDialect,circt::comb::CombDialect,SpecHLS::SpecHLSDialect"];
 }
 
 def SpecHLSToSeq : Pass<"lower-spechls-to-seq", "circt::hw::HWModuleOp"> {
   let summary = "Lower SPECHLS to Seq";
   let constructor = "createConvertSpecHLSToSeqPass()";
-  let dependentDialects = [
-    "circt::hw::HWDialect,circt::comb::CombDialect,SpecHLS::SpecHLSDialect,circt::seq::SeqDialect"
-  ];
+  let dependentDialects = ["circt::hw::HWDialect,circt::comb::CombDialect,"
+                           "SpecHLS::SpecHLSDialect,circt::seq::SeqDialect"];
 }
 
-def SpecHLSLUTToComb : Pass<"lower-SpecHLSLUT-to-comb", "SpecHLS::LookUpTableOp"> {
+def SpecHLSLUTToComb
+    : Pass<"lower-SpecHLSLUT-to-comb", "SpecHLS::LookUpTableOp"> {
   let summary = "Lower SPECHLS to comb";
   let constructor = "createConvertSpecHLSLUTToCombPass()";
-  let dependentDialects = [
-    "circt::hw::HWDialect,circt::comb::CombDialect,SpecHLS::SpecHLSDialect"
-  ];
+  let dependentDialects =
+      ["circt::hw::HWDialect,circt::comb::CombDialect,SpecHLS::SpecHLSDialect"];
 }
 
 def MobilityPass : Pass<"mobility", "SpecHLS::circuit"> {
@@ -208,44 +217,39 @@ def ConfigurationExcluderPass : Pass<"config-excluder", "SpecHLS::circuit"> {
   let dependentDialects = ["SpecHLS::ScheduleDialectDialect"];
 }
 
- def SchedulePass : Pass<"schedule", "mlir::ModuleOp"> {
-   let summary = "A circt::schedule pass wrapper for gecos.";
-   let description = [{
+def SchedulePass : Pass<"schedule", "mlir::ModuleOp"> {
+  let summary = "A circt::schedule pass wrapper for gecos.";
+  let description = [{
      A circt::schedule pass wrapper for gecos.
    }];
 
-   let constructor = "SpecHLS::createSchedulePass()";
-   let dependentDialects = ["circt::ssp::SSPDialect"];
- }
+  let constructor = "SpecHLS::createSchedulePass()";
+  let dependentDialects = ["circt::ssp::SSPDialect"];
+}
 
- def UnrollInstrPass : Pass<"unroll-instr", "mlir::ModuleOp"> {
-    let summary = "Unroll the HW module's instructions flow";
-    let description = [{
+def UnrollInstrPass : Pass<"unroll-instr", "mlir::ModuleOp"> {
+  let summary = "Unroll the HW module's instructions flow";
+  let description = [{
         Unroll the Hardware module to simulate the execution of a list of instructions by
         this module.
     }];
-    
-    let constructor = "SpecHLS::createUnrollInstrPass()";
-    let dependentDialects = [
-        "circt::hw::HWDialect",
-        "SpecHLS::SpecHLSDialect",
-        "mlir::arith::ArithDialect"];
 
-    let options = [
-        ListOption<"instrs", "instrs", "uint32_t", "The list of instructions">  
-    ];
+  let constructor = "SpecHLS::createUnrollInstrPass()";
+  let dependentDialects = ["circt::hw::HWDialect", "SpecHLS::SpecHLSDialect",
+                           "mlir::arith::ArithDialect"];
+
+  let options = [ListOption<"instrs", "instrs", "uint32_t",
+                            "The list of instructions">];
 }
 
- def LongestPathPass : Pass<"longest-path", "mlir::ModuleOp"> {
-    let summary = "Find the longest path from mu_init to hw.output";
-    let description = [{
+def LongestPathPass : Pass<"longest-path", "mlir::ModuleOp"> {
+  let summary = "Find the longest path from mu_init to hw.output";
+  let description = [{
         TODO
     }];
-    
-    let constructor = "SpecHLS::createLongestPathPass()";
-    let dependentDialects = [
-        "circt::hw::HWDialect",
-        "SpecHLS::SpecHLSDialect"];
+
+  let constructor = "SpecHLS::createLongestPathPass()";
+  let dependentDialects = ["circt::hw::HWDialect", "SpecHLS::SpecHLSDialect"];
 }
 
 #endif // SPECHLS_TRANSFORMS_PASSES

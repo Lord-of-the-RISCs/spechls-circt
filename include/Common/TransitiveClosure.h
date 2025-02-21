@@ -9,23 +9,24 @@
 
 using namespace mlir;
 
-#ifndef  __SpecHLSTransitiveDependencyAnalyzer_DECL
+#ifndef __SpecHLSTransitiveDependencyAnalyzer_DECL
 #define __SpecHLSTransitiveDependencyAnalyzer_DECL
 class PathAnalyzer {
 public:
-  PathAnalyzer(Region &region, bool intraIteration=true);
-  llvm::SmallVector<mlir::Operation *> getTransitiveSuccessors(mlir::Operation *op);
-  llvm::SmallVector<mlir::Operation *> getTransitivePredecessors(mlir::Operation *op);
-  bool isTransitiveSuccessor(mlir::Operation *op,mlir::Operation *succ) ;
-  bool isTransitivePredecessor(mlir::Operation *op,mlir::Operation *succ);
+  PathAnalyzer(Region &region, bool intraIteration = true);
+  llvm::SmallVector<mlir::Operation *>
+  getTransitiveSuccessors(mlir::Operation *op);
+  llvm::SmallVector<mlir::Operation *>
+  getTransitivePredecessors(mlir::Operation *op);
+  bool isTransitiveSuccessor(mlir::Operation *op, mlir::Operation *succ);
+  bool isTransitivePredecessor(mlir::Operation *op, mlir::Operation *succ);
 
 private:
-  void mapOperations() ;
+  void mapOperations();
 
   void buildAdjacencyMatrix(std::function<bool(mlir::Operation *)> filter);
 
-  void computeTransitiveClosure() ;
-
+  void computeTransitiveClosure();
 
 private:
   llvm::DenseMap<mlir::Operation *, size_t> opToIndexMap;

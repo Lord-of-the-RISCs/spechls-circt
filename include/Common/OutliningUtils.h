@@ -18,15 +18,13 @@
 using namespace mlir;
 using namespace circt;
 
-void getSliceInputs(mlir::SetVector<Operation *> &slice, SetVector<Value> &inputs);
+void getSliceInputs(mlir::SetVector<Operation *> &slice,
+                    SetVector<Value> &inputs);
 
-
-void getBackwardSlice(Operation &rootOp,
-                            SetVector<Operation *> &slice,
-                       llvm::function_ref<bool(Operation *)> filter);
+void getBackwardSlice(Operation &rootOp, SetVector<Operation *> &slice,
+                      llvm::function_ref<bool(Operation *)> filter);
 
 hw::HWModuleOp outlineSliceAsHwModule(hw::HWModuleOp hwmodule, Operation &root,
                                       SetVector<Operation *> &slice,
                                       SetVector<Value> &inputs,
-                                      SetVector<Value> &outputs,
-                                      Twine newName);
+                                      SetVector<Value> &outputs, Twine newName);
