@@ -18,7 +18,7 @@ module
 
     hw.module @SCC1(out out_0 : i1)
     {
-    // CHECK-LABEL: @SCC0
+    // CHECK-LABEL: @SCC1
     // CHECK-NOT: SpecHLS.rollback
     // CHECK: SpecHLS.delay
     // CHECK: comb.mux
