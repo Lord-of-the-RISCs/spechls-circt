@@ -46,6 +46,7 @@ jobs:
           repository: 'Lord-of-the-RISCs/yosys'
           ref: '${{ env.YOSYS_COMMIT }}'
           path: 'yosys'
+          submodules: 'recursive'
       - name: Build Yosys
         if: steps.cache-yosys.outputs.cache-hit != 'true'
         run: |
