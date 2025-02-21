@@ -340,11 +340,9 @@ mlir::ParseResult GammaOp::parse(mlir::OpAsmParser &parser,
   if (parser.parseQuestion())
     return mlir::failure();
   // llvm::errs() << "Parsed select operand \n" ;
-  OpAsmParser::UnresolvedOperand *dataop = new OpAsmParser::UnresolvedOperand();
   int nbargs = 0;
   while (nbargs < SPEC_GAMMAOP_MAXOPERANDS) {
-    dataop = new OpAsmParser::UnresolvedOperand();
-    dataOperands.push_back(*dataop);
+    dataOperands.push_back(OpAsmParser::UnresolvedOperand());
     nok = parser.parseOperand(dataOperands[nbargs]);
     nbargs++;
     // llvm::errs() << "parsed operand "<< nbargs <<"\n" ;
