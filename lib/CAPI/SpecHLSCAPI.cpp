@@ -27,14 +27,7 @@
 
 extern "C" {
 
-// bool mlirAttributeIsAArray(MlirAttribute attr) {
-//   return llvm::isa<mlir::ArrayAttr>(unwrap(attr));
-// }
-
 MLIR_DEFINE_CAPI_DIALECT_REGISTRATION(SpecHLS, spechls, SpecHLS::SpecHLSDialect)
-
 MLIR_DEFINE_CAPI_DIALECT_REGISTRATION(Schedule, schedule,
                                       SpecHLS::ScheduleDialect)
 }
-
-// void registerSeqPasses() { SpecHLS::registerTransformsPasses(); }
