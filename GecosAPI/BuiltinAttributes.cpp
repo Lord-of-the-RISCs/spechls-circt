@@ -17,7 +17,6 @@
 #include "mlir/IR/BuiltinTypes.h"
 #include "llvm/ADT/APSInt.h"
 
-#include "SpecHLSGecosUtils.h"
 using namespace mlir;
 
 void error(int i, char *message);
