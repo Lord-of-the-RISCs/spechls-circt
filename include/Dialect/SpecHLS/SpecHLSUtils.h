@@ -5,6 +5,9 @@
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 
+#ifndef SPECHLS_INCLUDED_DIALECT_SPECHLS_SPECHLS_UTILS_H
+#define SPECHLS_INCLUDED_DIALECT_SPECHLS_SPECHLS_UTILS_H
+
 #include "circt/Dialect/HW/HWOps.h"
 #include "mlir/IR/Operation.h"
 
@@ -19,3 +22,5 @@ void removePragmaAttr(mlir::Operation *op, llvm::StringRef name);
 void setPragmaAttr(mlir::Operation *op, mlir::StringAttr value);
 
 } // namespace SpecHLS
+
+#endif // SPECHLS_INCLUDED_DIALECT_SPECHLS_SPECHLS_UTILS_H

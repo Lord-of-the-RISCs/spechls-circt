@@ -5,8 +5,8 @@
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 
-#ifndef SPECHLS_DIALECT_SPECHLS_H
-#define SPECHLS_DIALECT_SPECHLS_H
+#ifndef SPECHLS_INCLUDED_CAPI_SPECHLS_H
+#define SPECHLS_INCLUDED_CAPI_SPECHLS_H
 
 #include "mlir-c/IR.h"
 
@@ -21,4 +21,4 @@ MLIR_DECLARE_CAPI_DIALECT_REGISTRATION(ScheduleDialect, scheduledialect);
 }
 #endif
 
-#endif // SPECHLS_DIALECT_SPECHLS_H
+#endif // SPECHLS_INCLUDED_CAPI_SPECHLS_H

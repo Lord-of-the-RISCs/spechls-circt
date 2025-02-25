@@ -5,8 +5,8 @@
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 
-#ifndef SPECHLS_TRANSFORMS_PASSES
-#define SPECHLS_TRANSFORMS_PASSES
+#ifndef SPECHLS_INCLUDED_TRANSFORMS_PASSES_TD
+#define SPECHLS_INCLUDED_TRANSFORMS_PASSES_TD
 
 include "mlir/Pass/PassBase.td"
 include "mlir/Rewrite/PassUtil.td"
@@ -215,4 +215,4 @@ def LongestPathPass : Pass<"longest-path", "mlir::ModuleOp"> {
   let dependentDialects = ["circt::hw::HWDialect", "SpecHLS::SpecHLSDialect"];
 }
 
-#endif // SPECHLS_TRANSFORMS_PASSES
+#endif // SPECHLS_INCLUDED_TRANSFORMS_PASSES_TD

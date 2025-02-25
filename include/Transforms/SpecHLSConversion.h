@@ -5,8 +5,8 @@
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 
-#ifndef SPECHLS_DIALECT_SPECHLSCONVERSION_H
-#define SPECHLS_DIALECT_SPECHLSCONVERSION_H
+#ifndef SPECHLS_INCLUDED_TRANSFORMS_SPECHLS_CONVERSION_H
+#define SPECHLS_INCLUDED_TRANSFORMS_SPECHLS_CONVERSION_H
 
 #include "Dialect/SpecHLS/SpecHLSDialect.h"
 #include "Dialect/SpecHLS/SpecHLSOps.h"
@@ -93,4 +93,4 @@ struct RollbackOpToSeqConversion : OpRewritePattern<RollbackOp> {
   Value *reset = NULL;
 };
 
-#endif // SPECHLS_DIALECT_SPECHLSCONVERSION_H
+#endif // SPECHLS_INCLUDED_TRANSFORMS_SPECHLS_CONVERSION_H

@@ -5,8 +5,8 @@
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 
-#ifndef SpecHLS_DIALECT
-#define SpecHLS_DIALECT
+#ifndef SPECHLS_INCLUDED_DIALECT_SPECHLS_SPECHLS_DIALECT_TD
+#define SPECHLS_INCLUDED_DIALECT_SPECHLS_SPECHLS_DIALECT_TD
 
 include "mlir/IR/OpBase.td"
 
@@ -32,4 +32,4 @@ def SpecHLS_Dialect : Dialect {
 class SpecHLSOp<string mnemonic, list<Trait> traits = []>
     : Op<SpecHLS_Dialect, mnemonic, traits>;
 
-#endif // SpecHLS_DIALECT
+#endif // SPECHLS_INCLUDED_DIALECT_SPECHLS_SPECHLS_DIALECT_TD

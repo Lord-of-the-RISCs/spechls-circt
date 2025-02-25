@@ -5,8 +5,8 @@
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 
-#ifndef SPECHLS_INITALLTRANSLATIONS_H
-#define SPECHLS_INITALLTRANSLATIONS_H
+#ifndef SPECHLS_INCLUDED_INIT_ALL_TRANSLATIONS_H
+#define SPECHLS_INCLUDED_INIT_ALL_TRANSLATIONS_H
 
 namespace SpecHLS {
 
@@ -19,4 +19,4 @@ inline void registerAllTranslations() {
 }
 } // namespace SpecHLS
 
-#endif // SPECHLS_INITALLTRANSLATIONS_H
+#endif // SPECHLS_INCLUDED_INIT_ALL_TRANSLATIONS_H

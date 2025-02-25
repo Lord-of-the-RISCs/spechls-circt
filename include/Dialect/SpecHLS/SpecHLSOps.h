@@ -5,8 +5,8 @@
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 
-#ifndef SpecHLS_SpecHLSOPS_H
-#define SpecHLS_SpecHLSOPS_H
+#ifndef SPECHLS_INCLUDED_DIALECT_SPECHLS_SPECHLS_OPS_H
+#define SPECHLS_INCLUDED_DIALECT_SPECHLS_SPECHLS_OPS_H
 
 #include "mlir/Bytecode/BytecodeOpInterface.h"
 #include "mlir/IR/BuiltinTypes.h"
@@ -19,4 +19,4 @@
 #define GET_OP_CLASSES
 #include "Dialect/SpecHLS/SpecHLSOps.h.inc"
 
-#endif // SpecHLS_SpecHLSOPS_H
+#endif // SPECHLS_INCLUDED_DIALECT_SPECHLS_SPECHLS_OPS_H

@@ -5,8 +5,8 @@
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 
-#ifndef SPECHLS_INITALLDIALECTS_H_
-#define SPECHLS_INITALLDIALECTS_H_
+#ifndef SPECHLS_INCLUDED_INIT_ALL_DIALECTS_H
+#define SPECHLS_INCLUDED_INIT_ALL_DIALECTS_H
 
 #include "Dialect/ScheduleDialect/ScheduleDialectDialect.h"
 #include "Dialect/SpecHLS/SpecHLSDialect.h"
@@ -18,10 +18,8 @@ namespace SpecHLS {
 inline void registerAllDialects(mlir::DialectRegistry &registry) {
   registry.insert<SpecHLS::SpecHLSDialect>();
   registry.insert<SpecHLS::ScheduleDialectDialect>();
-  // clang-format off
-  // clang-format on
 }
 
 } // namespace SpecHLS
 
-#endif // SPECHLS_INITALLDIALECTS_H_
+#endif // SPECHLS_INCLUDED_INIT_ALL_DIALECTS_H

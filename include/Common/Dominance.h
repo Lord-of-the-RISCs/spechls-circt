@@ -16,8 +16,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef MLIR_IR_DOMINANCE_H
-#define MLIR_IR_DOMINANCE_H
+#ifndef SPECHLS_INCLUDED_COMMON_DOMINANCE_H
+#define SPECHLS_INCLUDED_COMMON_DOMINANCE_H
 
 #include "mlir/IR/RegionGraphTraits.h"
 #include "llvm/Support/GenericDomTree.h"
@@ -242,4 +242,5 @@ struct GraphTraits<const mlir::DominanceInfoNode *> {
 };
 
 } // namespace llvm
-#endif
+
+#endif // SPECHLS_INCLUDED_COMMON_DOMINANCE_H

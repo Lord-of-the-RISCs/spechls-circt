@@ -5,8 +5,8 @@
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 
-#ifndef INCLUDED_GECOSAPI_H
-#define INCLUDED_GECOSAPI_H
+#ifndef SPECHLS_INCLUDED_GECOSAPI_GECOSAPI_H
+#define SPECHLS_INCLUDED_GECOSAPI_GECOSAPI_H
 
 #include "Dialect/ScheduleDialect/ScheduleDialectDialect.h"
 #include "Dialect/ScheduleDialect/ScheduleDialectOpsDialect.cpp.inc"
@@ -56,4 +56,4 @@ MLIR_CAPI_EXPORTED void registerConfigurationExcluderPass(void);
 }
 #endif
 
-#endif // INCLUDED_GECOSAPI_H
+#endif // SPECHLS_INCLUDED_GECOSAPI_GECOSAPI_H

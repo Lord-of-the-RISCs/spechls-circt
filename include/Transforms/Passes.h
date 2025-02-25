@@ -5,8 +5,8 @@
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 
-#ifndef SPECHLS_TRANSFORMS_PASSES_H
-#define SPECHLS_TRANSFORMS_PASSES_H
+#ifndef SPECHLS_INCLUDED_TRANSFORMS_PASSES_H
+#define SPECHLS_INCLUDED_TRANSFORMS_PASSES_H
 
 #include "circt/Dialect/HW/HWOpInterfaces.h"
 #include "circt/Dialect/HW/HWOps.h"
@@ -108,4 +108,4 @@ void registerYosysOptimizerPipeline();
 
 } // namespace SpecHLS
 
-#endif // CIRCT_TRANSFORMS_PASSES_H
+#endif // SPECHLS_INCLUDED_TRANSFORMS_PASSES_H

@@ -5,8 +5,8 @@
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 
-#ifndef ScheduleDialect_OPS
-#define ScheduleDialect_OPS
+#ifndef SPECHLS_INCLUDED_DIALECT_SCHEDULE_DIALECT_SCHEDULE_DIALECT_OPS_TD
+#define SPECHLS_INCLUDED_DIALECT_SCHEDULE_DIALECT_SCHEDULE_DIALECT_OPS_TD
 
 include "Dialect/ScheduleDialect/ScheduleDialectDialect.td"
 include "mlir/IR/RegionKindInterface.td"
@@ -61,4 +61,4 @@ def ScheduleDialect_operation
     }];
 }
 
-#endif // ScheduleDialect_OPS
+#endif // SPECHLS_INCLUDED_DIALECT_SCHEDULE_DIALECT_SCHEDULE_DIALECT_OPS_TD

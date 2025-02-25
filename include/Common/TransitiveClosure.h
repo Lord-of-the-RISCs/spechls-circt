@@ -5,8 +5,8 @@
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 
-#ifndef SPECHLS_INCLUDED_TRANSITIVE_CLOSURE_H
-#define SPECHLS_INCLUDED_TRANSITIVE_CLOSURE_H
+#ifndef SPECHLS_INCLUDED_COMMON_TRANSITIVE_CLOSURE_H
+#define SPECHLS_INCLUDED_COMMON_TRANSITIVE_CLOSURE_H
 
 #include "mlir/IR/Block.h"
 #include "mlir/IR/Operation.h"
@@ -45,4 +45,4 @@ private:
   Region &region;
 };
 
-#endif // SPECHLS_INCLUDED_TRANSITIVE_CLOSURE_H
+#endif // SPECHLS_INCLUDED_COMMON_TRANSITIVE_CLOSURE_H

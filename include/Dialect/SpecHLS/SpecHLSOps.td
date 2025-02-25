@@ -5,8 +5,8 @@
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 
-#ifndef SpecHLS_OPS
-#define SpecHLS_OPS
+#ifndef SPECHLS_INCLUDED_DIALECT_SPECHLS_SPECHLS_OPS_TD
+#define SPECHLS_INCLUDED_DIALECT_SPECHLS_SPECHLS_OPS_TD
 
 include "Dialect/SpecHLS/SpecHLSDialect.td"
 include "mlir/Interfaces/InferTypeOpInterface.td"
@@ -568,4 +568,4 @@ def SpecHLS_DefOp
      }];
 }
 
-#endif // SpecHLS_OPS
+#endif // SPECHLS_INCLUDED_DIALECT_SPECHLS_SPECHLS_OPS_H

@@ -5,11 +5,11 @@
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 
-#ifndef SpecHLS_SpecHLSDIALECT_H
-#define SpecHLS_SpecHLSDIALECT_H
+#ifndef SPECHLS_INCLUDED_DIALECT_SPECHLS_SPECHLS_DIALECT_H
+#define SPECHLS_INCLUDED_DIALECT_SPECHLS_SPECHLS_DIALECT_H
 
 #include "mlir/IR/Dialect.h"
 
 #include "Dialect/SpecHLS/SpecHLSOpsDialect.h.inc"
 
-#endif // SpecHLS_SpecHLSDIALECT_H
+#endif // SPECHLS_INCLUDED_DIALECT_SPECHLS_SPECHLS_DIALECT_H

@@ -5,8 +5,8 @@
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 
-#ifndef CIRCT_C_DIALECT_SSP_H
-#define CIRCT_C_DIALECT_SSP_H
+#ifndef SPECHLS_INCLUDED_CAPI_SSP_H
+#define SPECHLS_INCLUDED_CAPI_SSP_H
 
 #include "mlir-c/IR.h"
 
@@ -21,4 +21,4 @@ MLIR_DECLARE_CAPI_DIALECT_REGISTRATION(Scheduling, ssp);
 }
 #endif
 
-#endif // CIRCT_C_DIALECT_SSP_H
+#endif // SPECHLS_INCLUDED_CAPI_SSP_H

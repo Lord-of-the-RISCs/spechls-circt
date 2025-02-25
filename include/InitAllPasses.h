@@ -5,8 +5,8 @@
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 
-#ifndef SPECHLS_INITALLPASSES_H_
-#define SPECHLS_INITALLPASSES_H_
+#ifndef SPECHLS_INCLUDED_INIT_ALL_PASSES_H
+#define SPECHLS_INCLUDED_INIT_ALL_PASSES_H
 
 #include "Dialect/ScheduleDialect/ScheduleDialectDialect.h"
 #include "Dialect/SpecHLS/SpecHLSDialect.h"
@@ -40,4 +40,4 @@ inline void registerAllPasses() {
 
 } // namespace SpecHLS
 
-#endif // SPECHLS_INITALLPASSES_H_
+#endif // SPECHLS_INCLUDED_INIT_ALL_PASSES_H

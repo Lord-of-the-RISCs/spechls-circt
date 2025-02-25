@@ -5,6 +5,9 @@
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 
+#ifndef SPECHLS_INCLUDED_OUTLINING_UTILS_H
+#define SPECHLS_INCLUDED_OUTLINING_UTILS_H
+
 #include "mlir/Pass/Pass.h"
 
 #include "Dialect/SpecHLS/SpecHLSOps.h"
@@ -35,3 +38,5 @@ hw::HWModuleOp outlineSliceAsHwModule(hw::HWModuleOp hwmodule, Operation &root,
                                       SetVector<Operation *> &slice,
                                       SetVector<Value> &inputs,
                                       SetVector<Value> &outputs, Twine newName);
+
+#endif // SPECHLS_INCLUDED_OUTLINING_UTILS_H

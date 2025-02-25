@@ -5,8 +5,8 @@
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 
-#ifndef ScheduleDialect_DIALECT
-#define ScheduleDialect_DIALECT
+#ifndef SPECHLS_INCLUDED_DIALECT_SCHEDULE_DIALECT_SCHEDULE_DIALECT_DIALECT_TD
+#define SPECHLS_INCLUDED_DIALECT_SCHEDULE_DIALECT_SCHEDULE_DIALECT_DIALECT_TD
 
 include "mlir/IR/OpBase.td"
 
@@ -24,4 +24,4 @@ def ScheduleDialect_Dialect : Dialect {
 class ScheduleDialectOp<string mnemonic, list<Trait> traits = []>
     : Op<ScheduleDialect_Dialect, mnemonic, traits>;
 
-#endif // ScheduleDialect_DIALECT
+#endif // SPECHLS_INCLUDED_DIALECT_SCHEDULE_DIALECT_SCHEDULE_DIALECT_DIALECT_TD
