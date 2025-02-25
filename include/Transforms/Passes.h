@@ -22,8 +22,8 @@
 #include "mlir/Pass/PassRegistry.h"
 #include <limits>
 
-#include "Dialect/ScheduleDialect/ScheduleDialectDialect.h"
-#include "Dialect/ScheduleDialect/ScheduleDialectOps.h"
+#include "Dialect/Schedule/ScheduleDialect.h"
+#include "Dialect/Schedule/ScheduleOps.h"
 #include "Dialect/SpecHLS/SpecHLSDialect.h"
 #include "Dialect/SpecHLS/SpecHLSOps.h"
 #include "circt/Dialect/Comb/CombOps.h"

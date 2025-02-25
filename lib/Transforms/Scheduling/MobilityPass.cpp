@@ -10,10 +10,10 @@
 #include "mlir/Support/TypeID.h"
 #include "llvm/ADT/StringExtras.h"
 
-#include "Dialect/ScheduleDialect/ScheduleDialectDialect.h"
-#include "Dialect/ScheduleDialect/ScheduleDialectOps.h"
-#include "Dialect/ScheduleDialect/ScheduleDialectOpsDialect.cpp.inc"
-#include "Dialect/ScheduleDialect/ScheduleDialectOpsTypes.h.inc"
+#include "Dialect/Schedule/ScheduleDialect.h"
+#include "Dialect/Schedule/ScheduleOps.h"
+#include "Dialect/Schedule/ScheduleOpsDialect.cpp.inc"
+#include "Dialect/Schedule/ScheduleOpsTypes.h.inc"
 
 namespace SpecHLS {
 

@@ -47,8 +47,7 @@ void registerAllUpstreamDialects(MlirContext ctx) {
   MlirDialectRegistry registry = mlirDialectRegistryCreate();
   // mlirRegisterAllDialects(registry);
   mlirDialectHandleRegisterDialect(mlirGetDialectHandle__spechls__(), ctx);
-  mlirDialectHandleRegisterDialect(mlirGetDialectHandle__scheduledialect__(),
-                                   ctx);
+  mlirDialectHandleRegisterDialect(mlirGetDialectHandle__schedule__(), ctx);
   mlirDialectHandleRegisterDialect(mlirGetDialectHandle__transform__(), ctx);
   mlirDialectHandleRegisterDialect(mlirGetDialectHandle__func__(), ctx);
   mlirDialectHandleRegisterDialect(mlirGetDialectHandle__arith__(), ctx);

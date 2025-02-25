@@ -5,20 +5,20 @@
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 
-#include "Dialect/ScheduleDialect/ScheduleDialectDialect.h"
-#include "Dialect/ScheduleDialect/ScheduleDialectOps.h"
+#include "Dialect/Schedule/ScheduleDialect.h"
+#include "Dialect/Schedule/ScheduleOps.h"
 #include "mlir/IR/DialectImplementation.h"
 
 using namespace mlir;
 using namespace SpecHLS;
 
-void ScheduleDialectDialect::initialize() {
+void ScheduleDialect::initialize() {
   addOperations<
 #define GET_OP_LIST
-#include "Dialect/ScheduleDialect/ScheduleDialectOps.cpp.inc"
+#include "Dialect/Schedule/ScheduleOps.cpp.inc"
       >();
   addTypes<
 #define GET_TYPEDEF_LIST
-#include "Dialect/ScheduleDialect/ScheduleDialectOpsTypes.cpp.inc"
+#include "Dialect/Schedule/ScheduleOpsTypes.cpp.inc"
       >();
 }

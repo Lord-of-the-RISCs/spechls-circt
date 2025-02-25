@@ -8,7 +8,7 @@
 #ifndef SPECHLS_INCLUDED_INIT_ALL_DIALECTS_H
 #define SPECHLS_INCLUDED_INIT_ALL_DIALECTS_H
 
-#include "Dialect/ScheduleDialect/ScheduleDialectDialect.h"
+#include "Dialect/Schedule/ScheduleDialect.h"
 #include "Dialect/SpecHLS/SpecHLSDialect.h"
 #include "mlir/IR/Dialect.h"
 
@@ -17,7 +17,7 @@ namespace SpecHLS {
 // Add all the MLIR dialects to the provided registry.
 inline void registerAllDialects(mlir::DialectRegistry &registry) {
   registry.insert<SpecHLS::SpecHLSDialect>();
-  registry.insert<SpecHLS::ScheduleDialectDialect>();
+  registry.insert<SpecHLS::ScheduleDialect>();
 }
 
 } // namespace SpecHLS

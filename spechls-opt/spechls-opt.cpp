@@ -20,7 +20,7 @@
 
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
 
-#include "Dialect/ScheduleDialect/ScheduleDialectDialect.h"
+#include "Dialect/Schedule/ScheduleDialect.h"
 #include "Dialect/SpecHLS/SpecHLSDialect.h"
 #include "Dialect/SpecHLS/SpecHLSOpsDialect.cpp.inc"
 
@@ -69,7 +69,7 @@ int main(int argc, char **argv) {
   mlir::DialectRegistry registry;
 
   // registerAllDialects(registry);
-  registry.insert<SpecHLS::ScheduleDialectDialect, SpecHLS::SpecHLSDialect,
+  registry.insert<SpecHLS::ScheduleDialect, SpecHLS::SpecHLSDialect,
                   mlir::func::FuncDialect, mlir::arith::ArithDialect,
                   mlir::memref::MemRefDialect, circt::hwarith::HWArithDialect,
                   circt::comb::CombDialect, circt::seq::SeqDialect,

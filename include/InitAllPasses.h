@@ -8,7 +8,7 @@
 #ifndef SPECHLS_INCLUDED_INIT_ALL_PASSES_H
 #define SPECHLS_INCLUDED_INIT_ALL_PASSES_H
 
-#include "Dialect/ScheduleDialect/ScheduleDialectDialect.h"
+#include "Dialect/Schedule/ScheduleDialect.h"
 #include "Dialect/SpecHLS/SpecHLSDialect.h"
 #include "Transforms/Passes.h"
 #include "circt/Transforms/Passes.h"

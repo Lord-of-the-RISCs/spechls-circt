@@ -11,8 +11,7 @@
 include "mlir/Pass/PassBase.td"
 include "mlir/Rewrite/PassUtil.td"
 include "Dialect/SpecHLS/SpecHLSDialect.td"
-include "Dialect/ScheduleDialect/ScheduleDialectDialect.td"
-include "Dialect/ScheduleDialect/ScheduleDialectOps.td"
+include "Dialect/Schedule/ScheduleDialect.td"
 
 def MergeGammasPass : Pass<"merge-gammas"> {
   let summary = "Merge connected gamma ops";
@@ -171,13 +170,13 @@ def SpecHLSLUTToComb
 def MobilityPass : Pass<"mobility", "SpecHLS::circuit"> {
   let summary = "Compute mobility informations.";
   let constructor = "SpecHLS::createMobilityPass()";
-  let dependentDialects = ["SpecHLS::ScheduleDialectDialect"];
+  let dependentDialects = ["SpecHLS::ScheduleDialect"];
 }
 
 def ConfigurationExcluderPass : Pass<"config-excluder", "SpecHLS::circuit"> {
   let summary = "Exclude some configurations that cannot leads to II=1.";
   let constructor = "SpecHLS::createConfigurationExcluderPass()";
-  let dependentDialects = ["SpecHLS::ScheduleDialectDialect"];
+  let dependentDialects = ["SpecHLS::ScheduleDialect"];
 }
 
 def SchedulePass : Pass<"schedule", "mlir::ModuleOp"> {

@@ -5,8 +5,8 @@
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 
-#include "Dialect/ScheduleDialect/ScheduleDialectDialect.h"
-#include "Dialect/ScheduleDialect/ScheduleDialectOps.h"
+#include "Dialect/Schedule/ScheduleDialect.h"
+#include "Dialect/Schedule/ScheduleOps.h"
 
 #include "mlir-c/Conversion.h"
 #include <mlir-c/AffineExpr.h>

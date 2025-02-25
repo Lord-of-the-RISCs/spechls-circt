@@ -5,17 +5,16 @@
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 
-#ifndef SPECHLS_INCLUDED_DIALECT_SCHEDULE_DIALECT_SCHEDULE_DIALECT_OPS_TD
-#define SPECHLS_INCLUDED_DIALECT_SCHEDULE_DIALECT_SCHEDULE_DIALECT_OPS_TD
+#ifndef SPECHLS_INCLUDED_DIALECT_SCHEDULE_SCHEDULE_OPS_TD
+#define SPECHLS_INCLUDED_DIALECT_SCHEDULE_SCHEDULE_OPS_TD
 
-include "Dialect/ScheduleDialect/ScheduleDialectDialect.td"
+include "Dialect/Schedule/ScheduleDialect.td"
 include "mlir/IR/RegionKindInterface.td"
 include "mlir/IR/BuiltinAttributes.td"
 include "mlir/IR/AttrTypeBase.td"
 include "mlir/IR/BuiltinLocationAttributes.td"
 
-def ScheduleOperation_Type
-    : TypeDef<ScheduleDialect_Dialect, "ScheduleOperation", []> {
+def ScheduleOperation_Type : TypeDef<ScheduleDialect, "ScheduleOperation", []> {
   let mnemonic = "ScheduleOperation";
 }
 
@@ -61,4 +60,4 @@ def ScheduleDialect_operation
     }];
 }
 
-#endif // SPECHLS_INCLUDED_DIALECT_SCHEDULE_DIALECT_SCHEDULE_DIALECT_OPS_TD
+#endif // SPECHLS_INCLUDED_DIALECT_SCHEDULE_SCHEDULE_OPS_TD

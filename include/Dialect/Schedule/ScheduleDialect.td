@@ -5,13 +5,13 @@
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 
-#ifndef SPECHLS_INCLUDED_DIALECT_SCHEDULE_DIALECT_SCHEDULE_DIALECT_DIALECT_TD
-#define SPECHLS_INCLUDED_DIALECT_SCHEDULE_DIALECT_SCHEDULE_DIALECT_DIALECT_TD
+#ifndef SPECHLS_INCLUDED_DIALECT_SCHEDULE_DIALECT_SCHEDULE_DIALECT_TD
+#define SPECHLS_INCLUDED_DIALECT_SCHEDULE_DIALECT_SCHEDULE_DIALECT_TD
 
 include "mlir/IR/OpBase.td"
 
-def ScheduleDialect_Dialect : Dialect {
-  let name = "ScheduleDialect";
+def ScheduleDialect : Dialect {
+  let name = "Schedule";
   let summary = "A dialect for schedule passes.";
   let description = [{
         A dialect for schedule passes.
@@ -22,6 +22,6 @@ def ScheduleDialect_Dialect : Dialect {
 
 // Base class for the operation in this dialect.
 class ScheduleDialectOp<string mnemonic, list<Trait> traits = []>
-    : Op<ScheduleDialect_Dialect, mnemonic, traits>;
+    : Op<ScheduleDialect, mnemonic, traits>;
 
-#endif // SPECHLS_INCLUDED_DIALECT_SCHEDULE_DIALECT_SCHEDULE_DIALECT_DIALECT_TD
+#endif // SPECHLS_INCLUDED_DIALECT_SCHEDULE_DIALECT_SCHEDULE_DIALECT_TD

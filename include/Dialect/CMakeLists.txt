@@ -1,2 +1,2 @@
 add_subdirectory(SpecHLS)
-add_subdirectory(ScheduleDialect)
+add_subdirectory(Schedule)
