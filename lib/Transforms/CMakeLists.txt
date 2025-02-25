@@ -1,13 +1,5 @@
-
 add_compile_definitions(_YOSYS_)
 
-
-#include_directories("./YosysOptimizer")
-#
-#
-#		YosysOptimizer.cpp
-#
-# RTLILImporter.cpp
 add_mlir_library(SpecHLSTransforms
         Analysis/TransitiveClosure.cpp
         Common/OutliningUtils.cpp
