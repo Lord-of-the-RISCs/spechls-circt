@@ -1,17 +1,9 @@
-//===- GroupControlNode.cpp - SV Simulation Extraction Pass --------------===//
 //
-// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// This file is part of the SpecHLS project.
+// This file is licensed under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
-//===----------------------------------------------------------------------===//
-//
-// This transformation pass extracts simulation constructs to sunewModuleules.
-// It will take simulation operations, write, finish, assert, assume, and cover
-// and extract them and the dataflow into them into a separate module.  This
-// module is then instantiated in the original module.
-//
-//===----------------------------------------------------------------------===//
 
 #include "mlir/Pass/Pass.h"
 

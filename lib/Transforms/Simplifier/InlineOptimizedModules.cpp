@@ -1,16 +1,11 @@
 //
-// Created by Steven on 02/01/2024.
-//
-
-#include "InlineOptimizedModules.h"
-//===- InlineModules.cpp --------------------------------------------------===//
-//
-// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// This file is part of the SpecHLS project.
+// This file is licensed under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
-//===----------------------------------------------------------------------===//
 
+#include "InlineOptimizedModules.h"
 #include "Dialect/SpecHLS/SpecHLSUtils.h"
 #include "Transforms/Passes.h"
 #include "circt/Dialect/Comb/CombDialect.h"

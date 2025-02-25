@@ -1,10 +1,17 @@
+//
+// This file is part of the SpecHLS project.
+// This file is licensed under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
+//
 
 #include "Transforms/Passes.h"
 #include "circt/Dialect/SSP/SSPOps.h"
+#include "circt/Dialect/SSP/SSPPasses.h"
 #include "circt/Scheduling/Problems.h"
 #include "mlir/Pass/PassRegistry.h"
 #include "llvm/ADT/StringExtras.h"
-#include <circt/Dialect/SSP/SSPPasses.h>
+
 #include <iostream>
 #include <mlir/Pass/PassManager.h>
 

@@ -1,5 +1,8 @@
 //
-// Created by Steven on 19/01/2024.
+// This file is part of the SpecHLS project.
+// This file is licensed under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 
 #include "Dialect/SpecHLS/SpecHLSDialect.h"
@@ -11,36 +14,6 @@
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Pass/Pass.h"
 #include "mlir/Transforms/DialectConversion.h"
-/*
- *
- * Operations
-seq.clock_div (::circt::seq::ClockDividerOp)
-seq.clock_gate (::circt::seq::ClockGateOp)
-seq.clock_inv (::circt::seq::ClockInverterOp)
-seq.clock_mux (::circt::seq::ClockMuxOp)
-seq.compreg (::circt::seq::CompRegOp)
-seq.compreg.ce (::circt::seq::CompRegClockEnabledOp)
-seq.const_clock (::circt::seq::ConstClockOp)
-seq.fifo (::circt::seq::FIFOOp)
-seq.firmem (::circt::seq::FirMemOp)
-seq.firmem.read_port (::circt::seq::FirMemReadOp)
-seq.firmem.read_write_port (::circt::seq::FirMemReadWriteOp)
-seq.firmem.write_port (::circt::seq::FirMemWriteOp)
-seq.firreg (::circt::seq::FirRegOp)
-seq.from_clock (::circt::seq::FromClockOp)
-seq.hlmem (::circt::seq::HLMemOp)
-seq.read (::circt::seq::ReadPortOp)
-seq.shiftreg (::circt::seq::ShiftRegOp)
-seq.to_clock (::circt::seq::ToClockOp)
-seq.write (::circt::seq::WritePortOp)
-Attributes
-ClockConstAttr
-FirMemInitAttr
-Types
-ClockType
-FirMemType
-HLMemType
- */
 
 static MuOp *findMuSource(Value *value) {
   auto defOp = value->getDefiningOp();
