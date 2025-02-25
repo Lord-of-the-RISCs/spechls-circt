@@ -1,16 +1,16 @@
+#ifndef SPECHLS_INCLUDED_TRANSITIVE_CLOSURE_H
+#define SPECHLS_INCLUDED_TRANSITIVE_CLOSURE_H
+
 #include "mlir/IR/Block.h"
 #include "mlir/IR/Operation.h"
 #include "mlir/IR/Region.h"
 #include "llvm/ADT/BitVector.h"
-#include "llvm/Support/raw_ostream.h"
+
 #include <functional>
-#include <unordered_map>
 #include <vector>
 
 using namespace mlir;
 
-#ifndef __SpecHLSTransitiveDependencyAnalyzer_DECL
-#define __SpecHLSTransitiveDependencyAnalyzer_DECL
 class PathAnalyzer {
 public:
   PathAnalyzer(Region &region, bool intraIteration = true);
@@ -37,4 +37,5 @@ private:
 
   Region &region;
 };
-#endif
+
+#endif // SPECHLS_INCLUDED_TRANSITIVE_CLOSURE_H
