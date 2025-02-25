@@ -10,7 +10,6 @@ add_compile_definitions(_YOSYS_)
 # RTLILImporter.cpp
 add_mlir_library(SpecHLSTransforms
         Analysis/TransitiveClosure.cpp
-        #        Analysis/GuardLogicAnalyzer.cpp
         Common/OutliningUtils.cpp
         Common/UnrollInstr.cpp
         Common/LongestPath.cpp
@@ -33,7 +32,6 @@ add_mlir_library(SpecHLSTransforms
         VitisExport/PrintUtils.cpp
         VitisExport/ExportVitisHLS.cpp
         Simplifier/GroupControlLogic.cpp
-        Scheduling/AutoPipeline.cpp
         Scheduling/MobilityPass.cpp
         Scheduling/ConfigurationExcluder.cpp
         Scheduling/Schedule.cpp

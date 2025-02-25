@@ -131,8 +131,6 @@ add_library(gecosapi SHARED
         SpecHLSGecosAPIPasses.cpp
         BuiltinAttributes.cpp
         BuiltinTypes.cpp
-        ../lib/Transforms/Analysis/GuardLogicAnalyzer.cpp
-        ../lib/Transforms/Analysis/GuardLogicAnalyzer.cpp
         ../lib/Transforms/Analysis/DataflowDominatorAnalysis.cpp
         ../lib/Transforms/Analysis/PostDataflowDominatorAnalysis.cpp
         ../lib/Transforms/SpecHLSToSeq/DelayConversion.cpp

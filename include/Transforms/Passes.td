@@ -31,19 +31,6 @@ def MergeGammasPass : Pass<"merge-gammas"> {
                            "SpecHLS::SpecHLSDialect"];
 }
 
-def AutoPipelinePass : Pass<"auto-pipeline"> {
-  let summary = "Schedule pipeline draft";
-  let description = [{
-    Perform operation scheduling on the
-
-  }];
-  let constructor = "SpecHLS::createAutoPipelinePass()";
-  let dependentDialects = ["circt::ssp::SSPDialect",
-                           "circt::hw::HWDialect, mlir::arith::ArithDialect, "
-                           "circt::comb::CombDialect,circt::seq::SeqDialect,"
-                           "SpecHLS::SpecHLSDialect"];
-}
-
 def EliminateRedundantGammaInputsPass
     : Pass<"eliminate-redundant-gamma-inputs"> {
   let summary = "Simplify Gamma ops which have multiple identical inputs";
@@ -109,15 +96,6 @@ def GroupControlNodePass : Pass<"group-control", "mlir::ModuleOp"> {
                               "Number of ops erased">];
 }
 
-def GuardLogicAnalyzerPass : Pass<"guard-analyzer", "mlir::ModuleOp"> {
-  let summary = "";
-  let description = [{}];
-  let constructor = "SpecHLS::createGuardLogicAnalyzerPass()";
-  let dependentDialects = ["circt::hw::HWDialect, mlir::arith::ArithDialect, "
-                           "circt::comb::CombDialect,circt::seq::SeqDialect,"
-                           "SpecHLS::SpecHLSDialect"];
-}
-
 def YosysOptimizer : Pass<"yosys-optimizer", "mlir::ModuleOp"> {
   let summary = "Invoke Yosys to perform circuit optimization.";
 
@@ -135,16 +113,6 @@ def YosysOptimizer : Pass<"yosys-optimizer", "mlir::ModuleOp"> {
        "mlir::arith::ArithDialect, "
        "circt::comb::CombDialect,circt::seq::SeqDialect"];
 }
-/*
-def ControlOptimizer : Pass<"control-optimizer","circt::hw::HWModuleOp"> {
-  let summary = "Invoke Yosys to perform circuit optimization.";
-  let constructor = "SpecHLS::createControlOptimizer()";
-  let description = [{ }];
-  let dependentDialects = ["circt::hw::HWDialect,
-circt::sv::SVDialect,SpecHLS::SpecHLSDialect, mlir::arith::ArithDialect,
-circt::comb::CombDialect,circt::seq::SeqDialect"];
-}
-*/
 
 def InlineModules : Pass<"inline-opt-modules", "mlir::ModuleOp"> {
   let summary = "Inline Yosys optimized modules";

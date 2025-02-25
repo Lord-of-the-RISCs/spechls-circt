@@ -5,14 +5,9 @@
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
-//
-// This file defines a helper to trigger the registration of all translations
-// in and out of CIRCT to the system.
-//
-//===----------------------------------------------------------------------===//
 
-#ifndef CIRCT_INITALLTRANSLATIONS_H
-#define CIRCT_INITALLTRANSLATIONS_H
+#ifndef SPECHLS_INITALLTRANSLATIONS_H
+#define SPECHLS_INITALLTRANSLATIONS_H
 
 namespace SpecHLS {
 
@@ -25,4 +20,4 @@ inline void registerAllTranslations() {
 }
 } // namespace SpecHLS
 
-#endif // CIRCT_INITALLTRANSLATIONS_H
+#endif // SPECHLS_INITALLTRANSLATIONS_H

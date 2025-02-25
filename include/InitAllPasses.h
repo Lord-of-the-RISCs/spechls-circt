@@ -5,11 +5,6 @@
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
-//
-// This file defines a helper to trigger the registration of all passes to the
-// system.
-//
-//===----------------------------------------------------------------------===//
 
 #ifndef SPECHLS_INITALLPASSES_H_
 #define SPECHLS_INITALLPASSES_H_
@@ -29,7 +24,6 @@ inline void registerAllPasses() {
     registerMergeGammasPass();
     registerMergeLookUpTablesPass();
     registerFactorGammaInputsPass();
-    registerAutoPipelinePass();
     registerEliminateRedundantGammaInputsPass();
     registerGroupControlNodePass();
     registerInlineModules();
@@ -38,7 +32,6 @@ inline void registerAllPasses() {
     registerSchedulePass();
     registerConfigurationExcluderPass();
     registerExportVitisHLS();
-    // registerGuardLogicAnalyzerPass();
     registerUnrollInstrPass();
     registerLongestPathPass();
     return true;
