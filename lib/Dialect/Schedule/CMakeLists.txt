@@ -9,6 +9,5 @@ add_mlir_dialect_library(SpecHLSScheduleDialect
         MLIRSpecHLSOpsIncGen
 
         LINK_LIBS PUBLIC
-        MLIRIR
-        MLIRInferTypeOpInterface
+        MLIR
 )

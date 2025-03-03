@@ -44,8 +44,6 @@ extern "C" {
 int isNull(void *p) { return (p == NULL); }
 
 void registerAllUpstreamDialects(MlirContext ctx) {
-  MlirDialectRegistry registry = mlirDialectRegistryCreate();
-  // mlirRegisterAllDialects(registry);
   mlirDialectHandleRegisterDialect(mlirGetDialectHandle__spechls__(), ctx);
   mlirDialectHandleRegisterDialect(mlirGetDialectHandle__schedule__(), ctx);
   mlirDialectHandleRegisterDialect(mlirGetDialectHandle__transform__(), ctx);
@@ -59,9 +57,6 @@ void registerAllUpstreamDialects(MlirContext ctx) {
   mlirDialectHandleRegisterDialect(mlirGetDialectHandle__scf__(), ctx);
   mlirDialectHandleRegisterDialect(mlirGetDialectHandle__ssp__(), ctx);
   mlirDialectHandleRegisterDialect(mlirGetDialectHandle__memref__(), ctx);
-
-  mlirContextAppendDialectRegistry(ctx, registry);
-  mlirDialectRegistryDestroy(registry);
 }
 
 bool mlirAttributeIsAArray(MlirAttribute attr);

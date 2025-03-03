@@ -32,19 +32,7 @@ add_mlir_library(SpecHLSTransforms
         MLIRSpecHLSOpsIncGen
         SpecHLSTransformsPassIncGen
 
-        LINK_COMPONENTS
-        Core
-
         LINK_LIBS PUBLIC
         MLIRSpecHLS
-        SpecHLSScheduleDialect
-        MLIRTransforms
-        CIRCTExportVerilog
-        CIRCTComb
-        CIRCTHW
-        CIRCTSSP
-        CIRCTSupport
-        CIRCTSSPTransforms
-        CIRCTScheduling
 )
 target_compile_options(SpecHLSTransforms PUBLIC -fexceptions)
