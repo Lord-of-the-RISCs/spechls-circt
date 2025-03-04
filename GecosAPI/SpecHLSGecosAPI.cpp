@@ -5,7 +5,6 @@
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 
-#include "mlir-c/Conversion.h"
 #include <mlir-c/AffineExpr.h>
 #include <mlir-c/AffineMap.h>
 #include <mlir-c/BuiltinAttributes.h>
@@ -39,9 +38,22 @@
 #include <stdlib.h>
 #include <string.h>
 
-extern "C" {
+namespace {
 
-int isNull(void *p) { return (p == NULL); }
+#define BUFFERLEN 0x800000
+char buffer[BUFFERLEN];
+int offset = 0;
+
+void resetBuffer() { offset = 0; }
+
+void printToBuffer(MlirStringRef str, void *userData) {
+  memcpy(&buffer[offset], str.data, str.length);
+  offset += str.length;
+}
+
+} // namespace
+
+extern "C" {
 
 void registerAllUpstreamDialects(MlirContext ctx) {
   mlirDialectHandleRegisterDialect(mlirGetDialectHandle__spechls__(), ctx);
@@ -59,45 +71,18 @@ void registerAllUpstreamDialects(MlirContext ctx) {
   mlirDialectHandleRegisterDialect(mlirGetDialectHandle__memref__(), ctx);
 }
 
-bool mlirAttributeIsAArray(MlirAttribute attr);
-bool mlirAttributeIsAString(MlirAttribute attr);
-
-int errorId = 0;
-char *errorMessage = "no error";
-
-void error(int i, char *message) {
-  errorMessage = message;
-  errorId = i;
-}
-
-int getErrorId(int i) { return errorId; }
-
-char *getErrorMessage(int i) { return errorMessage; }
-
-void clearError() {
-  errorId = 0;
-  errorMessage = "no error";
-}
-
-int traverseMLIR(MlirModule module);
-
-void printMlirIdentifier(MlirIdentifier ident) {
-  MlirStringRef identStr = mlirIdentifierStr(ident);
-  //  printf("ident[%d] %s\n",identStr.length,identStr.data);
-}
-
 int getCStringSizeFromMlirIdentifier(MlirIdentifier ident) {
   MlirStringRef identStr = mlirIdentifierStr(ident);
   return identStr.length;
 }
 
-char *getCStringDataFromMlirIdentifier(MlirIdentifier ident) {
+const char *getCStringDataFromMlirIdentifier(MlirIdentifier ident) {
   MlirStringRef identStr = mlirIdentifierStr(ident);
-  return (char *)identStr.data;
+  return identStr.data;
 }
 
-char *getCStringDataFromMlirStringRef(MlirStringRef ident) {
-  return (char *)ident.data;
+const char *getCStringDataFromMlirStringRef(MlirStringRef ident) {
+  return ident.data;
 }
 
 size_t getCStringSizeFromMlirStringRef(MlirStringRef ident) {
@@ -109,31 +94,11 @@ MlirIdentifier mlirNamedAttributeGetName(MlirNamedAttribute p) {
 }
 
 MlirAttribute mlirNamedAttributeGetAttribute(MlirNamedAttribute p) {
-  if (p.attribute.ptr == NULL)
-    fprintf(stderr, "NULL %X->%X", p.attribute, p.attribute.ptr);
   return p.attribute;
-}
-
-#define BUFFERLEN 0x800000
-char buffer[BUFFERLEN];
-int offset = 0;
-
-static void resetBuffer() { offset = 0; }
-
-char getCharAt(char *v, int offset) { return v[offset]; }
-
-int getOffset() { return offset; }
-
-static void printToBuffer(MlirStringRef str, void *userData) {
-
-  strcpy(&buffer[offset], str.data);
-  // strncpy(&buffer[offset],str.data, BUFFERLEN-offset);
-  offset += str.length;
 }
 
 char *mlirBlockToString(MlirBlock b) {
   resetBuffer();
-
   mlirBlockPrint(b, printToBuffer, NULL);
   return buffer;
 }
@@ -162,24 +127,15 @@ char *mlirValueToString(MlirValue b) {
 char *mlirAttributeToString(MlirAttribute b) {
   resetBuffer();
   if (b.ptr != NULL) {
-    // mlirAttributeDump(b);
-    // fprintf(stderr,"Dump  %p\n",b.ptr);
     mlirAttributePrint(b, printToBuffer, NULL);
-    // fprintf(stderr,"Print  %p\n",b.ptr);
     buffer[offset] = '\0';
     return buffer;
-  } else {
-    // fprintf(stderr,"Null  %p\n",b.ptr);
   }
+  return nullptr;
 }
 
 MlirIdentifier mlirOperationGetAttributeNameAt(MlirOperation op, intptr_t pos) {
-  //  if (pos>=0 && pos<mlirOperationGetNumAttributes(op)) {
   return mlirOperationGetAttribute(op, pos).name;
-  //  } else {
-  //    fprintf(stderr,"error at pos %d\n",pos);
-  //    return (MlirIdentifier) {NULL,NULL};
-  //  }
 }
 
 MlirAttribute mlirOperationGetAttributeAt(MlirOperation op, intptr_t pos) {
@@ -187,9 +143,7 @@ MlirAttribute mlirOperationGetAttributeAt(MlirOperation op, intptr_t pos) {
   return mlirOperationGetAttribute(op, pos).attribute;
 }
 
-// MlirNamedAttribute mlirOperationGetAttribute(MlirOperation op, intptr_t pos);
-
-char *mlirPrintNamedAttribute(MlirNamedAttribute b) {
+void mlirPrintNamedAttribute(MlirNamedAttribute b) {
   fprintf(stderr, "%s->%s", getCStringDataFromMlirIdentifier(b.name),
           mlirAttributeToString(b.attribute));
 }
@@ -200,120 +154,17 @@ char *mlirTypeToString(MlirType b) {
   buffer[offset] = '\0';
   return buffer;
 }
-// In the module we created, the first operation of the first function is
-// an "memref.dim", which has an attribute and a single result that we can
-// use to test the printing mechanism.
 
-// CHECK-LABEL: Running test 'testSimpleExecution'
 MlirModule parseMLIR(const char *mlir) {
   MlirContext ctx = mlirContextCreate();
   registerAllUpstreamDialects(ctx);
-  // printf("C side : context %p\n", ctx.ptr);
-
-  // printf("Input %s", mlir);
-
   MlirStringRef str = mlirStringRefCreateFromCString(mlir);
-
   MlirModule module = mlirModuleCreateParse(ctx, str);
-
-  // printf("Output %s", mlirModuleToString(module));
-
   return module;
 }
 
 void destroyMLIR(MlirModule module) {
   MlirContext ctx = mlirModuleGetContext(module);
-  mlirModuleDestroy(module);
-  mlirContextDestroy(ctx);
-}
-
-static void printToStderr(MlirStringRef str, void *userData) {
-  (void)userData;
-  fwrite(str.data, 1, str.length, stderr);
-}
-
-void traverseBlock(MlirBlock block);
-void traverseOp(MlirOperation operation);
-void traverseRegion(MlirRegion region);
-
-int traverseModule(MlirModule m) {
-  // Assuming we are given a module, go to the first operation of the first
-  // function.
-  MlirOperation op = mlirModuleGetOperation(m);
-  traverseOp(op);
-
-  return 0;
-}
-
-void traverseOp(MlirOperation op) {
-  if (op.ptr != NULL) {
-    MlirIdentifier ident = mlirOperationGetName(op);
-    if (ident.ptr != NULL) {
-      // printMlirIdentifier(ident);
-      //   mlirOperationToString(op);
-    }
-
-    int num = mlirOperationGetNumRegions(op);
-    for (int i = 0; i < num; i++) {
-      MlirRegion region = mlirOperationGetRegion(op, i);
-      traverseRegion(region);
-    }
-  }
-}
-
-void traverseRegion(MlirRegion region) {
-  if (region.ptr != NULL) {
-    MlirBlock block = mlirRegionGetFirstBlock(region);
-    while (block.ptr != NULL) {
-      traverseBlock(block);
-      block = mlirBlockGetNextInRegion(block);
-    }
-    fflush(stdout);
-  }
-}
-
-void traverseBlock(MlirBlock block) {
-  if (block.ptr != NULL) {
-    MlirOperation op = mlirBlockGetFirstOperation(block);
-    while (op.ptr != NULL) {
-      traverseOp(op);
-      op = mlirOperationGetNextInBlock(op);
-    }
-    fflush(stdout);
-  }
-}
-
-void traverseRegionLegacy(MlirRegion region) {
-
-  if (region.ptr != NULL) {
-    MlirBlock block = mlirRegionGetFirstBlock(region);
-    while (block.ptr != NULL) {
-      MlirOperation op = mlirBlockGetFirstOperation(block);
-      while (op.ptr != NULL) {
-        MlirIdentifier ident = mlirOperationGetName(op);
-        printMlirIdentifier(ident);
-        int num = mlirOperationGetNumRegions(op);
-        for (int i = 0; i < num; i++) {
-          region = mlirOperationGetRegion(op, i);
-          traverseRegion(region);
-        }
-        op = mlirOperationGetNextInBlock(op);
-      }
-      block = mlirBlockGetNextInRegion(block);
-    }
-  }
-}
-
-// CHECK-LABEL: Running test 'testSimpleExecution'
-void pass(const char *mlir) {
-  MlirContext ctx = mlirContextCreate();
-  registerAllUpstreamDialects(ctx);
-
-  MlirModule module =
-      mlirModuleCreateParse(ctx, mlirStringRefCreateFromCString(mlir));
-  MlirOperation moduleOp = mlirModuleGetOperation(module);
-  // printFirstOfEach(ctx,moduleOp);
-
   mlirModuleDestroy(module);
   mlirContextDestroy(ctx);
 }
