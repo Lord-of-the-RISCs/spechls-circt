@@ -139,12 +139,12 @@ jobs:
           hugo-version: '0.145.0'
           extended: true
       - name: Build website
-        run: (cd "$GITHUB_WORKSPACE/spechls-circt/website" && hugo --minify -d ../public)
+        run: (cd "$GITHUB_WORKSPACE/spechls-circt/website" && hugo --minify -d "$GITHUB_WORKSPACE/public")
       - name: Deploy website
         uses: peaceiris/actions-gh-pages@v3
         with:
           publish_branch: gh-pages
-          publish_dir: "$GITHUB_WORKSPACE/spechls-circt/public"
+          publish_dir: "$GITHUB_WORKSPACE/public"
           force_orphan: true
           github_token: ${{ secrets.GITHUB_TOKEN }}
           user_name: 'github-actions[bot]'
