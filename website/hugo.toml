@@ -1,4 +1,4 @@
-baseURL = ""
+baseURL = "https://lord-of-the-riscs.github.io/spechls-circt"
 
 languageCode = "en-us"
 DefaultContentLanguage = "en"
