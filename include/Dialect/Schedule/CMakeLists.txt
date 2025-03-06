@@ -1,3 +1,2 @@
-add_mlir_dialect(ScheduleOps Schedule)
-add_mlir_doc(ScheduleDialect ScheduleDialect Schedule/ -gen-dialect-doc)
-add_mlir_doc(ScheduleOps ScheduleOps Schedule/ -gen-op-doc)
+add_circt_dialect(ScheduleOps Schedule)
+add_circt_dialect_doc(ScheduleOps Schedule)
