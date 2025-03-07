@@ -21,10 +21,6 @@ add_mlir_library(SpecHLSTransforms
         SpecHLSToComb/LUTConversion.cpp
         SpecHLSToSeq/SpecHLSToSeq.cpp
         SpecHLSToSeq/DelayConversion.cpp
-        VitisExport/CFileContent.cpp
-        VitisExport/PrintOperations.cpp
-        VitisExport/PrintUtils.cpp
-        VitisExport/ExportVitisHLS.cpp
         Simplifier/GroupControlLogic.cpp
         Scheduling/MobilityPass.cpp
         Scheduling/ConfigurationExcluder.cpp

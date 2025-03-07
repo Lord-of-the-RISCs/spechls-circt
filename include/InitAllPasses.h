@@ -30,7 +30,6 @@ inline void registerAllPasses() {
     registerMobilityPass();
     registerSchedulePass();
     registerConfigurationExcluderPass();
-    registerExportVitisHLS();
     registerUnrollInstrPass();
     registerLongestPathPass();
     return true;
