@@ -90,34 +90,3 @@ public:
     }
   }
 };
-/*
-int main() {
-  // Initialize an MLIR context
-  MLIRContext context;
-
-  // For demonstration, create an example module with operations
-  OpBuilder builder(&context);
-  auto module = builder.create<ModuleOp>(builder.getUnknownLoc());
-  auto funcType = builder.getFunctionType({}, {});
-  auto funcOp = builder.create<FuncOp>(builder.getUnknownLoc(), "example_func",
-funcType); Region &region = funcOp.getBody();
-
-  Block *entryBlock = builder.createBlock(&region);
-  auto type = builder.getIntegerType(32);
-  Operation *op1 = builder.create<mlir::ConstantOp>(builder.getUnknownLoc(),
-type, builder.getI32IntegerAttr(1)); Operation *op2 =
-builder.create<mlir::ConstantOp>(builder.getUnknownLoc(), type,
-builder.getI32IntegerAttr(2)); Operation *op3 =
-builder.create<mlir::AddIOp>(builder.getUnknownLoc(), op1->getResult(0),
-op2->getResult(0)); builder.create<mlir::ReturnOp>(builder.getUnknownLoc(),
-op3->getResult(0));
-
-  // Construct data-flow based dominator analysis
-  DataFlowDominatorAnalysis analysis(funcOp);
-
-  // Print dominator sets
-  analysis.printDominatorSets();
-
-  return 0;
-}
-*/

@@ -63,8 +63,6 @@ mlir::ParseResult parseOperandList(mlir::OpAsmParser &parser,
 
 /*
  *  ExitOP
- *
- *
  */
 
 mlir::ParseResult SuperNodeOp::parse(mlir::OpAsmParser &parser,

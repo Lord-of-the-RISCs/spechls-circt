@@ -411,7 +411,6 @@ void YosysOptimizer::runOnOperation() {
       llvm::errs() << "Yosys pass failed \n";
     signalPassFailure();
   }
-  mlir::verify(mlir::OperationPass<ModuleOp>::getOperation(), true);
 }
 
 } // namespace mlir

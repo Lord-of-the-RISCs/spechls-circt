@@ -12,11 +12,6 @@
 #include "mlir/CAPI/Registration.h"
 
 extern "C" {
-
-// bool mlirAttributeIsAArray(MlirAttribute attr) {
-//   return llvm::isa<mlir::ArrayAttr>(unwrap(attr));
-// }
-
 MLIR_DEFINE_CAPI_DIALECT_REGISTRATION(Scheduling, ssp, circt::ssp::SSPDialect)
 void registerSSPPasses() { circt::ssp::registerPasses(); }
 }

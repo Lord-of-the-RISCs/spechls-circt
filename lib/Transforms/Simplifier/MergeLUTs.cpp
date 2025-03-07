@@ -90,7 +90,6 @@ public:
       llvm::errs() << "partial conversion failed pattern  \n";
       signalPassFailure();
     }
-    mlir::verify(getOperation(), true);
   }
 };
 

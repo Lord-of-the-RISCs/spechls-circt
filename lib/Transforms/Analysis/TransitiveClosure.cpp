@@ -5,22 +5,17 @@
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 
+#include "Common/TransitiveClosure.h"
 #include "mlir/Analysis/SliceAnalysis.h"
 #include "mlir/IR/Block.h"
 #include "mlir/IR/Operation.h"
 #include "mlir/IR/Region.h"
-
-#include "Common/TransitiveClosure.h"
 #include "llvm/ADT/BitVector.h"
 #include "llvm/Support/raw_ostream.h"
 #include <functional>
-#include <unordered_map>
 #include <vector>
 
 using namespace mlir;
-
-#ifndef __SpecHLSTransitiveDependencyAnalyzer_IMPL
-#define __SpecHLSTransitiveDependencyAnalyzer_IMPL
 
 void PathAnalyzer::mapOperations() {
   size_t index = 0;
@@ -163,4 +158,3 @@ PathAnalyzer::getTransitivePredecessors(mlir::Operation *op) {
   }
   return res;
 }
-#endif

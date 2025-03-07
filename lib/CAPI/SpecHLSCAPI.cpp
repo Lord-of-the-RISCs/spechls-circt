@@ -26,7 +26,6 @@
 #include "mlir/IR/BuiltinTypes.h"
 
 extern "C" {
-
 MLIR_DEFINE_CAPI_DIALECT_REGISTRATION(SpecHLS, spechls, SpecHLS::SpecHLSDialect)
 MLIR_DEFINE_CAPI_DIALECT_REGISTRATION(Schedule, schedule,
                                       SpecHLS::ScheduleDialect)

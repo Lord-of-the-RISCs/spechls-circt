@@ -12,6 +12,7 @@
 
 #include "Dialect/Schedule/ScheduleDialect.h"
 #include "Dialect/Schedule/ScheduleOps.h"
+
 #include "Dialect/Schedule/ScheduleOpsDialect.cpp.inc"
 #include "Dialect/Schedule/ScheduleOpsTypes.h.inc"
 

@@ -164,7 +164,6 @@ struct GammaMergingPattern : OpRewritePattern<GammaOp> {
           rewriter.replaceOp(outerGamma, newGammaOp);
           if (nbUsers == 1)
             rewriter.eraseOp(innerGamma);
-          mlir::verify(newGammaOp, true);
           return success();
         }
       }
@@ -188,8 +187,6 @@ public:
       llvm::errs() << "partial conversion failed pattern  \n";
       signalPassFailure();
     }
-
-    mlir::verify(getOperation(), true);
   }
 };
 

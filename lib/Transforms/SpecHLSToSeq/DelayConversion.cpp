@@ -5,20 +5,17 @@
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 
-#include "Dialect/SpecHLS/SpecHLSDialect.h"
 #include "Dialect/SpecHLS/SpecHLSOps.h"
 #include "Transforms/SpecHLSConversion.h"
-#include "circt/Dialect/Comb/CombOps.h"
-#include "circt/Dialect/HW/HWTypes.h"
 #include "circt/Dialect/Seq/SeqOps.h"
-#include "mlir/Dialect/Arith/IR/Arith.h"
-#include "mlir/Pass/Pass.h"
 #include "mlir/Transforms/DialectConversion.h"
 
-static MuOp *findMuSource(Value *value) {
-  auto defOp = value->getDefiningOp();
+namespace {
+
+MuOp findMuSource(Value *value) {
+  auto *defOp = value->getDefiningOp();
   if (defOp) {
-    TypeSwitch<Operation *, bool>(defOp)
+    return TypeSwitch<Operation *, MuOp>(defOp)
         .Case<GammaOp>([&](auto op) {
           llvm::outs() << "- node " << op << "\n";
           auto operand = op->getOperand(1);
@@ -37,12 +34,13 @@ static MuOp *findMuSource(Value *value) {
         .Case<MuOp>([&](auto op) { return op; })
         .Default([&](auto op) {
           llvm::errs() << "Operation " << *op << "is not unexpecetd\n";
-          return NULL;
+          return nullptr;
         });
-  } else {
-    return NULL;
   }
+  return nullptr;
 }
+
+} // namespace
 
 DelayOpToShiftRegOpConversion::DelayOpToShiftRegOpConversion(
     MLIRContext *context1, Value *clock, Value *reset)
@@ -54,18 +52,16 @@ DelayOpToShiftRegOpConversion::DelayOpToShiftRegOpConversion(
 LogicalResult DelayOpToShiftRegOpConversion::matchAndRewrite(
     DelayOp op, PatternRewriter &rewriter) const {
   InnerSymAttr innerSymAttr;
-  auto _true = rewriter.create<circt::hw::ConstantOp>(op.getLoc(),
-                                                      rewriter.getI1Type(), 0);
-  auto _false = rewriter.create<circt::hw::ConstantOp>(op.getLoc(),
-                                                       rewriter.getI1Type(), 0);
+  auto falseCst = rewriter.create<circt::hw::ConstantOp>(
+      op.getLoc(), rewriter.getI1Type(), 0);
 
   auto shiftRegOp = rewriter.create<circt::seq::ShiftRegOp>(
 
       op.getLoc(), 10,
       op.getNext(), // Input signal to be shifted
       *this->clock, // Clock signal
-      op.getEnable(), rewriter.getStringAttr("Delay"), *this->reset, _false,
-      _false, innerSymAttr);
+      op.getEnable(), rewriter.getStringAttr("Delay"), *this->reset, falseCst,
+      falseCst, innerSymAttr);
 
   shiftRegOp->dump();
   auto value = op->getResult(0);
@@ -89,42 +85,18 @@ AlphaOpToHLWriteConversion::AlphaOpToHLWriteConversion(
 LogicalResult
 AlphaOpToHLWriteConversion::matchAndRewrite(AlphaOp op,
                                             PatternRewriter &rewriter) const {
-  InnerSymAttr innerSymAttr;
-  auto _true = rewriter.create<circt::hw::ConstantOp>(op.getLoc(),
-                                                      rewriter.getI1Type(), 0);
-  auto _false = rewriter.create<circt::hw::ConstantOp>(op.getLoc(),
-                                                       rewriter.getI1Type(), 0);
+  auto trueCst = rewriter.create<circt::hw::ConstantOp>(
+      op.getLoc(), rewriter.getI1Type(), 0);
 
   llvm::errs() << "AlphaOpToHLWriteConversion:" << op << "\n";
-  //  static void build(::mlir::OpBuilder &odsBuilder, ::mlir::OperationState
-  //  &odsState, Value memory, ValueRange addresses, Value rdEn, unsigned
-  //  latency); static void build(::mlir::OpBuilder &odsBuilder,
-  //  ::mlir::OperationState &odsState, ::mlir::Type readData, ::mlir::Value
-  //  memory, ::mlir::ValueRange addresses, /*optional*/::mlir::Value rdEn,
-  //  ::mlir::IntegerAttr latency); static void build(::mlir::OpBuilder
-  //  &odsBuilder, ::mlir::OperationState &odsState, ::mlir::TypeRange
-  //  resultTypes, ::mlir::Value memory, ::mlir::ValueRange addresses,
-  //  /*optional*/::mlir::Value rdEn, ::mlir::IntegerAttr latency); static void
-  //  build(::mlir::OpBuilder &odsBuilder, ::mlir::OperationState &odsState,
-  //  ::mlir::Type readData, ::mlir::Value memory, ::mlir::ValueRange addresses,
-  //  /*optional*/::mlir::Value rdEn, uint64_t latency); static void
-  //  build(::mlir::OpBuilder &odsBuilder, ::mlir::OperationState &odsState,
-  //  ::mlir::TypeRange resultTypes, ::mlir::Value memory, ::mlir::ValueRange
-  //  addresses, /*optional*/::mlir::Value rdEn, uint64_t latency); static void
-  //  build(::mlir::OpBuilder &, ::mlir::OperationState &odsState,
-  //  ::mlir::TypeRange resultTypes, ::mlir::ValueRange operands,
-  //  ::llvm::ArrayRef<::mlir::NamedAttribute> attributes = {});
-  //
   auto memref = op.getOperand(0);
   llvm::outs() << memref << "\n";
-  if (auto mu = findMuSource(&memref)) {
-
-    if (auto hlmem = this->memMap.at(*mu)) {
-
+  if (auto mu = findMuSource(&memref); mu) {
+    if (auto hlmem = this->memMap.at(mu); hlmem) {
       llvm::errs() << "Associated memory :" << hlmem << "\n";
 
       auto readop = rewriter.create<circt::seq::ReadPortOp>(
-          op.getLoc(), hlmem.getResult(), op.getIndices(), _true, 1u);
+          op.getLoc(), hlmem.getResult(), op.getIndices(), trueCst, 1u);
 
       auto value = op->getResult(0);
       value.replaceAllUsesWith(readop->getResult(0));
@@ -147,37 +119,14 @@ ArrayReadOpToHLReadConversion::ArrayReadOpToHLReadConversion(
 
 LogicalResult ArrayReadOpToHLReadConversion::matchAndRewrite(
     ArrayReadOp op, PatternRewriter &rewriter) const {
-  InnerSymAttr innerSymAttr;
-  auto _true = rewriter.create<circt::hw::ConstantOp>(op.getLoc(),
-                                                      rewriter.getI1Type(), 0);
-  auto _false = rewriter.create<circt::hw::ConstantOp>(op.getLoc(),
-                                                       rewriter.getI1Type(), 0);
-
-  //  static void build(::mlir::OpBuilder &odsBuilder, ::mlir::OperationState
-  //  &odsState, Value memory, ValueRange addresses, Value rdEn, unsigned
-  //  latency); static void build(::mlir::OpBuilder &odsBuilder,
-  //  ::mlir::OperationState &odsState, ::mlir::Type readData, ::mlir::Value
-  //  memory, ::mlir::ValueRange addresses, /*optional*/::mlir::Value rdEn,
-  //  ::mlir::IntegerAttr latency); static void build(::mlir::OpBuilder
-  //  &odsBuilder, ::mlir::OperationState &odsState, ::mlir::TypeRange
-  //  resultTypes, ::mlir::Value memory, ::mlir::ValueRange addresses,
-  //  /*optional*/::mlir::Value rdEn, ::mlir::IntegerAttr latency); static void
-  //  build(::mlir::OpBuilder &odsBuilder, ::mlir::OperationState &odsState,
-  //  ::mlir::Type readData, ::mlir::Value memory, ::mlir::ValueRange addresses,
-  //  /*optional*/::mlir::Value rdEn, uint64_t latency); static void
-  //  build(::mlir::OpBuilder &odsBuilder, ::mlir::OperationState &odsState,
-  //  ::mlir::TypeRange resultTypes, ::mlir::Value memory, ::mlir::ValueRange
-  //  addresses, /*optional*/::mlir::Value rdEn, uint64_t latency); static void
-  //  build(::mlir::OpBuilder &, ::mlir::OperationState &odsState,
-  //  ::mlir::TypeRange resultTypes, ::mlir::ValueRange operands,
-  //  ::llvm::ArrayRef<::mlir::NamedAttribute> attributes = {});
-  //
+  auto trueCst = rewriter.create<circt::hw::ConstantOp>(
+      op.getLoc(), rewriter.getI1Type(), 0);
   auto mvalue = op.getMemref();
   auto mu = findMuSource(&mvalue);
-  auto hlmem = this->memMap.at(*mu);
+  auto hlmem = this->memMap.at(mu);
 
   auto readop = rewriter.create<circt::seq::ReadPortOp>(
-      op.getLoc(), hlmem.getResult(), op.getIndices(), _true, 1u);
+      op.getLoc(), hlmem.getResult(), op.getIndices(), trueCst, 1u);
 
   readop->dump();
   auto value = op->getResult(0);
@@ -198,11 +147,6 @@ MuOpToRegConversion::MuOpToRegConversion(
 
 LogicalResult
 MuOpToRegConversion::matchAndRewrite(MuOp op, PatternRewriter &rewriter) const {
-  InnerSymAttr innerSymAttr;
-  auto _true = rewriter.create<circt::hw::ConstantOp>(op.getLoc(),
-                                                      rewriter.getI1Type(), 0);
-  auto _false = rewriter.create<circt::hw::ConstantOp>(op.getLoc(),
-                                                       rewriter.getI1Type(), 0);
   llvm::errs() << "Associated MuOp :" << op << "\n";
   if (!clock) {
     llvm::errs() << "no registerd clock\n";
@@ -210,11 +154,6 @@ MuOpToRegConversion::matchAndRewrite(MuOp op, PatternRewriter &rewriter) const {
   }
 
   if (auto memRefType = dyn_cast<MemRefType>(op.getType())) {
-
-    //    auto reg = rewriter.create<circt::seq::CompRegOp>(op.getLoc(),
-    //    op.getNext(),
-    //                                                      *clock);
-
     auto hlMemType = rewriter.getType<seq::HLMemType>(
         memRefType.getShape(), memRefType.getElementType());
     auto mem = rewriter.create<circt::seq::HLMemOp>(
@@ -228,17 +167,15 @@ MuOpToRegConversion::matchAndRewrite(MuOp op, PatternRewriter &rewriter) const {
     rewriter.replaceOp(op, mem);
     //
     return success();
-
-  } else {
-
-    auto reg = rewriter.create<circt::seq::CompRegOp>(op.getLoc(), op.getNext(),
-                                                      *clock);
-
-    reg->dump();
-    auto value = op->getResult(0);
-    value.replaceAllUsesWith(reg->getResult(0));
-    rewriter.replaceOp(op, reg);
-
-    return success();
   }
+
+  auto reg =
+      rewriter.create<circt::seq::CompRegOp>(op.getLoc(), op.getNext(), *clock);
+
+  reg->dump();
+  auto value = op->getResult(0);
+  value.replaceAllUsesWith(reg->getResult(0));
+  rewriter.replaceOp(op, reg);
+
+  return success();
 }

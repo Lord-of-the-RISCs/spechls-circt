@@ -5,7 +5,6 @@
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 
-#include "InlineOptimizedModules.h"
 #include "Dialect/SpecHLS/SpecHLSUtils.h"
 #include "Transforms/Passes.h"
 #include "circt/Dialect/Comb/CombDialect.h"
@@ -161,7 +160,6 @@ void InlineOptimizedModulesPass::runOnOperation() {
       }
     }
   }
-  mlir::verify(mlir::OperationPass<ModuleOp>::getOperation(), true);
 }
 
 std::unique_ptr<mlir::OperationPass<mlir::ModuleOp>>

@@ -85,8 +85,8 @@ struct LongestPathPattern : OpRewritePattern<hw::HWModuleOp> {
 
       // Save all uses & update all uses' value
       for (Operation *use : v.getUsers()) {
-        auto use_d = dists[use];
-        if (use_d < (dist + delay)) {
+        auto useDist = dists[use];
+        if (useDist < (dist + delay)) {
           dists[use] = dist + delay;
         }
       }

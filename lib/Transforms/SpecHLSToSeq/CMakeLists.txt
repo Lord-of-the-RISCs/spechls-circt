@@ -1,22 +1,11 @@
-add_mlir_library(SpecHLSToComb
+add_mlir_library(SpecHLSToSeq
         SpecHLSToSeq.cpp
         DelayConversion.cpp
         DEPENDS
 
         MLIRSpecHLSOpsIncGen
         SpecHLSConversionIncGen
-  LINK_COMPONENTS
-  Core
 
-  LINK_LIBS PUBLIC
-  MLIRSpecHLS
-  MLIRTransforms
+        LINK_LIBS PUBLIC
+        CIRCT
 )
-
-target_link_libraries(SpecHLSToSeq
-
-        PUBLIC
-        CIRCTComb
-        CIRCTHW
-        CIRCTSupport
-        )

@@ -34,7 +34,6 @@ using namespace std;
 
 using namespace mlir;
 using namespace circt;
-using namespace SpecHLS;
 using namespace circt::hw;
 
 namespace SpecHLS {
@@ -42,8 +41,7 @@ namespace SpecHLS {
 struct ExportElkPass : public impl::ExportVitisHLSBase<ExportElkPass> {
 
 public:
-  void runOnOperation() {
-    auto *ctx = &getContext();
+  void runOnOperation() override {
     auto module = this->getOperation();
 
     llvm::outs() << "In ElkJS export pass ";
@@ -51,12 +49,11 @@ public:
 
     for (auto hwop : module.getOps<circt::hw::HWModuleOp>()) {
       auto moduleName = hwop.getNameAttr().str();
-      for (Operation *op : hwop.getBodyBlock()->getOperations()) {
+      for (auto &&op : hwop.getBodyBlock()->getOperations()) {
 
         llvm::outs() << "node " << op.getName() << " {\n";
-        for (auto arg : op.getOperands()) {
-          llvm::outs() << "    port " << arg.getName()
-                       << " { ^port.side: WEST }\n";
+        for (auto &&arg : op.getOperands()) {
+          llvm::outs() << "    port " << arg << " { ^port.side: WEST }\n";
         }
         llvm::outs() << "    node n1 {\n";
         llvm::outs() << "        portConstraints: FIXED_SIDE\n";

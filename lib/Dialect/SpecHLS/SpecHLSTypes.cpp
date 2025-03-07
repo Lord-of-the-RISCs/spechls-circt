@@ -34,21 +34,7 @@ using namespace mlir;
 
 namespace SpecHLS {
 
-/*
- "int64_t":$size,
-"Type":$elementType,
-"int64_t":$nbDiscardedWrites,
-ArrayRefParameter<"int64_t">:$nbPendingWrites,
-"int64_t":$maxPendingWrites,
-"int64_t":$maxPendingAddresses
- */
-
-//  let assemblyFormat = "`specarray` `<` $size `x`  $elementType `>` `{`
-//  $$nbDiscardedWrites `,`  {$nbPendingWrites, $nbPendingWrites*},
-//  $maxPendingWrites, $maxPendingAddresses `}`";
-
 mlir::Type SpecArrayType::parse(mlir::AsmParser &parser) {
-  int64_t size;
   Type baseType;
   int64_t nbDiscardedWrites;
   int64_t maxPendingAddresses;

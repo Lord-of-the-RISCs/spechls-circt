@@ -34,8 +34,7 @@ private:
   //  Cette fonction construit une liste avec la position des arguments produit
   //  par des op d'une même classe d'equivalence (definie par checkmatch)
   //
-  LogicalResult extractMatches(GammaOp op,
-                               SmallVector<int32_t> &matches) const {
+  LogicalResult extractMatches(GammaOp op, SmallVector<size_t> &matches) const {
     // llvm::errs() << "analyzing  " << op << " \n";
     auto nbInputs = op.getInputs().size();
     for (uint32_t i = 0; i < nbInputs; i++) {
@@ -58,7 +57,7 @@ private:
   }
 
   SpecHLS::LookUpTableOp
-  createOuterReindexingLUT(GammaOp op, SmallVector<int32_t> &matches,
+  createOuterReindexingLUT(GammaOp op, SmallVector<size_t> &matches,
                            PatternRewriter &rewriter) const {
     /*
      * creates a LUT for reindexing outer Gamma inputs, by skipping
@@ -68,11 +67,11 @@ private:
     size_t outerLutSize = 1 << (size_t)(std::ceil(log(nbInputs) / log(2)));
     auto firstMatchIndex = matches[0];
     SmallVector<int> outerLutContent;
-    u_int32_t pos = 0;
-    for (int k = 0; k <= firstMatchIndex; k++) {
+    size_t pos = 0;
+    for (size_t k = 0; k <= firstMatchIndex; k++) {
       outerLutContent.push_back(k);
     }
-    for (int k = firstMatchIndex + 1; k < nbInputs; k++) {
+    for (size_t k = firstMatchIndex + 1; k < nbInputs; k++) {
       if (std::count_if(matches.begin(), matches.end(),
                         [&](const auto &item) { return (k == item); })) {
         outerLutContent.push_back(firstMatchIndex);
@@ -89,7 +88,7 @@ private:
 
     if (verbose) {
       llvm::outs() << "Outer gamma " << op << " reindexing  \n";
-      for (int k = 0; k < nbInputs; k++) {
+      for (size_t k = 0; k < nbInputs; k++) {
         llvm::outs() << " - input " << k << " reindexed to "
                      << outerLutContent[k] << " \n";
       }
@@ -103,9 +102,8 @@ private:
 public:
   LogicalResult matchAndRewrite(GammaOp op,
                                 PatternRewriter &rewriter) const override {
-
-    SmallVector<int32_t> matches;
-    u_int32_t nbInputs = op.getInputs().size();
+    SmallVector<size_t> matches;
+    size_t nbInputs = op.getInputs().size();
     if (extractMatches(op, matches).succeeded()) {
       if (matches.size() == nbInputs) {
         llvm::errs() << "Eliminating " << op
@@ -113,36 +111,33 @@ public:
         op.getResult().replaceAllUsesWith(op.getInputs()[0]);
         rewriter.eraseOp(op);
         return success();
-      } else {
-
-        auto lut = createOuterReindexingLUT(op, matches, rewriter);
-
-        // filter out redundant input values
-        SmallVector<Value> args;
-        for (int32_t k = 0; k < nbInputs; k++) {
-          bool found = false;
-          for (u_int32_t j = 1; j < matches.size(); j++) {
-            if (k == matches[j]) {
-              found = true;
-              break;
-            }
-          }
-          if (!found) {
-            args.push_back(op.getInputs()[k]);
-          }
-        }
-        auto gamma = rewriter.create<SpecHLS::GammaOp>(
-            op->getLoc(), op->getResultTypes(), op.getName(), lut->getResult(0),
-            args);
-
-        llvm::errs() << "Simplifying  " << op << " into  " << gamma << "\n";
-        rewriter.replaceOp(op, gamma);
-        return success();
       }
 
-    } else {
-      return failure();
+      auto lut = createOuterReindexingLUT(op, matches, rewriter);
+
+      // filter out redundant input values
+      SmallVector<Value> args;
+      for (size_t k = 0; k < nbInputs; k++) {
+        bool found = false;
+        for (u_int32_t j = 1; j < matches.size(); j++) {
+          if (k == matches[j]) {
+            found = true;
+            break;
+          }
+        }
+        if (!found) {
+          args.push_back(op.getInputs()[k]);
+        }
+      }
+      auto gamma = rewriter.create<SpecHLS::GammaOp>(
+          op->getLoc(), op->getResultTypes(), op.getName(), lut->getResult(0),
+          args);
+
+      llvm::errs() << "Simplifying  " << op << " into  " << gamma << "\n";
+      rewriter.replaceOp(op, gamma);
+      return success();
     }
+    return failure();
   }
 };
 
@@ -154,8 +149,6 @@ public:
     auto *ctx = &getContext();
 
     RewritePatternSet patterns(ctx);
-
-    //    patterns.insert<FactorGammaInputsPattern>(ctx);
     patterns.insert<EliminateRedundantGammaInputs>(ctx);
 
     if (failed(applyPatternsAndFoldGreedily(getOperation(),
@@ -163,7 +156,6 @@ public:
       llvm::errs() << "partial conversion failed pattern  \n";
       signalPassFailure();
     }
-    mlir::verify(getOperation(), true);
   }
 };
 std::unique_ptr<OperationPass<>> createEliminateRedundantGammaInputsPass() {

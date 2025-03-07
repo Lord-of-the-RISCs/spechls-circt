@@ -158,7 +158,6 @@ void GroupControlNodePass::runOnOperation() {
       }
     }
   }
-  mlir::verify(top, true);
 }
 
 namespace SpecHLS {

@@ -61,24 +61,24 @@ struct UnrollInstrPattern : OpRewritePattern<hw::HWModuleOp> {
 
   LogicalResult matchAndRewrite(hw::HWModuleOp top,
                                 PatternRewriter &rewriter) const override {
-    MuOp first_mu;
-    if (!setupHWModule(top, rewriter, first_mu)) {
+    MuOp firstMu;
+    if (!setupHWModule(top, rewriter, firstMu)) {
       return failure();
     }
 
     // Create the new module with all instances
     SmallVector<hw::PortInfo> ports;
 
-    StringAttr module_name =
+    StringAttr moduleName =
         rewriter.getStringAttr(top.getName().str() + std::string("_unroll"));
-    hw::HWModuleOp unrolled_module = rewriter.create<hw::HWModuleOp>(
-        rewriter.getUnknownLoc(), module_name, ports);
-    Block *body = unrolled_module.getBodyBlock();
+    hw::HWModuleOp unrolledModule = rewriter.create<hw::HWModuleOp>(
+        rewriter.getUnknownLoc(), moduleName, ports);
+    Block *body = unrolledModule.getBodyBlock();
     ImplicitLocOpBuilder builder =
-        ImplicitLocOpBuilder::atBlockBegin(unrolled_module.getLoc(), body);
+        ImplicitLocOpBuilder::atBlockBegin(unrolledModule.getLoc(), body);
 
     auto initial =
-        builder.create<InitOp>(first_mu.getInit().getType(), "initial_value");
+        builder.create<InitOp>(firstMu.getInit().getType(), "initial_value");
     setPragmaAttr(initial, rewriter.getStringAttr("MU_INITAL"));
 
     // Create a constOp for each instruction
@@ -116,7 +116,7 @@ struct UnrollInstrPattern : OpRewritePattern<hw::HWModuleOp> {
     }
 
     // Plug the last delay into the output of the module
-    unrolled_module.appendOutput("out", delta.getResult());
+    unrolledModule.appendOutput("out", delta.getResult());
 
     return success();
   }
