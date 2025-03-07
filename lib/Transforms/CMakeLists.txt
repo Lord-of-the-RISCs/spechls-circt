@@ -1,6 +1,8 @@
 add_compile_definitions(_YOSYS_)
 
 add_mlir_library(SpecHLSTransforms
+        Analysis/DataflowDominatorAnalysis.cpp
+        Analysis/PostDataflowDominatorAnalysis.cpp
         Analysis/TransitiveClosure.cpp
         Common/OutliningUtils.cpp
         Common/UnrollInstr.cpp
