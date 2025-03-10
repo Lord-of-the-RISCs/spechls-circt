@@ -33,8 +33,9 @@ struct SchedulePass : public impl::SchedulePassBase<SchedulePass> {
     }
     mlir::OpPassManager dynamicPM("builtin.module");
     std::unique_ptr<mlir::Pass> pass = circt::ssp::createSchedulePass();
-    auto optionsResults =
-        pass->initializeOptions("options=cycle-time=" + std::to_string(period));
+    auto optionsResults = pass->initializeOptions(
+        "options=cycle-time=" + std::to_string(period),
+        [](const llvm::Twine &) { return circt::failure(); });
     if (failed(optionsResults)) {
       llvm::errs() << "Error initializing ssp options.\n";
       exit(1);

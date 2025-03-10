@@ -98,7 +98,6 @@ MlirPass mlirCreateSchedulePass(void);
 MlirPass mlirCreateMobilityPass(void);
 MlirPass mlirCreateLocalMobilityPass(void);
 MlirPass mlirCreateConfigurationExcluderPass(void);
-MlirPass mlirCreateExportVitisHLS(void);
 
 #define DEFINE_GECOS_API_PASS(name, pass)                                      \
                                                                                \
@@ -127,7 +126,6 @@ DEFINE_GECOS_API_PASS(mobilityMLIR, MobilityPass)
 
 DEFINE_GECOS_API_PASS(configurationExcluderMLIR, ConfigurationExcluderPass)
 
-DEFINE_GECOS_API_PASS(exportVitisHLS, ExportVitisHLS)
 DEFINE_GECOS_API_PASS(yosysOptimizer, YosysOptimizerPass)
 DEFINE_GECOS_API_PASS(groupControl, GroupControlNodePass)
 DEFINE_GECOS_API_PASS(factorGammaInputs, FactorGammaInputsPass)
