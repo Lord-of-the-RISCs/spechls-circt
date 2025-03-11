@@ -4,7 +4,7 @@ on: [push, pull_request]
 
 env:
   YOSYS_COMMIT: e0d2eb90b5377133e28008f31add8988e14ca99f
-  CIRCT_COMMIT: f2291d637ac07d2c650ac81af8ef020f7b8368d2
+  CIRCT_COMMIT: b7ba69abf58092448fa4df8c8e23ec6b6097d1ba
   CMAKE_FLAGS: '-DYosys_LIBRARY="$GITHUB_WORKSPACE/yosys/libyosys.so" -DYosys_INCLUDE_DIR="$GITHUB_WORKSPACE/yosys" -DMLIR_DIR="$GITHUB_WORKSPACE/circt/llvm/build/lib/cmake/mlir" -DCIRCT_DIR="$GITHUB_WORKSPACE/circt/build/lib/cmake/circt" -DLLVM_EXTERNAL_LIT="$GITHUB_WORKSPACE/circt/llvm/build/bin/llvm-lit" -DLLVM_ENABLE_LLD=ON -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ -DUSE_ALTERNATE_LINKER=mold'
 
 jobs:
