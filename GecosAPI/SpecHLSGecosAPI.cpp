@@ -89,6 +89,8 @@ size_t getCStringSizeFromMlirStringRef(MlirStringRef ident) {
   return ident.length;
 }
 
+char getCharAt(char *v, int offset) { return v[offset]; }
+
 MlirIdentifier mlirNamedAttributeGetName(MlirNamedAttribute p) {
   return p.name;
 }
