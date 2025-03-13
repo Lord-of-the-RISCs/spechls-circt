@@ -142,6 +142,7 @@ jobs:
         run: (cd "$GITHUB_WORKSPACE/spechls-circt/website" && hugo --minify -d "$GITHUB_WORKSPACE/public")
       - name: Deploy website
         uses: peaceiris/actions-gh-pages@v3
+        if: github.ref == 'refs/heads/main'
         with:
           publish_branch: gh-pages
           publish_dir: ./public
