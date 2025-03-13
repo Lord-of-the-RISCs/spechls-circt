@@ -7,16 +7,15 @@
 
 #include "Dialect/SpecHLS/IR/SpecHLSOps.h"
 
+#include <mlir/IR/BuiltinAttributes.h>
 #include <mlir/IR/OpImplementation.h>
 #include <mlir/IR/OperationSupport.h>
 #include <mlir/IR/SymbolTable.h>
+#include <mlir/Interfaces/CallInterfaces.h>
 #include <mlir/Interfaces/FunctionImplementation.h>
 #include <mlir/Support/LLVM.h>
 
 #include "Dialect/SpecHLS/IR/SpecHLSDialect.cpp.inc"
-#include "mlir/IR/BuiltinAttributes.h"
-#include "mlir/Interfaces/CallInterfaces.h"
-#include "llvm/Support/LogicalResult.h"
 
 using namespace mlir;
 
