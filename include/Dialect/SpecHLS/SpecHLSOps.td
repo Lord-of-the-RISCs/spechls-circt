@@ -9,44 +9,28 @@
 #define SPECHLS_INCLUDED_DIALECT_SPECHLS_SPECHLS_OPS_TD
 
 include "Dialect/SpecHLS/SpecHLSDialect.td"
-include "mlir/Interfaces/InferTypeOpInterface.td"
-include "mlir/IR/EnumAttr.td"
 
-include "mlir/IR/BuiltinAttributes.td"
-include "mlir/IR/CommonAttrConstraints.td"
-include "mlir/IR/AttrTypeBase.td"
-include "mlir/IR/BuiltinTypeInterfaces.td"
-include "mlir/IR/SymbolInterfaces.td"
-include "mlir/Interfaces/SideEffectInterfaces.td"
-include "mlir/Interfaces/CallInterfaces.td"
-include "mlir/Dialect/DLTI/DLTIBase.td"
 include "mlir/Dialect/Linalg/IR/LinalgInterfaces.td"
-include "mlir/IR/EnumAttr.td"
-include "mlir/Interfaces/FunctionInterfaces.td"
-include "mlir/IR/OpBase.td"
-include "mlir/IR/OpAsmInterface.td"
-include "mlir/IR/PatternBase.td"
-include "mlir/IR/RegionKindInterface.td"
-include "mlir/IR/SymbolInterfaces.td"
 include "mlir/Interfaces/CallInterfaces.td"
 include "mlir/Interfaces/ControlFlowInterfaces.td"
 include "mlir/Interfaces/CopyOpInterface.td"
 include "mlir/Interfaces/DataLayoutInterfaces.td"
 include "mlir/Interfaces/DestinationStyleOpInterface.td"
+include "mlir/Interfaces/FunctionInterfaces.td"
 include "mlir/Interfaces/InferIntRangeInterface.td"
 include "mlir/Interfaces/InferTypeOpInterface.td"
 include "mlir/Interfaces/LoopLikeInterface.td"
 include "mlir/Interfaces/SideEffectInterfaces.td"
 include "mlir/IR/AttrTypeBase.td"
-
-// include "circt/Dialect/HW/HWAttributes.td"
-// include "circt/Dialect/HW/HWDialect.td"
-// include "circt/Dialect/HW/HWOpInterfaces.td"
-// include "circt/Dialect/HW/HWTypes.td"
-
-// Include the definition of the necessary tablegen constructs for defining
-// our attributes.
-include "mlir/IR/AttrTypeBase.td"
+include "mlir/IR/BuiltinAttributes.td"
+include "mlir/IR/BuiltinTypeInterfaces.td"
+include "mlir/IR/CommonAttrConstraints.td"
+include "mlir/IR/EnumAttr.td"
+include "mlir/IR/OpAsmInterface.td"
+include "mlir/IR/OpBase.td"
+include "mlir/IR/PatternBase.td"
+include "mlir/IR/RegionKindInterface.td"
+include "mlir/IR/SymbolInterfaces.td"
 
 class SpecHLS_Type<string name, string typeMnemonic, list<Trait> traits = []>
     : TypeDef<SpecHLS_Dialect, name, traits> {
