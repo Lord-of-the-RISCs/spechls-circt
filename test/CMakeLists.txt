@@ -14,6 +14,6 @@ add_lit_testsuite(check-spechls-opt "Running the spechls-opt regression tests"
         ${CMAKE_CURRENT_BINARY_DIR}
         DEPENDS ${SpecHLS_OPT_TEST_DEPENDS}
         )
-set_target_properties(check-spechls-opt PROPERTIES FOLDER "Tests")
+set_target_properties(check-spechls-opt PROPERTIES FOLDER "test")
 
 add_lit_testsuites(SpecHLS_OPT ${CMAKE_CURRENT_SOURCE_DIR} DEPENDS ${SpecHLS_OPT_TEST_DEPENDS})

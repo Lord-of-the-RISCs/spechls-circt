@@ -1,2 +1,0 @@
-add_circt_dialect(ScheduleOps Schedule)
-add_circt_dialect_doc(ScheduleOps Schedule)

@@ -40,6 +40,10 @@ if (NOT "${USE_ALTERNATE_LINKER}" STREQUAL "")
   set_alternate_linker("${USE_ALTERNATE_LINKER}")
 endif ()
 
+# Set output directories to lib for libraries, and bin for binaries
+set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
 set(LLVM_RUNTIME_OUTPUT_INTDIR ${CMAKE_BINARY_DIR}/bin)
 set(LLVM_LIBRARY_OUTPUT_INTDIR ${CMAKE_BINARY_DIR}/lib)
@@ -72,7 +76,6 @@ set(LLVM_LIT_ARGS "-sv" CACHE STRING "lit default options")
 list(APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake/modules")
 include(sanitizers)
 
-add_subdirectory(GecosAPI)
 add_subdirectory(include)
 add_subdirectory(lib)
 add_subdirectory(test)

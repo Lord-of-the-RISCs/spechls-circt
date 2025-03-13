@@ -1,13 +1,9 @@
-add_llvm_executable(spechls-opt spechls-opt.cpp)
-
-llvm_update_compile_flags(spechls-opt)
+add_executable(spechls-opt spechls-opt.cpp)
 
 target_link_libraries(spechls-opt PRIVATE
-    SpecHLSScheduleDialect
-    SpecHLSTransforms
+    SpecHLS
+    MLIR
     CIRCT
-    ${Z3_LIBRARIES}
-    Yosys::Yosys
 )
-target_compile_options(spechls-opt PUBLIC -fexceptions)
 install(TARGETS spechls-opt DESTINATION bin)
+set_property(TARGET spechls-opt PROPERTY INSTALL_RPATH "$ORIGIN/../lib")

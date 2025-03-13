@@ -1,11 +1,12 @@
-// RUN: spechls-opt --canonicalize %s | spechls-opt | FileCheck %s
-module {
-  // CHECK-LABEL: @SCC_0
-  hw.module @SCC_0(in %enable : i1, in %value : i32, in %address : i32, in %array:memref<16xi32>, out result : memref<16xi32>)
-  {
-    // CHECK: SpecHLS.alpha @x
-    %index = arith.index_cast %address : i32 to index
-    %31 = SpecHLS.alpha @x : %enable -> %array[%index], %value : memref<16xi32>
-    hw.output %31 : memref<16xi32>
-  }
+// RUN: spechls-opt %s | spechls-opt | FileCheck %s
+
+// CHECK-LABEL: @toplevel
+spechls.hkernel @toplevel(%in1 : i32) -> i32 {
+  %0 = spechls.launch @task(%in1) : (i32) -> i32
+  spechls.exit %0 : i32
+}
+
+// CHECK: spechls.htask @task
+spechls.htask @task(%in1 : i32) -> i32 {
+  spechls.commit %in1 : i32
 }

@@ -1,2 +1,1 @@
-add_circt_dialect(SpecHLSOps SpecHLS)
-add_circt_dialect_doc(SpecHLSOps SpecHLS)
+add_subdirectory(IR)
