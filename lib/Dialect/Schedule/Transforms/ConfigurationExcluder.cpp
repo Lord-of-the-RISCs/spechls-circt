@@ -7,7 +7,6 @@
 
 #include "Dialect/Schedule/IR/ScheduleOps.h"
 #include "Dialect/Schedule/Transforms/Passes.h" // IWYU pragma: keep
-#include "mlir/IR/BuiltinAttributes.h"
 
 using namespace mlir;
 
