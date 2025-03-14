@@ -212,6 +212,54 @@ LogicalResult spechls::GammaOp::verify() {
   return success();
 }
 
+ParseResult spechls::MuOp::parse(OpAsmParser &parser, OperationState &result) {
+  // Parse the symbol name specifier.
+  StringAttr symbolNameAttr;
+  if (parser.parseLess() || parser.parseAttribute(symbolNameAttr, getSymNameAttrName(result.name), result.attributes) ||
+      parser.parseGreater())
+    return failure();
+
+  // Parse operands.
+  SmallVector<OpAsmParser::UnresolvedOperand> inputs;
+  SMLoc inputsLoc = parser.getCurrentLocation();
+  if (parser.parseOperandList(inputs, OpAsmParser::Delimiter::Paren))
+    return failure();
+
+  // Parse the attribute dictionary.
+  if (parser.parseOptionalAttrDict(result.attributes))
+    return failure();
+
+  // Parse the type specifiers.
+  Type argType;
+  if (parser.parseColonType(argType))
+    return failure();
+
+  // Resolve operands.
+  SmallVector<Type> inputTypes(inputs.size(), argType);
+  if (parser.resolveOperands(inputs, inputTypes, inputsLoc, result.operands))
+    return failure();
+
+  result.addTypes(argType);
+  return success();
+}
+
+void spechls::MuOp::print(OpAsmPrinter &printer) {
+  printer << "<\"" << getSymName() << "\">(";
+  printer.printOperand(getInitValue());
+  printer << ", ";
+  printer.printOperand(getLoopValue());
+  printer << ") : ";
+  printer.printType(getInitValue().getType());
+}
+
+LogicalResult spechls::MuOp::verify() {
+  auto init = getInitValue();
+  if (!isa<BlockArgument>(init))
+    return emitOpError("init value must be a task argument");
+
+  return success();
+}
+
 //===--------------------------------------------------------------------------------------------------------------===//
 // TableGen'd op method definitions
 //===--------------------------------------------------------------------------------------------------------------===//

@@ -10,8 +10,10 @@
 
 #include <mlir/Bytecode/BytecodeOpInterface.h>
 #include <mlir/IR/Builders.h>
+#include <mlir/IR/RegionKindInterface.h>
 #include <mlir/Interfaces/ControlFlowInterfaces.h>
 #include <mlir/Interfaces/FunctionInterfaces.h>
+#include <mlir/Interfaces/InferTypeOpInterface.h>
 #include <mlir/Interfaces/SideEffectInterfaces.h>
 
 #include "Dialect/SpecHLS/IR/SpecHLS.h" // IWYU pragma: export

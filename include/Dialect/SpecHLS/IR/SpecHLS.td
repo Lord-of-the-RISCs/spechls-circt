@@ -10,10 +10,12 @@
 
 include "mlir/Interfaces/ControlFlowInterfaces.td"
 include "mlir/Interfaces/FunctionInterfaces.td"
+include "mlir/Interfaces/InferTypeOpInterface.td"
 include "mlir/Interfaces/SideEffectInterfaces.td"
 include "mlir/IR/DialectBase.td"
 include "mlir/IR/OpAsmInterface.td"
 include "mlir/IR/OpBase.td"
+include "mlir/IR/RegionKindInterface.td"
 
 def SpecHLSDialect : Dialect {
     let name = "spechls";
@@ -34,7 +36,8 @@ class SpecHLSOp<string mnemonic, list<Trait> traits = []>
 
 class SpecHLS_TaskLikeOp<string mnemonic, list<Trait> traits = []> :
         SpecHLSOp<mnemonic,
-            !listconcat(traits, [AutomaticAllocationScope, IsolatedFromAbove, FunctionOpInterface, SingleBlock])> {
+            !listconcat(traits, [AutomaticAllocationScope, IsolatedFromAbove, FunctionOpInterface, SingleBlock,
+                                 RegionKindInterface])> {
     let arguments = (ins StrAttr:$sym_name,
                          TypeAttrOf<FunctionType>:$function_type,
                          OptionalAttr<DictArrayAttr>:$arg_attrs,
@@ -56,6 +59,14 @@ class SpecHLS_TaskLikeOp<string mnemonic, list<Trait> traits = []> :
 
         // CallableOpInterface
         ::mlir::Region *getCallableRegion() { return &getBody(); }
+
+        //===------------------------------------------------------------------===//
+        // RegionKindInterface Methods
+        //===------------------------------------------------------------------===//
+
+        static ::mlir::RegionKind getRegionKind(unsigned) {
+            return ::mlir::RegionKind::Graph;
+        }
     }];
 }
 
@@ -95,7 +106,8 @@ def SpecHLS_LaunchOp : SpecHLSOp<"launch", [DeclareOpInterfaceMethods<CallOpInte
     }];
 }
 
-def SpecHLS_GammaOp : SpecHLSOp<"gamma", [Pure, DeclareOpInterfaceMethods<OpAsmOpInterface, ["getAsmResultNames"]>]> {
+def SpecHLS_GammaOp : SpecHLSOp<"gamma",
+        [HasParent<"HTaskOp">, Pure, DeclareOpInterfaceMethods<OpAsmOpInterface, ["getAsmResultNames"]>]> {
     let arguments = (ins StrAttr:$sym_name, AnyInteger:$select, Variadic<AnyType>:$inputs);
     let results = (outs AnyType:$result);
 
@@ -105,6 +117,22 @@ def SpecHLS_GammaOp : SpecHLSOp<"gamma", [Pure, DeclareOpInterfaceMethods<OpAsmO
     let extraClassDefinition = [{
         void $cppClass::getAsmResultNames(llvm::function_ref<void(mlir::Value, llvm::StringRef)> setNameFn) {
             setNameFn(getResult(), "gamma");
+        }
+    }];
+}
+
+def SpecHLS_MuOp : SpecHLSOp<"mu",
+        [HasParent<"HTaskOp">, Pure, SameOperandsAndResultType,
+         DeclareOpInterfaceMethods<OpAsmOpInterface, ["getAsmResultNames"]>]> {
+    let arguments = (ins StrAttr:$sym_name, AnyType:$initValue, AnyType:$loopValue);
+    let results = (outs AnyType:$result);
+
+    let hasCustomAssemblyFormat = 1;
+    let hasVerifier = 1;
+
+    let extraClassDefinition = [{
+        void $cppClass::getAsmResultNames(llvm::function_ref<void(mlir::Value, llvm::StringRef)> setNameFn) {
+            setNameFn(getResult(), "mu");
         }
     }];
 }
