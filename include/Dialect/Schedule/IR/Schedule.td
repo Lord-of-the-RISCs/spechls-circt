@@ -49,7 +49,7 @@ def Schedule_CircuitOp : ScheduleOp<"circuit", [RegionKindInterface, NoTerminato
     let regions = (region SizedRegion<1>:$body);
 
     let assemblyFormat = [{
-        $targetClock attr-dict-with-keyword $body
+        attr-dict $targetClock $body
     }];
 
     let extraClassDeclaration = [{
@@ -76,7 +76,7 @@ def Schedule_OperationOp : ScheduleOp<"operation", [HasParent<"CircuitOp">]> {
     let results = (outs Schedule_OperationType:$res);
 
     let assemblyFormat = [{
-        $sym_name `(` $dependences `:` $distances `,` $inDelay `,` $latency `,` $outDelay `)` attr-dict
+        attr-dict $sym_name `(` $dependences `:` $distances `,` $inDelay `,` $latency `,` $outDelay `)`
     }];
 }
 
