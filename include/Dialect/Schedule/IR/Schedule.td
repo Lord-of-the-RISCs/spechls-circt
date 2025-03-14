@@ -5,8 +5,8 @@
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 
-#ifndef SPECHLS_INCLUDED_DIALECT_SCHEDULE_SCHEDULE_TD
-#define SPECHLS_INCLUDED_DIALECT_SCHEDULE_SCHEDULE_TD
+#ifndef SPECHLS_INCLUDED_DIALECT_SCHEDULE_IR_SCHEDULE_TD
+#define SPECHLS_INCLUDED_DIALECT_SCHEDULE_IR_SCHEDULE_TD
 
 include "mlir/IR/CommonAttrConstraints.td"
 include "mlir/IR/DialectBase.td"
@@ -80,4 +80,4 @@ def Schedule_OperationOp : ScheduleOp<"operation", [HasParent<"CircuitOp">]> {
     }];
 }
 
-#endif // SPECHLS_INCLUDED_DIALECT_SCHEDULE_SCHEDULE_TD
+#endif // SPECHLS_INCLUDED_DIALECT_SCHEDULE_IR_SCHEDULE_TD

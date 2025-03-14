@@ -5,8 +5,8 @@
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 
-#ifndef SPECHLS_INCLUDED_DIALECT_SPECHLS_SPECHLS_TD
-#define SPECHLS_INCLUDED_DIALECT_SPECHLS_SPECHLS_TD
+#ifndef SPECHLS_INCLUDED_DIALECT_SPECHLS_IR_SPECHLS_TD
+#define SPECHLS_INCLUDED_DIALECT_SPECHLS_IR_SPECHLS_TD
 
 include "mlir/Interfaces/ControlFlowInterfaces.td"
 include "mlir/Interfaces/FunctionInterfaces.td"
@@ -137,4 +137,4 @@ def SpecHLS_MuOp : SpecHLSOp<"mu",
     }];
 }
 
-#endif // SPECHLS_INCLUDED_DIALECT_SPECHLS_SPECHLS_TD
+#endif // SPECHLS_INCLUDED_DIALECT_SPECHLS_IR_SPECHLS_TD
