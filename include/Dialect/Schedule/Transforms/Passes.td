@@ -12,17 +12,17 @@ include "mlir/Pass/PassBase.td"
 
 def SchedulePass : Pass<"schedule"> {
     let summary = "A CIRCT scheduler wrapper for SpecHLS.";
-    let dependentDialects = ["circt::ssp::SSPDialect"];
+    let dependentDialects = ["::circt::ssp::SSPDialect"];
 }
 
 def MobilityPass : Pass<"mobility", "schedule::CircuitOp"> {
     let summary = "Compute mobility information.";
-    let dependentDialects = ["schedule::ScheduleDialect"];
+    let dependentDialects = ["::schedule::ScheduleDialect"];
 }
 
 def ConfigurationExcluderPass : Pass<"config-excluder", "schedule::CircuitOp"> {
     let summary = "Exclude speculation configurations that cannot lead to II = 1.";
-    let dependentDialects = ["schedule::ScheduleDialect"];
+    let dependentDialects = ["::schedule::ScheduleDialect"];
 }
 
 #endif // SPECHLS_INCLUDED_DIALECT_SCHEDULE_TRANSFORMS_PASSES_TD
