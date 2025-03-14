@@ -9,8 +9,9 @@
 #define SPECHLS_INCLUDED_DIALECT_SPECHLS_SPECHLS_TD
 
 include "mlir/Interfaces/ControlFlowInterfaces.td"
-include "mlir/Interfaces/SideEffectInterfaces.td"
 include "mlir/Interfaces/FunctionInterfaces.td"
+include "mlir/Interfaces/InferTypeOpInterface.td"
+include "mlir/Interfaces/SideEffectInterfaces.td"
 include "mlir/IR/DialectBase.td"
 include "mlir/IR/OpAsmInterface.td"
 include "mlir/IR/OpBase.td"
@@ -95,13 +96,14 @@ def SpecHLS_LaunchOp : SpecHLSOp<"launch", [DeclareOpInterfaceMethods<CallOpInte
     }];
 }
 
-def SpecHLS_GammaOp : SpecHLSOp<"gamma", [Pure, DeclareOpInterfaceMethods<OpAsmOpInterface, ["getAsmResultNames"]>]> {
+def SpecHLS_GammaOp : SpecHLSOp<"gamma",
+        [Pure, DeclareOpInterfaceMethods<OpAsmOpInterface, ["getAsmResultNames"]>,
+         DeclareOpInterfaceMethods<InferTypeOpInterface>]> {
     let arguments = (ins StrAttr:$sym_name, AnyInteger:$select, Variadic<AnyType>:$inputs);
     let results = (outs AnyType:$result);
 
-    let assemblyFormat = [{
-        `<` $sym_name `>` `(` $select `,` $inputs `)` attr-dict `:` type($select) `,` functional-type($inputs, $result)
-    }];
+    let hasCustomAssemblyFormat = 1;
+    let hasVerifier = 1;
 
     let extraClassDefinition = [{
         void $cppClass::getAsmResultNames(llvm::function_ref<void(mlir::Value, llvm::StringRef)> setNameFn) {
@@ -111,5 +113,3 @@ def SpecHLS_GammaOp : SpecHLSOp<"gamma", [Pure, DeclareOpInterfaceMethods<OpAsmO
 }
 
 #endif // SPECHLS_INCLUDED_DIALECT_SPECHLS_SPECHLS_TD
-
-// kate: syntax Normal;

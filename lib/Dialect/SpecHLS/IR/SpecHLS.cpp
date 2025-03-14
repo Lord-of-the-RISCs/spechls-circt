@@ -151,6 +151,75 @@ Operation::operand_range spechls::LaunchOp::getArgOperands() { return getArgumen
 
 MutableOperandRange spechls::LaunchOp::getArgOperandsMutable() { return getArgumentsMutable(); }
 
+ParseResult spechls::GammaOp::parse(OpAsmParser &parser, OperationState &result) {
+  // Parse the symbol name specifier.
+  StringAttr symbolNameAttr;
+  if (parser.parseLess() || parser.parseAttribute(symbolNameAttr, getSymNameAttrName(result.name), result.attributes) ||
+      parser.parseGreater() || parser.parseLParen())
+    return failure();
+
+  // Parse operands.
+  OpAsmParser::Argument selectArgInfo;
+  if (parser.parseOperand(selectArgInfo.ssaName))
+    return failure();
+  SmallVector<OpAsmParser::UnresolvedOperand> inputs;
+  SMLoc inputsLoc = parser.getCurrentLocation();
+  if (parser.parseTrailingOperandList(inputs) || parser.parseRParen())
+    return failure();
+
+  // Parse the attribute dictionary.
+  if (parser.parseOptionalAttrDict(result.attributes))
+    return failure();
+
+  // Parse the type specifiers.
+  Type selectType;
+  Type argType;
+  if (parser.parseColon() || parser.parseType(selectType) || parser.parseComma() || parser.parseType(argType))
+    return failure();
+
+  // Resolve operands.
+  SmallVector<Type> inputTypes(inputs.size(), argType);
+  if (parser.resolveOperand(selectArgInfo.ssaName, selectType, result.operands) ||
+      parser.resolveOperands(inputs, inputTypes, inputsLoc, result.operands))
+    return failure();
+
+  result.addTypes(argType);
+  return success();
+}
+
+void spechls::GammaOp::print(OpAsmPrinter &printer) {
+  auto select = getSelect();
+  auto inputs = getInputs();
+
+  printer << "<\"" << getSymName() << "\">(" << select << ", ";
+  printer.printOperands(inputs);
+  printer << ") : ";
+  printer.printType(select.getType());
+  printer << ", ";
+  printer.printType(inputs.front().getType());
+}
+
+LogicalResult spechls::GammaOp::verify() {
+  auto inputs = getInputs();
+  if (inputs.size() < 2)
+    return emitOpError("expects at least two data inputs");
+
+  unsigned int selectWidth = getSelect().getType().getWidth();
+  if ((1ull << selectWidth) <= inputs.size())
+    return emitOpError("has a select signal too narrow (")
+           << selectWidth << " bit" << ((selectWidth > 1) ? "s" : "") << ") to select all of its inputs";
+
+  return success();
+}
+
+LogicalResult spechls::GammaOp::inferReturnTypes(MLIRContext *context, std::optional<Location> location,
+                                                 ValueRange operands, DictionaryAttr attributes,
+                                                 OpaqueProperties properties, RegionRange regions,
+                                                 SmallVectorImpl<Type> &inferredReturnTypes) {
+  inferredReturnTypes.push_back(operands.back().getType());
+  return success();
+}
+
 //===--------------------------------------------------------------------------------------------------------------===//
 // TableGen'd op method definitions
 //===--------------------------------------------------------------------------------------------------------------===//
