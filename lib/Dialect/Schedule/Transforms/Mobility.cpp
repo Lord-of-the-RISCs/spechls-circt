@@ -51,10 +51,15 @@ void MobilityPass::runOnOperation() {
   DenseMap<Operation *, SmallVector<double>> startTimesInCyclesAlap;
 
   for (auto &&op : body.getOps()) {
-    startTimesAsap[&op] = SmallVector<int64_t>(iterationCount);
-    startTimesAlap[&op] = SmallVector<int64_t>(iterationCount);
-    startTimesInCyclesAsap[&op] = SmallVector<double>(iterationCount);
-    startTimesInCyclesAlap[&op] = SmallVector<double>(iterationCount);
+    startTimesAsap.try_emplace(&op, SmallVector<int64_t>());
+    startTimesAlap.try_emplace(&op, SmallVector<int64_t>());
+    startTimesInCyclesAsap.try_emplace(&op, SmallVector<double>());
+    startTimesInCyclesAlap.try_emplace(&op, SmallVector<double>());
+    // The size of these vectors is used in the following code, so we only reserve and don't allocate.
+    startTimesAsap[&op].reserve(iterationCount);
+    startTimesAlap[&op].reserve(iterationCount);
+    startTimesInCyclesAsap[&op].reserve(iterationCount);
+    startTimesInCyclesAlap[&op].reserve(iterationCount);
   }
 
   for (int64_t iteration = 0; iteration < iterationCount; ++iteration) {
@@ -100,12 +105,20 @@ void MobilityPass::runOnOperation() {
             predEndCycleAsap = cycle;
             predEndTimeInCyclesAsap = time;
 
-            if ((isGamma && nextCycleAsap > predEndCycleAsap) || (predEndCycleAsap > nextCycleAsap)) {
+            if (isGamma) {
+              if (nextCycleAsap > predEndCycleAsap) {
+                nextCycleAsap = predEndCycleAsap;
+                nextTimeInCyclesAsap = predEndTimeInCyclesAsap;
+              } else if (nextCycleAsap == predEndCycleAsap) {
+                nextTimeInCyclesAsap = std::min(nextTimeInCyclesAsap, predEndTimeInCyclesAsap);
+              }
+            } else if (predEndCycleAsap > nextCycleAsap) {
               nextCycleAsap = predEndCycleAsap;
               nextTimeInCyclesAsap = predEndTimeInCyclesAsap;
-            } else if (predEndCycleAsap == nextCycleAsap) {
-              nextTimeInCyclesAsap = std::min(nextTimeInCyclesAsap, predEndTimeInCyclesAsap);
             }
+          } else {
+            nextCycleAsap = 0;
+            nextTimeInCyclesAsap = 0.0;
           }
 
           // ALAP.

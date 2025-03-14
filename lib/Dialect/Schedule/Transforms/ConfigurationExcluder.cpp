@@ -50,8 +50,11 @@ void ConfigurationExcluderPass::runOnOperation() {
   DenseMap<Operation *, SmallVector<double>> startTimesInCycles;
 
   for (auto &&op : body.getOps()) {
-    startTimes[&op] = SmallVector<int64_t>(iterationCount);
-    startTimesInCycles[&op] = SmallVector<double>(iterationCount);
+    startTimes.try_emplace(&op, SmallVector<int64_t>());
+    startTimesInCycles.try_emplace(&op, SmallVector<double>());
+    // The size of these vectors is used in the following code, so we only reserve and don't allocate.
+    startTimes[&op].reserve(iterationCount);
+    startTimesInCycles[&op].reserve(iterationCount);
   }
 
   for (int64_t iteration = 0; iteration < iterationCount; ++iteration) {
@@ -91,12 +94,22 @@ void ConfigurationExcluderPass::runOnOperation() {
               predEndTimeInCycles = startTimesInCycles[pred][offset] + predOutDelay;
             }
 
-            if ((isGamma && nextCycle > predEndCycle) || (predEndCycle > nextCycle)) {
+            if (isGamma) {
+              if (nextCycle > predEndCycle) {
+                nextCycle = predEndCycle;
+                nextTimeInCycles = predEndTimeInCycles;
+              } else if (predEndCycle == nextCycle) {
+                nextTimeInCycles = std::min(nextTimeInCycles, predEndTimeInCycles);
+              }
+            } else if (predEndCycle > nextCycle) {
               nextCycle = predEndCycle;
               nextTimeInCycles = predEndTimeInCycles;
             } else if (predEndCycle == nextCycle) {
-              nextTimeInCycles = std::min(nextTimeInCycles, predEndTimeInCycles);
+              nextTimeInCycles = std::max(nextTimeInCycles, predEndTimeInCycles);
             }
+          } else {
+            nextCycle = 0;
+            nextTimeInCycles = 0.0;
           }
         }
       }
