@@ -7,12 +7,15 @@
 
 #include <mlir/Tools/mlir-opt/MlirOptMain.h>
 
+#include "Dialect/Schedule/IR/Schedule.h"
+#include "Dialect/Schedule/Transforms/Passes.h"
 #include "Dialect/SpecHLS/IR/SpecHLS.h"
 
 int main(int argc, char **argv) {
   mlir::DialectRegistry registry;
 
-  registry.insert<spechls::SpecHLSDialect>();
+  registry.insert<spechls::SpecHLSDialect, schedule::ScheduleDialect>();
+  schedule::registerSchedulePasses();
 
   return mlir::asMainReturnCode(mlir::MlirOptMain(argc, argv, "SpecHLS optimizer driver", registry));
 }

@@ -2,6 +2,8 @@ add_executable(spechls-opt spechls-opt.cpp)
 
 target_link_libraries(spechls-opt PRIVATE
     SpecHLS
+    Schedule
+    ScheduleTransforms
     MLIR
     CIRCT
 )
