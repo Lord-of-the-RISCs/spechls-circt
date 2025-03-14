@@ -212,14 +212,6 @@ LogicalResult spechls::GammaOp::verify() {
   return success();
 }
 
-LogicalResult spechls::GammaOp::inferReturnTypes(MLIRContext *context, std::optional<Location> location,
-                                                 ValueRange operands, DictionaryAttr attributes,
-                                                 OpaqueProperties properties, RegionRange regions,
-                                                 SmallVectorImpl<Type> &inferredReturnTypes) {
-  inferredReturnTypes.push_back(operands.back().getType());
-  return success();
-}
-
 //===--------------------------------------------------------------------------------------------------------------===//
 // TableGen'd op method definitions
 //===--------------------------------------------------------------------------------------------------------------===//

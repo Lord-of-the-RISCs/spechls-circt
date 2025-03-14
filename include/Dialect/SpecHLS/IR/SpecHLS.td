@@ -10,7 +10,6 @@
 
 include "mlir/Interfaces/ControlFlowInterfaces.td"
 include "mlir/Interfaces/FunctionInterfaces.td"
-include "mlir/Interfaces/InferTypeOpInterface.td"
 include "mlir/Interfaces/SideEffectInterfaces.td"
 include "mlir/IR/DialectBase.td"
 include "mlir/IR/OpAsmInterface.td"
@@ -96,9 +95,7 @@ def SpecHLS_LaunchOp : SpecHLSOp<"launch", [DeclareOpInterfaceMethods<CallOpInte
     }];
 }
 
-def SpecHLS_GammaOp : SpecHLSOp<"gamma",
-        [Pure, DeclareOpInterfaceMethods<OpAsmOpInterface, ["getAsmResultNames"]>,
-         DeclareOpInterfaceMethods<InferTypeOpInterface>]> {
+def SpecHLS_GammaOp : SpecHLSOp<"gamma", [Pure, DeclareOpInterfaceMethods<OpAsmOpInterface, ["getAsmResultNames"]>]> {
     let arguments = (ins StrAttr:$sym_name, AnyInteger:$select, Variadic<AnyType>:$inputs);
     let results = (outs AnyType:$result);
 
