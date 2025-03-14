@@ -28,7 +28,7 @@ public:
 // TODO: Move attributes into the operation definition.
 void MobilityPass::runOnOperation() {
   auto circuitOp = getOperation();
-  float targetClock = circuitOp.getTargetClock().convertToFloat();
+  double targetClock = circuitOp.getTargetClock().convertToDouble();
   auto &body = circuitOp.getBody();
 
   int64_t sumDistances = 0;
@@ -92,19 +92,15 @@ void MobilityPass::runOnOperation() {
             return std::make_pair(predStartCycle, predStartTimeInCycles + predOutDelay);
           };
 
-          size_t difference = iteration - distance;
+          size_t offset = iteration - distance;
 
           // ASAP.
-          if (difference < startTimesAsap[pred].size()) {
-            auto [cycle, time] =
-                computePredEnd(startTimesAsap[pred][difference], startTimesInCyclesAsap[pred][difference]);
+          if (offset < startTimesAsap[pred].size()) {
+            auto [cycle, time] = computePredEnd(startTimesAsap[pred][offset], startTimesInCyclesAsap[pred][offset]);
             predEndCycleAsap = cycle;
             predEndTimeInCyclesAsap = time;
 
-            if (isGamma && nextCycleAsap > predEndCycleAsap) {
-              nextCycleAsap = predEndCycleAsap;
-              nextTimeInCyclesAsap = predEndTimeInCyclesAsap;
-            } else if (predEndCycleAsap > nextCycleAsap) {
+            if ((isGamma && nextCycleAsap > predEndCycleAsap) || (predEndCycleAsap > nextCycleAsap)) {
               nextCycleAsap = predEndCycleAsap;
               nextTimeInCyclesAsap = predEndTimeInCyclesAsap;
             } else if (predEndCycleAsap == nextCycleAsap) {
@@ -113,9 +109,8 @@ void MobilityPass::runOnOperation() {
           }
 
           // ALAP.
-          if (difference < startTimesAlap[pred].size()) {
-            auto [cycle, time] =
-                computePredEnd(startTimesAlap[pred][difference], startTimesInCyclesAlap[pred][difference]);
+          if (offset < startTimesAlap[pred].size()) {
+            auto [cycle, time] = computePredEnd(startTimesAlap[pred][offset], startTimesInCyclesAlap[pred][offset]);
             predEndCycleAlap = cycle;
             predEndTimeInCyclesAlap = time;
 
