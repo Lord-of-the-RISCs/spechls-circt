@@ -10,7 +10,7 @@
 
 include "mlir/Pass/PassBase.td"
 
-def SchedulePass : Pass<"schedule"> {
+def SchedulePass : Pass<"schedule", "ModuleOp"> {
     let summary = "A CIRCT scheduler wrapper for SpecHLS.";
     let dependentDialects = ["::circt::ssp::SSPDialect"];
 }
