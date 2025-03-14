@@ -5,6 +5,7 @@
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 
+#include "CAPI/Dialect/SpecHLS.h" // IWYU pragma: keep
 #include "Dialect/SpecHLS/IR/SpecHLS.h"
 
 #include <mlir/CAPI/Registration.h>

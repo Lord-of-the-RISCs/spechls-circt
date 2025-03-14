@@ -3,4 +3,5 @@ add_mlir_public_c_api_library(ScheduleCAPI
 
     LINK_LIBS PUBLIC
     Schedule
+    ScheduleTransforms
 )
