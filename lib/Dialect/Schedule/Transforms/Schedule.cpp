@@ -5,7 +5,6 @@
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 
-#include "Dialect/Schedule/IR/ScheduleOps.h"
 #include "Dialect/Schedule/Transforms/Passes.h" // IWYU pragma: keep
 #include "circt/Dialect/SSP/SSPAttributes.h"
 #include "circt/Dialect/SSP/SSPPasses.h"
@@ -38,7 +37,7 @@ void SchedulePass::runOnOperation() {
 
   double period = 0.0;
   for (auto &&instance : moduleOp.getOps<circt::ssp::InstanceOp>()) {
-    if (auto periodAttr = instance->getAttrOfType<FloatAttr>("SpecHLS.period"))
+    if (auto periodAttr = instance->getAttrOfType<FloatAttr>("spechls.period"))
       period = periodAttr.getValueAsDouble();
     else
       return signalPassFailure();
@@ -61,7 +60,7 @@ void SchedulePass::runOnOperation() {
     if (auto propertiesAttr = instance->getAttrOfType<ArrayAttr>("sspProperties")) {
       for (auto &&property : propertiesAttr) {
         if (auto iiAttr = dyn_cast<circt::ssp::InitiationIntervalAttr>(property)) {
-          instance->setAttr("SpecHLS.II",
+          instance->setAttr("spechls.ii",
                             IntegerAttr::get(IntegerType::get(moduleOp.getContext(), 32), iiAttr.getValue()));
         }
       }
@@ -70,9 +69,9 @@ void SchedulePass::runOnOperation() {
       if (auto propertiesAttr = sspOp.getAttrOfType<ArrayAttr>("sspProperties")) {
         for (auto &&property : propertiesAttr) {
           if (auto z = dyn_cast<circt::ssp::StartTimeInCycleAttr>(property))
-            sspOp.setAttr("SpecHLS.z", z.getValue());
+            sspOp.setAttr("spechls.z", z.getValue());
           if (auto t = dyn_cast<circt::ssp::StartTimeAttr>(property))
-            sspOp.setAttr("SpecHLS.t", IntegerAttr::get(IntegerType::get(moduleOp.getContext(), 32), t.getValue()));
+            sspOp.setAttr("spechls.t", IntegerAttr::get(IntegerType::get(moduleOp.getContext(), 32), t.getValue()));
         }
       }
     }

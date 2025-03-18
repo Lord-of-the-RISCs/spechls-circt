@@ -33,8 +33,8 @@ void MobilityPass::runOnOperation() {
 
   int64_t sumDistances = 0;
   SmallVector<Operation *> gammas;
-  StringRef gammaAttrName = "SpecHLS.gamma";
-  StringRef mobilityAttrName = "SpecHLS.mobility";
+  StringRef gammaAttrName = "spechls.gamma";
+  StringRef mobilityAttrName = "spechls.mobility";
   StringRef distanceArrayAttrName = "distances";
 
   for (auto &&op : body.getOps()) {

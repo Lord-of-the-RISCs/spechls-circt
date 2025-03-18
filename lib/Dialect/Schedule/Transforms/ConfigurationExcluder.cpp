@@ -33,9 +33,9 @@ void ConfigurationExcluderPass::runOnOperation() {
 
   int64_t sumDistances = 0;
   SmallVector<Operation *> gammas;
-  StringRef gammaAttrName = "SpecHLS.gamma";
-  StringRef muAttrName = "SpecHLS.mu";
-  StringRef allowUnitIIAttrName = "SpecHLS.allowUnitII";
+  StringRef gammaAttrName = "spechls.gamma";
+  StringRef muAttrName = "spechls.mu";
+  StringRef allowUnitIIAttrName = "spechls.allow_unit_ii";
   StringRef distanceArrayAttrName = "distances";
 
   for (auto &&op : body.getOps()) {
