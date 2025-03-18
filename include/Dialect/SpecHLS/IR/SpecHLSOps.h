@@ -16,7 +16,8 @@
 #include <mlir/Interfaces/InferTypeOpInterface.h>
 #include <mlir/Interfaces/SideEffectInterfaces.h>
 
-#include "Dialect/SpecHLS/IR/SpecHLS.h" // IWYU pragma: export
+#include "Dialect/SpecHLS/IR/SpecHLS.h"      // IWYU pragma: export
+#include "Dialect/SpecHLS/IR/SpecHLSTypes.h" // IWYU pragma: keep
 
 #define GET_OP_CLASSES
 #include "Dialect/SpecHLS/IR/SpecHLS.h.inc"

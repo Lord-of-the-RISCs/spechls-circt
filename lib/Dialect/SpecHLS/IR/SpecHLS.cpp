@@ -7,7 +7,9 @@
 
 #include "Dialect/SpecHLS/IR/SpecHLSOps.h"
 
+#include <llvm/ADT/TypeSwitch.h>
 #include <mlir/IR/BuiltinAttributes.h>
+#include <mlir/IR/DialectImplementation.h>
 #include <mlir/IR/OpImplementation.h>
 #include <mlir/IR/OperationSupport.h>
 #include <mlir/IR/SymbolTable.h>
@@ -27,6 +29,10 @@ void spechls::SpecHLSDialect::initialize() {
   addOperations<
 #define GET_OP_LIST
 #include "Dialect/SpecHLS/IR/SpecHLS.cpp.inc"
+      >();
+  addTypes<
+#define GET_TYPEDEF_LIST
+#include "Dialect/SpecHLS/IR/SpecHLSTypes.cpp.inc"
       >();
 }
 
@@ -281,8 +287,11 @@ LogicalResult spechls::MuOp::verify() {
 }
 
 //===--------------------------------------------------------------------------------------------------------------===//
-// TableGen'd op method definitions
+// TableGen'd types and op method definitions
 //===--------------------------------------------------------------------------------------------------------------===//
+
+#define GET_TYPEDEF_CLASSES
+#include "Dialect/SpecHLS/IR/SpecHLSTypes.cpp.inc"
 
 #define GET_OP_CLASSES
 #include "Dialect/SpecHLS/IR/SpecHLS.cpp.inc"

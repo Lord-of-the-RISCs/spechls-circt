@@ -23,12 +23,23 @@ def SpecHLSDialect : Dialect {
     let description = [{
         TODO
     }];
+
     let cppNamespace = "spechls";
+
+    let useDefaultTypePrinterParser = 1;
 }
 
 // Base class for the SpecHLS dialect operations.
 class SpecHLSOp<string mnemonic, list<Trait> traits = []>
     : Op<SpecHLSDialect, mnemonic, traits>;
+
+//===--------------------------------------------------------------------------------------------------------------===//
+// Types
+//===--------------------------------------------------------------------------------------------------------------===//
+
+def SpecHLS_StringType : TypeDef<SpecHLSDialect, "String", []> {
+  let mnemonic = "str";
+}
 
 //===--------------------------------------------------------------------------------------------------------------===//
 // Operations
@@ -130,6 +141,21 @@ def SpecHLS_MuOp : SpecHLSOp<"mu",
     let extraClassDefinition = [{
         void $cppClass::getAsmResultNames(llvm::function_ref<void(mlir::Value, llvm::StringRef)> setNameFn) {
             setNameFn(getResult(), "mu");
+        }
+    }];
+}
+
+def SpecHLS_StringOp : SpecHLSOp<"string", [Pure, DeclareOpInterfaceMethods<OpAsmOpInterface, ["getAsmResultNames"]>]> {
+    let arguments = (ins StrAttr:$value);
+    let results = (outs SpecHLS_StringType:$result);
+
+    let assemblyFormat = [{
+        $value attr-dict
+    }];
+
+    let extraClassDefinition = [{
+        void $cppClass::getAsmResultNames(llvm::function_ref<void(mlir::Value, llvm::StringRef)> setNameFn) {
+            setNameFn(getResult(), "str");
         }
     }];
 }
