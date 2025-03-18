@@ -157,7 +157,7 @@ def SpecHLS_MuOp : SpecHLSOp<"mu",
     }];
 }
 
-def SpecHLS_PrintOp : SpecHLSOp<"print"> {
+def SpecHLS_PrintOp : SpecHLSOp<"print", [DeclareOpInterfaceMethods<OpAsmOpInterface, ["getAsmResultNames"]>]> {
     let arguments = (ins I32:$state, I1:$enable, StrAttr:$format, Variadic<AnyType>:$args);
     let results = (outs I32:$new_state);
 
@@ -165,9 +165,17 @@ def SpecHLS_PrintOp : SpecHLSOp<"print"> {
         $state `,` $enable `,` $format (`,` $args^ `:` type($args))? attr-dict
     }];
     let hasVerifier = 1;
+
+    let extraClassDefinition = [{
+        void $cppClass::getAsmResultNames(llvm::function_ref<void(mlir::Value, llvm::StringRef)> setNameFn) {
+            setNameFn(getResult(), "io_state");
+        }
+    }];
 }
 
-def SpecHLS_CallOp : SpecHLSOp<"call", [DeclareOpInterfaceMethods<CallOpInterface>]> {
+def SpecHLS_CallOp : SpecHLSOp<"call",
+        [DeclareOpInterfaceMethods<CallOpInterface>,
+         DeclareOpInterfaceMethods<OpAsmOpInterface, ["getAsmResultNames"]>]> {
     let arguments = (ins
         FlatSymbolRefAttr:$callee,
         Variadic<AnyType>:$arguments,
@@ -178,6 +186,12 @@ def SpecHLS_CallOp : SpecHLSOp<"call", [DeclareOpInterfaceMethods<CallOpInterfac
 
     let assemblyFormat = [{
         $callee `(` $arguments `)` attr-dict `:` functional-type($arguments, $result)
+    }];
+
+    let extraClassDefinition = [{
+        void $cppClass::getAsmResultNames(llvm::function_ref<void(mlir::Value, llvm::StringRef)> setNameFn) {
+            setNameFn(getResult(), getCallee());
+        }
     }];
 }
 
