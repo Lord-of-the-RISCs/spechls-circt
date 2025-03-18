@@ -73,11 +73,9 @@ class SpecHLS_TaskLikeOp<string mnemonic, list<Trait> traits = []> :
 def SpecHLS_HKernelOp : SpecHLS_TaskLikeOp<"hkernel"> {}
 
 def SpecHLS_ExitOp : SpecHLSOp<"exit", [HasParent<"HKernelOp">, Terminator, ReturnLike]> {
-    let arguments = (ins Variadic<AnyType>:$values);
+    let arguments = (ins I1:$guard, Variadic<AnyType>:$values);
 
-    let assemblyFormat = [{
-        ($values^ `:` type($values))? attr-dict
-    }];
+    let hasCustomAssemblyFormat = 1;
     let hasVerifier = 1;
 }
 

@@ -102,13 +102,13 @@ LogicalResult spechls::ExitOp::verify() {
 
   // The number of committed values must match the task signature.
   auto const &results = task.getResultTypes();
-  if (getNumOperands() != results.size())
-    return emitOpError("has ") << getNumOperands() << " operands, but enclosing hkernel (@" << task.getName()
+  if (getNumOperands() - 1 != results.size())
+    return emitOpError("has ") << getNumOperands() - 1 << " operands, but enclosing hkernel (@" << task.getName()
                                << ") returns " << results.size();
 
   for (size_t i = 0, e = results.size(); i != e; ++i) {
-    if (getOperand(i).getType() != results[i])
-      return emitError() << "type of exit operand " << i << " (" << getOperand(i).getType()
+    if (getOperand(i + 1).getType() != results[i])
+      return emitError() << "type of exit operand " << i << " (" << getOperand(i + 1).getType()
                          << ") doesn't match result type (" << results[i] << ") in hkernel @" << task.getName();
   }
 
@@ -139,6 +139,34 @@ LogicalResult spechls::CommitOp::verify() {
   return success();
 }
 
+ParseResult spechls::ExitOp::parse(OpAsmParser &parser, OperationState &result) {
+  OpAsmParser::UnresolvedOperand guard;
+  if (parser.parseKeyword("if") || parser.parseOperand(guard) ||
+      parser.resolveOperand(guard, parser.getBuilder().getI1Type(), result.operands))
+    return failure();
+
+  if (parser.parseOptionalKeyword("with").succeeded()) {
+    SmallVector<OpAsmParser::UnresolvedOperand> values;
+    SmallVector<Type> valueTypes;
+    SMLoc valueLoc = parser.getCurrentLocation();
+    if (parser.parseOperandList(values) || parser.parseColonTypeList(valueTypes) ||
+        parser.resolveOperands(values, valueTypes, valueLoc, result.operands))
+      return failure();
+  }
+
+  if (parser.parseOptionalAttrDict(result.attributes))
+    return failure();
+
+  return success();
+}
+
+void spechls::ExitOp::print(OpAsmPrinter &printer) {
+  printer << " if " << getGuard();
+
+  if (getValues().size() > 0)
+    printer << " with " << getValues() << " : " << getValues().getTypes();
+}
+
 CallInterfaceCallable spechls::LaunchOp::getCallableForCallee() {
   return (*this)->getAttrOfType<SymbolRefAttr>(getCalleeAttrName());
 }
@@ -159,8 +187,8 @@ ParseResult spechls::GammaOp::parse(OpAsmParser &parser, OperationState &result)
     return failure();
 
   // Parse operands.
-  OpAsmParser::Argument selectArgInfo;
-  if (parser.parseOperand(selectArgInfo.ssaName))
+  OpAsmParser::UnresolvedOperand select;
+  if (parser.parseOperand(select))
     return failure();
   SmallVector<OpAsmParser::UnresolvedOperand> inputs;
   SMLoc inputsLoc = parser.getCurrentLocation();
@@ -179,7 +207,7 @@ ParseResult spechls::GammaOp::parse(OpAsmParser &parser, OperationState &result)
 
   // Resolve operands.
   SmallVector<Type> inputTypes(inputs.size(), argType);
-  if (parser.resolveOperand(selectArgInfo.ssaName, selectType, result.operands) ||
+  if (parser.resolveOperand(select, selectType, result.operands) ||
       parser.resolveOperands(inputs, inputTypes, inputsLoc, result.operands))
     return failure();
 
