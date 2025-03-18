@@ -223,10 +223,10 @@ ParseResult spechls::GammaOp::parse(OpAsmParser &parser, OperationState &result)
   // Resolve operands.
   SmallVector<Type> inputTypes(inputs.size(), argType);
   if (parser.resolveOperand(select, selectType, result.operands) ||
-      parser.resolveOperands(inputs, inputTypes, inputsLoc, result.operands))
+      parser.resolveOperands(inputs, inputTypes, inputsLoc, result.operands) ||
+      parser.addTypeToList(argType, result.types))
     return failure();
 
-  result.addTypes(argType);
   return success();
 }
 
