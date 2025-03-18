@@ -5,6 +5,8 @@
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 
+#include <circt/Dialect/Comb/CombDialect.h>
+#include <circt/Dialect/HW/HWDialect.h>
 #include <mlir/Tools/mlir-opt/MlirOptMain.h>
 
 #include "Dialect/Schedule/IR/Schedule.h"
@@ -14,7 +16,7 @@
 int main(int argc, char **argv) {
   mlir::DialectRegistry registry;
 
-  registry.insert<spechls::SpecHLSDialect, schedule::ScheduleDialect>();
+  registry.insert<spechls::SpecHLSDialect, schedule::ScheduleDialect, circt::comb::CombDialect, circt::hw::HWDialect>();
   schedule::registerSchedulePasses();
 
   return mlir::asMainReturnCode(mlir::MlirOptMain(argc, argv, "SpecHLS optimizer driver", registry));
