@@ -229,7 +229,7 @@ LogicalResult spechls::GammaOp::verify() {
     return emitOpError("expects at least two data inputs");
 
   unsigned int selectWidth = getSelect().getType().getWidth();
-  if ((1ull << selectWidth) <= inputs.size())
+  if ((1ull << selectWidth) + 1 <= inputs.size())
     return emitOpError("has a select signal too narrow (")
            << selectWidth << " bit" << ((selectWidth > 1) ? "s" : "") << ") to select all of its inputs";
 
