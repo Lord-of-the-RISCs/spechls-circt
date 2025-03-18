@@ -90,7 +90,7 @@ def SpecHLS_CommitOp : SpecHLSOp<"commit", [HasParent<"HTaskOp">, Terminator, Re
     let hasVerifier = 1;
 }
 
-def SpecHLS_LaunchOp : SpecHLSOp<"launch", [DeclareOpInterfaceMethods<CallOpInterface>, HasParent<"HKernelOp">]> {
+def SpecHLS_LaunchOp : SpecHLSOp<"launch", [DeclareOpInterfaceMethods<CallOpInterface>]> {
     let arguments = (ins
         FlatSymbolRefAttr:$callee,
         Variadic<AnyType>:$arguments,
@@ -105,7 +105,7 @@ def SpecHLS_LaunchOp : SpecHLSOp<"launch", [DeclareOpInterfaceMethods<CallOpInte
 }
 
 def SpecHLS_GammaOp : SpecHLSOp<"gamma",
-        [HasParent<"HTaskOp">, Pure, DeclareOpInterfaceMethods<OpAsmOpInterface, ["getAsmResultNames"]>]> {
+        [Pure, DeclareOpInterfaceMethods<OpAsmOpInterface, ["getAsmResultNames"]>]> {
     let arguments = (ins StrAttr:$sym_name, AnyInteger:$select, Variadic<AnyType>:$inputs);
     let results = (outs AnyType:$result);
 
@@ -120,8 +120,7 @@ def SpecHLS_GammaOp : SpecHLSOp<"gamma",
 }
 
 def SpecHLS_MuOp : SpecHLSOp<"mu",
-        [HasParent<"HTaskOp">, Pure, SameOperandsAndResultType,
-         DeclareOpInterfaceMethods<OpAsmOpInterface, ["getAsmResultNames"]>]> {
+        [Pure, SameOperandsAndResultType, DeclareOpInterfaceMethods<OpAsmOpInterface, ["getAsmResultNames"]>]> {
     let arguments = (ins StrAttr:$sym_name, AnyType:$initValue, AnyType:$loopValue);
     let results = (outs AnyType:$result);
 
