@@ -104,18 +104,27 @@ ParseResult spechls::HKernelOp::parse(OpAsmParser &parser, OperationState &resul
 void spechls::HKernelOp::print(OpAsmPrinter &printer) { printTaskLikeOp(*this, printer); }
 
 LogicalResult spechls::ExitOp::verify() {
-  auto task = cast<HKernelOp>((*this)->getParentOp());
+  ArrayRef<Type> results;
+  StringRef taskName;
+
+  if (auto task = dyn_cast<HKernelOp>((*this)->getParentOp())) {
+    results = task.getResultTypes();
+    taskName = task.getName();
+  } else if (auto task = dyn_cast<HTaskOp>((*this)->getParentOp())) {
+    results = task.getResultTypes();
+    taskName = task.getName();
+  } else
+    return emitOpError("expected parent to be an hkernel or an htask op");
 
   // The number of committed values must match the task signature.
-  auto const &results = task.getResultTypes();
   if (getNumOperands() - 1 != results.size())
-    return emitOpError("has ") << getNumOperands() - 1 << " operands, but enclosing hkernel (@" << task.getName()
+    return emitOpError("has ") << getNumOperands() - 1 << " operands, but enclosing hkernel (@" << taskName
                                << ") returns " << results.size();
 
   for (size_t i = 0, e = results.size(); i != e; ++i) {
     if (getOperand(i + 1).getType() != results[i])
       return emitError() << "type of exit operand " << i << " (" << getOperand(i + 1).getType()
-                         << ") doesn't match result type (" << results[i] << ") in hkernel @" << task.getName();
+                         << ") doesn't match result type (" << results[i] << ") in hkernel @" << taskName;
   }
 
   return success();
