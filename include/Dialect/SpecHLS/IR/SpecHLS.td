@@ -33,12 +33,24 @@ def SpecHLSDialect : Dialect {
 class SpecHLSOp<string mnemonic, list<Trait> traits = []>
     : Op<SpecHLSDialect, mnemonic, traits>;
 
+// Base class for the SpecHLS dialect types.
+class SpecHLSType<string name, string typeMnemonic, list<Trait> traits = []>
+        : TypeDef<SpecHLSDialect, name, traits> {
+    let mnemonic = typeMnemonic;
+}
+
 //===--------------------------------------------------------------------------------------------------------------===//
 // Types
 //===--------------------------------------------------------------------------------------------------------------===//
 
-def SpecHLS_StringType : TypeDef<SpecHLSDialect, "String", []> {
-  let mnemonic = "str";
+def SpecHLS_ArrayType : SpecHLSType<"Array", "array"> {
+    let summary = "Array type.";
+
+    let parameters = (ins "unsigned":$size, "::mlir::Type":$element_type);
+
+    let assemblyFormat = [{
+        `<` $element_type `,` $size `>`
+    }];
 }
 
 //===--------------------------------------------------------------------------------------------------------------===//
@@ -166,6 +178,31 @@ def SpecHLS_CallOp : SpecHLSOp<"call", [DeclareOpInterfaceMethods<CallOpInterfac
 
     let assemblyFormat = [{
         $callee `(` $arguments `)` attr-dict `:` functional-type($arguments, $results)
+    }];
+}
+
+def SpecHLS_AlphaOp : SpecHLSOp<"alpha"> {
+    let arguments = (ins
+        Arg<SpecHLS_ArrayType, "The array to write to", [MemWriteAt<0, FullEffect>]>:$array,
+        AnyInteger:$index,
+        AnyType:$value,
+        I1:$we
+    );
+    let results = (outs SpecHLS_ArrayType:$result);
+
+    let hasCustomAssemblyFormat = 1;
+    let hasVerifier = 1;
+}
+
+def SpecHLS_LoadOp : SpecHLSOp<"load", [DeclareOpInterfaceMethods<InferTypeOpInterface>]> {
+    let arguments = (ins
+        Arg<SpecHLS_ArrayType, "The array to read from", [MemReadAt<0, FullEffect>]>:$array,
+        AnyInteger:$index
+    );
+    let results = (outs AnyType:$result);
+
+    let assemblyFormat = [{
+        $array `[` $index `:` type($index) `]` attr-dict `:` type($array)
     }];
 }
 

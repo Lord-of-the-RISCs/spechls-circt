@@ -18,6 +18,7 @@
 #include <mlir/Support/LLVM.h>
 
 #include "Dialect/SpecHLS/IR/SpecHLSDialect.cpp.inc"
+#include "Dialect/SpecHLS/IR/SpecHLSTypes.h"
 
 using namespace mlir;
 
@@ -313,6 +314,52 @@ void spechls::CallOp::setCalleeFromCallable(CallInterfaceCallable callee) {
 Operation::operand_range spechls::CallOp::getArgOperands() { return getArguments(); }
 
 MutableOperandRange spechls::CallOp::getArgOperandsMutable() { return getArgumentsMutable(); }
+
+ParseResult spechls::AlphaOp::parse(OpAsmParser &parser, OperationState &result) {
+  OpAsmParser::UnresolvedOperand array, index, value, we;
+  Type indexType;
+  spechls::ArrayType arrayType;
+
+  if (parser.parseOperand(array) || parser.parseLSquare() || parser.parseOperand(index) ||
+      parser.parseColonType(indexType) || parser.parseRSquare() || parser.parseComma() || parser.parseOperand(value) ||
+      parser.parseKeyword("if") || parser.parseOperand(we) || parser.parseColonType(arrayType))
+    return failure();
+
+  // Resolve operands and results.
+  if (parser.resolveOperand(array, arrayType, result.operands) ||
+      parser.resolveOperand(index, indexType, result.operands) ||
+      parser.resolveOperand(value, arrayType.getElementType(), result.operands) ||
+      parser.resolveOperand(we, parser.getBuilder().getI1Type(), result.operands) ||
+      parser.addTypeToList(arrayType, result.types))
+    return failure();
+
+  return success();
+}
+
+void spechls::AlphaOp::print(OpAsmPrinter &printer) {
+  printer << ' ' << getArray() << '[' << getIndex() << ": " << getIndex().getType() << "], " << getValue() << " if "
+          << getWe() << " : " << getType();
+}
+
+LogicalResult spechls::AlphaOp::verify() {
+  auto arrayType = getArray().getType();
+  if (arrayType != getType())
+    return emitOpError("has inconsistent input (")
+           << getArray().getType() << ") and output (" << getType() << ") array types";
+  if (arrayType.getElementType() != getValue().getType())
+    return emitOpError("has inconsistent write value type (")
+           << arrayType.getElementType() << ") and output array element type (" << getType().getElementType() << ")";
+
+  return success();
+}
+
+LogicalResult spechls::LoadOp::inferReturnTypes(MLIRContext *context, std::optional<Location> loc, ValueRange operands,
+                                                DictionaryAttr attributes, OpaqueProperties properties,
+                                                RegionRange regions, SmallVectorImpl<Type> &inferredReturnTypes) {
+  LoadOpAdaptor adaptor(operands, attributes, properties, regions);
+  inferredReturnTypes.push_back(cast<spechls::ArrayType>(adaptor.getArray().getType()).getElementType());
+  return success();
+}
 
 //===--------------------------------------------------------------------------------------------------------------===//
 // TableGen'd types and op method definitions
