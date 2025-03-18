@@ -7,7 +7,7 @@
 
 #include "CAPI/Dialect/Schedule.h"
 #include "CAPI/Dialect/SpecHLS.h"
-#include "Dialect/Schedule/Transforms/Passes.h"
+#include "Dialect/Schedule/Transforms/Passes.h" // IWYU pragma: keep
 
 #include <circt-c/Dialect/SSP.h>
 #include <mlir-c/IR.h>
