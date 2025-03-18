@@ -174,10 +174,10 @@ def SpecHLS_CallOp : SpecHLSOp<"call", [DeclareOpInterfaceMethods<CallOpInterfac
         OptionalAttr<DictArrayAttr>:$arg_attrs,
         OptionalAttr<DictArrayAttr>:$res_attrs
     );
-    let results = (outs Variadic<AnyType>:$results);
+    let results = (outs AnyType:$result);
 
     let assemblyFormat = [{
-        $callee `(` $arguments `)` attr-dict `:` functional-type($arguments, $results)
+        $callee `(` $arguments `)` attr-dict `:` functional-type($arguments, $result)
     }];
 }
 
