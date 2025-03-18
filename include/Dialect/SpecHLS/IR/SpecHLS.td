@@ -145,21 +145,6 @@ def SpecHLS_MuOp : SpecHLSOp<"mu",
     }];
 }
 
-def SpecHLS_StringOp : SpecHLSOp<"string", [Pure, DeclareOpInterfaceMethods<OpAsmOpInterface, ["getAsmResultNames"]>]> {
-    let arguments = (ins StrAttr:$value);
-    let results = (outs SpecHLS_StringType:$result);
-
-    let assemblyFormat = [{
-        $value attr-dict
-    }];
-
-    let extraClassDefinition = [{
-        void $cppClass::getAsmResultNames(llvm::function_ref<void(mlir::Value, llvm::StringRef)> setNameFn) {
-            setNameFn(getResult(), "str");
-        }
-    }];
-}
-
 def SpecHLS_PrintOp : SpecHLSOp<"print"> {
     let arguments = (ins I32:$state, I1:$enable, StrAttr:$format, Variadic<AnyType>:$args);
     let results = (outs I32:$new_state);
