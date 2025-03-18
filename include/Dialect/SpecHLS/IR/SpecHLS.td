@@ -155,4 +155,18 @@ def SpecHLS_PrintOp : SpecHLSOp<"print"> {
     let hasVerifier = 1;
 }
 
+def SpecHLS_CallOp : SpecHLSOp<"call", [DeclareOpInterfaceMethods<CallOpInterface>]> {
+    let arguments = (ins
+        FlatSymbolRefAttr:$callee,
+        Variadic<AnyType>:$arguments,
+        OptionalAttr<DictArrayAttr>:$arg_attrs,
+        OptionalAttr<DictArrayAttr>:$res_attrs
+    );
+    let results = (outs Variadic<AnyType>:$results);
+
+    let assemblyFormat = [{
+        $callee `(` $arguments `)` attr-dict `:` functional-type($arguments, $results)
+    }];
+}
+
 #endif // SPECHLS_INCLUDED_DIALECT_SPECHLS_IR_SPECHLS_TD

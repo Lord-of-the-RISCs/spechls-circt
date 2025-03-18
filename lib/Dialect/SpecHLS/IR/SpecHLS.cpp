@@ -302,6 +302,18 @@ LogicalResult spechls::PrintOp::verify() {
   return success();
 }
 
+CallInterfaceCallable spechls::CallOp::getCallableForCallee() {
+  return (*this)->getAttrOfType<SymbolRefAttr>(getCalleeAttrName());
+}
+
+void spechls::CallOp::setCalleeFromCallable(CallInterfaceCallable callee) {
+  (*this)->setAttr(getCalleeAttrName(), cast<SymbolRefAttr>(callee));
+}
+
+Operation::operand_range spechls::CallOp::getArgOperands() { return getArguments(); }
+
+MutableOperandRange spechls::CallOp::getArgOperandsMutable() { return getArgumentsMutable(); }
+
 //===--------------------------------------------------------------------------------------------------------------===//
 // TableGen'd types and op method definitions
 //===--------------------------------------------------------------------------------------------------------------===//
