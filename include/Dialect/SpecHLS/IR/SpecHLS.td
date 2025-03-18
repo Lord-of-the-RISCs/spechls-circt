@@ -164,7 +164,6 @@ def SpecHLS_PrintOp : SpecHLSOp<"print", [DeclareOpInterfaceMethods<OpAsmOpInter
     let assemblyFormat = [{
         $state `,` $enable `,` $format (`,` $args^ `:` type($args))? attr-dict
     }];
-    let hasVerifier = 1;
 
     let extraClassDefinition = [{
         void $cppClass::getAsmResultNames(llvm::function_ref<void(mlir::Value, llvm::StringRef)> setNameFn) {

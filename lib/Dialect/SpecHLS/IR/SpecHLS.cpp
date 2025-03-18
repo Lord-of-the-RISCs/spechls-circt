@@ -296,13 +296,6 @@ LogicalResult spechls::MuOp::verify() {
   return success();
 }
 
-LogicalResult spechls::PrintOp::verify() {
-  auto state = getState();
-  if (!state.hasOneUse())
-    return emitOpError("state operand is expected to be part of a single use-def chain");
-  return success();
-}
-
 CallInterfaceCallable spechls::CallOp::getCallableForCallee() {
   return (*this)->getAttrOfType<SymbolRefAttr>(getCalleeAttrName());
 }
