@@ -160,4 +160,14 @@ def SpecHLS_StringOp : SpecHLSOp<"string", [Pure, DeclareOpInterfaceMethods<OpAs
     }];
 }
 
+def SpecHLS_PrintOp : SpecHLSOp<"print"> {
+    let arguments = (ins I32:$state, I1:$enable, StrAttr:$format, Variadic<AnyType>:$args);
+    let results = (outs I32:$new_state);
+
+    let assemblyFormat = [{
+        $state `,` $enable `,` $format (`,` $args^ `:` type($args))? attr-dict
+    }];
+    let hasVerifier = 1;
+}
+
 #endif // SPECHLS_INCLUDED_DIALECT_SPECHLS_IR_SPECHLS_TD

@@ -295,6 +295,13 @@ LogicalResult spechls::MuOp::verify() {
   return success();
 }
 
+LogicalResult spechls::PrintOp::verify() {
+  auto state = getState();
+  if (!state.hasOneUse())
+    return emitOpError("state operand is expected to be part of a single use-def chain");
+  return success();
+}
+
 //===--------------------------------------------------------------------------------------------------------------===//
 // TableGen'd types and op method definitions
 //===--------------------------------------------------------------------------------------------------------------===//
