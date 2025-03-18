@@ -219,12 +219,8 @@ void spechls::GammaOp::print(OpAsmPrinter &printer) {
   auto select = getSelect();
   auto inputs = getInputs();
 
-  printer << "<\"" << getSymName() << "\">(" << select << ", ";
-  printer.printOperands(inputs);
-  printer << ") : ";
-  printer.printType(select.getType());
-  printer << ", ";
-  printer.printType(inputs.front().getType());
+  printer << "<\"" << getSymName() << "\">(" << select << ", " << inputs << ") : " << select.getType() << ", "
+          << inputs.front().getType();
 }
 
 LogicalResult spechls::GammaOp::verify() {
@@ -272,12 +268,8 @@ ParseResult spechls::MuOp::parse(OpAsmParser &parser, OperationState &result) {
 }
 
 void spechls::MuOp::print(OpAsmPrinter &printer) {
-  printer << "<\"" << getSymName() << "\">(";
-  printer.printOperand(getInitValue());
-  printer << ", ";
-  printer.printOperand(getLoopValue());
-  printer << ") : ";
-  printer.printType(getInitValue().getType());
+  printer << "<\"" << getSymName() << "\">(" << getInitValue() << ", " << getLoopValue()
+          << ") : " << getInitValue().getType();
 }
 
 LogicalResult spechls::MuOp::verify() {
