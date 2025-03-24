@@ -345,7 +345,7 @@ def SpecHLS_MuOp : SpecHLSOp<"mu", [Pure,SameOperandsAndResultType,
    let results = (outs AnyType:$result);
 
  let assemblyFormat = [{
-    $name `:` $next `,` $init attr-dict `:` type($init)
+    $name `:` $init attr-dict `,` $next `:` type($init)
  }];
 
     let extraClassDefinition = [{
@@ -445,9 +445,12 @@ def SpecHLS_DelayOp : SpecHLSOp<"delay", [AttrSizedOperandSegments,
 
    let arguments = (ins AnyType:$next,Optional<I1>:$enable,Optional<AnyType>:$init, I32Attr:$depth);
    let results = (outs AnyType:$result);
+  let assemblyFormat = [{
+        ($enable^ `->`)? $next `by` $depth (`(`$init^ `:` type($init) `)`)? `:` type($result) attr-dict 
+}];
 
-   let hasCustomAssemblyFormat =1;
-
+  //let hasCustomAssemblyFormat =1;
+  let hasCanonicalizer=1;
 }
 
 
@@ -571,6 +574,20 @@ def SpecHLS_DefOp : SpecHLSOp<"def", [
      let assemblyFormat = [{
           $name $data `:` type($result)      attr-dict
      }];
+}
+
+def SpecHLS_DummyOp : SpecHLSOp<"dummy", [
+  Pure
+]>  {
+  let summary = "Dummy.";
+  let description = [{Dummy operation for longestPath analysis.}];
+
+  let arguments = (ins Variadic<AnyType>:$inputs);
+  let results = (outs Variadic<AnyType>:$outputs);
+
+  let assemblyFormat = [{
+    $inputs `:` type($inputs) `->` qualified(type($outputs)) attr-dict
+  }];
 }
 
 #endif // SpecHLS_OPS

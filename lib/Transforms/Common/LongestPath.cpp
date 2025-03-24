@@ -10,7 +10,10 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include <climits>
 #include <cstdio>
+#include <llvm/ADT/ArrayRef.h>
+#include <llvm/ADT/SmallVector.h>
 #include <map>
 #include <stack>
 
@@ -34,6 +37,11 @@ using namespace SpecHLS;
 void topologicalSort(Operation *op, std::stack<Value> &stack,
                      DenseMap<Operation *, bool> &visited);
 
+void longestPath(DummyOp starting_point, PatternRewriter &rewriter,
+                 StringAttr dist_name);
+
+void visitedOps(Operation *op, SmallVector<Operation *> &visited);
+
 namespace SpecHLS {
 
 struct LongestPathPattern : OpRewritePattern<hw::HWModuleOp> {
@@ -43,76 +51,68 @@ struct LongestPathPattern : OpRewritePattern<hw::HWModuleOp> {
 
   LogicalResult matchAndRewrite(hw::HWModuleOp top,
                                 PatternRewriter &rewriter) const override {
-    if (!hasPragmaContaining(top, "TOP")) {
+    if (!top->hasAttr("TOP")) {
       return failure();
     }
+
+    Block *body = top.getBodyBlock();
+    ImplicitLocOpBuilder builder =
+        ImplicitLocOpBuilder::atBlockBegin(top.getLoc(), body);
     auto inits = top.getOps<InitOp>();
-    InitOp starting_point;
-    bool find = false;
+    SmallVector<Value> init_values;
+    SmallVector<Type> init_types;
     for (InitOp init : inits) {
-      if (hasPragmaContaining(init, "MU_INITIAL")) {
-        starting_point = init;
-        find = true;
-        break;
-      }
+      init_values.push_back(init.getResult());
+      init_types.push_back(init.getType());
     }
-    if (!find) {
+    if (init_values.size() == 0) {
       return failure();
     }
-    DenseMap<Operation *, int> dists;
-    DenseMap<Operation *, bool> visited;
-    std::stack<Value> stack;
-    for (Operation &op : top.getBody().front().getOperations()) {
-      dists[&op] = INT_MIN;
-      visited[&op] = false;
-    }
-    for (Operation &op : top.getBody().front().getOperations()) {
-      if (!visited[&op]) {
-        topologicalSort(&op, stack, visited);
-      }
-    }
-    dists[starting_point] = 0;
-    while (!stack.empty()) {
-      Value v = stack.top();
-      stack.pop();
+    DummyOp starting_point = builder.create<DummyOp>(init_types, init_values);
 
-      // Get the delay of the Operation
-      int delay = 0;
-      DelayOp delta = v.getDefiningOp<DelayOp>();
-      if (delta) {
-        delay = delta.getDepth();
-      } else {
-        auto unknown = v.getDefiningOp();
-        if (unknown->hasAttr("delay")) {
-          delay = unknown->getAttr("delay").cast<IntegerAttr>().getInt();
+    auto dummy_results = starting_point.getResults();
+    for (size_t i = 0; i < init_values.size(); i++) {
+      Value oldResult = init_values[i];
+      Value newResult = dummy_results[i];
+      oldResult.replaceAllUsesExcept(newResult, starting_point);
+    }
+    std::map<int, SmallVector<DelayOp>> instrs_delay;
+    top.walk([&](DelayOp delay) {
+      if (delay->hasAttr("instrs")) {
+        int instr_num = delay->getAttr("instrs")
+                            .cast<IntegerAttr>()
+                            .getValue()
+                            .getSExtValue();
+        if (auto vec = instrs_delay.find(instr_num);
+            vec != instrs_delay.end()) {
+          instrs_delay[instr_num].push_back(delay);
+        } else {
+          SmallVector<DelayOp> new_vec = SmallVector<DelayOp>();
+          new_vec.push_back(delay);
+          instrs_delay[instr_num] = new_vec;
         }
       }
-
-      // Get the attribute
-      Operation *op = v.getDefiningOp();
-      auto dist = dists[op];
-
-      // Check attribute's Value
-      if (dist == INT_MIN) {
-        continue;
+    });
+    for (int i = 0; i < instrs_delay.size(); i++) {
+      SmallVector<DelayOp> vec = instrs_delay[i];
+      SmallVector<Value> del_val;
+      SmallVector<Type> del_types;
+      for (size_t j = 0; j < vec.size(); j++) {
+        del_val.push_back(vec[j].getResult());
+        del_types.push_back(vec[j].getType());
       }
-
-      // Save all uses & update all uses' value
-      for (Operation *use : v.getUsers()) {
-        auto use_d = dists[use];
-        if (use_d < (dist + delay)) {
-          dists[use] = dist + delay;
-        }
+      DummyOp inter_instr = builder.create<DummyOp>(del_types, del_val);
+      auto results = inter_instr.getResults();
+      for (size_t j = 0; j < del_val.size(); j++) {
+        Value oldResult = del_val[j];
+        Value newResult = results[j];
+        oldResult.replaceAllUsesExcept(newResult, inter_instr);
       }
     }
-    Operation *output = top.getBody().front().getTerminator();
-    output->setAttr("#dist", rewriter.getI32IntegerAttr(dists[output]));
-    for (Operation &op : top.getBody().front().getOperations()) {
-      op.setAttr("#dist", rewriter.getI32IntegerAttr(dists[&op]));
-      fprintf(stderr, "WCET: %d\n", dists[&op]);
-    }
-    removePragmaAttr(starting_point, "MU_INITAL");
-    removePragmaAttr(top, "TOP");
+
+    StringAttr dist_name = rewriter.getStringAttr("dist");
+    longestPath(starting_point, rewriter, dist_name);
+    top->removeAttr("TOP");
     return success();
   }
 };
@@ -151,5 +151,74 @@ void topologicalSort(Operation *op, std::stack<Value> &stack,
   }
   for (size_t i = 0; i < op->getNumResults(); i++) {
     stack.push(op->getResult(i));
+  }
+}
+
+void longestPath(DummyOp starting_point, PatternRewriter &rewriter,
+                 StringAttr dist_name) {
+  DenseMap<Operation *, int> dists;
+  DenseMap<Operation *, bool> visited;
+  std::stack<Value> stack;
+  SmallVector<Operation *> ops;
+  visitedOps(starting_point, ops);
+  for (Operation *op : ops) {
+    dists[op] = INT_MIN;
+    visited[op] = false;
+  }
+  for (Operation *op : ops) {
+    if (!visited[op]) {
+      topologicalSort(op, stack, visited);
+    }
+  }
+  dists[starting_point] = 0;
+  while (!stack.empty()) {
+    Value v = stack.top();
+    stack.pop();
+
+    // Get the delay of the Operation
+    int delay = 0;
+    DelayOp delta = v.getDefiningOp<DelayOp>();
+    if (delta) {
+      delay = delta.getDepth();
+    } else {
+      auto unknown = v.getDefiningOp();
+      if (unknown->hasAttr("delay")) {
+        delay = unknown->getAttr("delay").cast<IntegerAttr>().getInt();
+      }
+    }
+
+    // Get the attribute
+    Operation *op = v.getDefiningOp();
+    auto dist = dists[op];
+
+    // Check attribute's Value
+    if (dist == INT_MIN) {
+      continue;
+    }
+
+    // Save all uses & update all uses' value
+    for (Operation *use : v.getUsers()) {
+      auto use_d = dists[use];
+      if (use_d < (dist + delay)) {
+        dists[use] = dist + delay;
+      }
+    }
+  }
+  for (Operation *op : ops) {
+    op->setAttr(dist_name, rewriter.getI32IntegerAttr(dists[op]));
+  }
+}
+
+void visitedOps(Operation *op, SmallVector<Operation *> &visited) {
+  if (std::find(visited.begin(), visited.end(), op) != visited.end()) {
+    return;
+  }
+
+  visited.push_back(op);
+
+  for (Value result : op->getResults()) {
+    for (Operation *user : result.getUsers()) {
+      visitedOps(user, visited);
+    }
   }
 }

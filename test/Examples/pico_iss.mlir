@@ -146,8 +146,7 @@ hw.module @SpecSCC_15(out "out_0": i1) attributes {"#pragma" = "UNROLL_NODE"} {
 	%t96 = arith.andi %t93,%t95 : i1 
 	%t97 = arith.ori  %t92,%t94 : i1 
 	
-  %t98_t = comb.concat %t96, %t97 : i1, i1
-  %t98 = comb.concat %t98_t, %t91 : i2, i1
+  %t98 = comb.concat %t91, %t97, %t96 : i1, i1, i1
 	%t99 = SpecHLS.gamma @merge__1 %t100 ? %t43,%t27,%t27,%t27,%t27 :i32 
 	%t101_0 = hw.constant 0 : i1
 	%t101 = comb.icmp eq %t101_0,%t9: i1

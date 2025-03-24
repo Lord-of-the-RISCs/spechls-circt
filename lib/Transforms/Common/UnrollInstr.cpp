@@ -30,21 +30,27 @@ using namespace SpecHLS;
 
 // Setup the HWModuleOp to be unrolled
 bool setupHWModule(hw::HWModuleOp op, PatternRewriter &rewriter,
-                   SmallVector<MuOp> &mus) {
+                   SmallVector<InitOp> &inits) {
   // Check module validity
   if (!hasPragmaContaining(op, "UNROLL_NODE")) {
     return false;
   }
 
+  SmallVector<MuOp> mus;
   // Remove all MuOp
   op.walk([&](MuOp mu) {
+    if (InitOp init = mu.getInit().getDefiningOp<InitOp>()) {
+      inits.push_back(init);
+    }
     mus.push_back(mu);
-    // Replace the uses of the output of the mu by an op's argument
+  });
+
+  for (MuOp mu : mus) {
     std::pair<StringAttr, BlockArgument> arg =
         op.appendInput(mu.getName(), mu.getResult().getType());
     op.appendOutput(mu.getName(), mu.getNext());
     rewriter.replaceOp(mu, arg.second);
-  });
+  }
 
   std::pair<StringAttr, BlockArgument> arg =
       op.appendInput("instrs", rewriter.getI32Type());
@@ -60,12 +66,12 @@ bool setupHWModule(hw::HWModuleOp op, PatternRewriter &rewriter,
       rewriter.replaceOp(inst, arg.second);
       return;
     }
-    op.walk([&](DelayOp del) {
+    /*op.walk([&](DelayOp del) {
       auto input = del.getNext();
       input.getDefiningOp()->setAttr(
           "delay", rewriter.getI32IntegerAttr(del.getDepth()));
       rewriter.replaceOp(del, input);
-    });
+    });*/
   });
 
   // Update pragma
@@ -87,8 +93,9 @@ struct UnrollInstrPattern : OpRewritePattern<hw::HWModuleOp> {
 
   LogicalResult matchAndRewrite(hw::HWModuleOp top,
                                 PatternRewriter &rewriter) const override {
-    SmallVector<MuOp> mus = SmallVector<MuOp>();
-    if (!setupHWModule(top, rewriter, mus)) {
+    size_t num_init_outputs = top.getNumOutputPorts();
+    SmallVector<InitOp> mu_inits = SmallVector<InitOp>();
+    if (!setupHWModule(top, rewriter, mu_inits)) {
       return failure();
     }
 
@@ -104,16 +111,11 @@ struct UnrollInstrPattern : OpRewritePattern<hw::HWModuleOp> {
         ImplicitLocOpBuilder::atBlockBegin(unrolled_module.getLoc(), body);
 
     SmallVector<InitOp> inits = SmallVector<InitOp>();
-    size_t regs_num = 0;
-    for (size_t i = 0; i < mus.size(); i++) {
-      auto mu = mus[i];
-      auto initial =
-          builder.create<InitOp>(mu.getInit().getType(), mu.getName());
-      if (mu.getName() == "regs") {
-        regs_num = i;
-        setPragmaAttr(initial, rewriter.getStringAttr("MU_INITIAL"));
-      }
+    for (size_t i = 0; i < mu_inits.size(); i++) {
+      InitOp init = mu_inits[i];
+      InitOp initial = builder.create<InitOp>(init.getType(), init.getName());
       inits.push_back(initial);
+      rewriter.eraseOp(init);
     }
     // Create a constOp for each instruction
     SmallVector<hw::ConstantOp> cons;
@@ -138,10 +140,13 @@ struct UnrollInstrPattern : OpRewritePattern<hw::HWModuleOp> {
         builder.create<hw::InstanceOp>(top, top.getName(), inputs);
 
     SmallVector<DelayOp> deltas = SmallVector<DelayOp>();
-    for (size_t i = 0; i < mus.size(); i++) {
+    for (size_t i = num_init_outputs; i < (inits.size() + num_init_outputs);
+         i++) {
       DelayOp delta = builder.create<DelayOp>(
-          inst.getType(i + 1), inst.getResult(i + 1), enable,
-          inst.getResult(i + 1), builder.getI32IntegerAttr(1));
+          inst.getType(i), inst.getResult(i), enable, inst.getResult(i),
+          builder.getI32IntegerAttr(1));
+      delta->setAttr(rewriter.getStringAttr("instrs"),
+                     rewriter.getI32IntegerAttr(0));
       deltas.push_back(delta);
     }
     // Add the other instances
@@ -153,17 +158,25 @@ struct UnrollInstrPattern : OpRewritePattern<hw::HWModuleOp> {
       inputs.push_back(cons[i]);
       inst = builder.create<hw::InstanceOp>(top, top.getName(), inputs);
       deltas.clear();
-      for (size_t j = 0; j < mus.size(); j++) {
+      for (size_t j = num_init_outputs; j < (inits.size() + num_init_outputs);
+           j++) {
         DelayOp delta = builder.create<DelayOp>(
-            inst.getType(j + 1), inst.getResult(j + 1), enable,
-            inst.getResult(j + 1), builder.getI32IntegerAttr(1));
+            inst.getType(j), inst.getResult(j), enable, inst.getResult(j),
+            builder.getI32IntegerAttr(1));
+        delta->setAttr(rewriter.getStringAttr("instrs"),
+                       rewriter.getI32IntegerAttr(i));
         deltas.push_back(delta);
       }
     }
 
+    fprintf(stderr, "size deltas: %ld\n", deltas.size());
     // Plug the last delay into the output of the module
-    unrolled_module.appendOutput("out", deltas[regs_num].getResult());
-    setPragmaAttr(unrolled_module, rewriter.getStringAttr("TOP"));
+    for (size_t i = 0; i < inits.size(); i++) {
+      StringAttr out_name = rewriter.getStringAttr("out_" + inits[i].getName());
+      unrolled_module.appendOutput(out_name, deltas[i].getResult());
+    }
+    unrolled_module->setAttr(rewriter.getStringAttr("TOP"),
+                             rewriter.getI32IntegerAttr(instrs.size()));
 
     return success();
   }
@@ -187,7 +200,7 @@ public:
 
     OpPassManager dynamicPM("builtin.module");
     dynamicPM.addPass(createInlineModulesPass());
-    dynamicPM.addPass(createCanonicalizerPass());
+    // dynamicPM.addPass(createCanonicalizerPass());
     if (failed(runPipeline(dynamicPM, getOperation()))) {
       signalPassFailure();
     }
