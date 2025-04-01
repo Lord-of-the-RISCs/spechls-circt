@@ -354,6 +354,27 @@ LogicalResult spechls::LoadOp::inferReturnTypes(MLIRContext *context, std::optio
   return success();
 }
 
+LogicalResult spechls::LUTOp::verify() {
+  auto indexWidth = getIndex().getType().getWidth();
+  if ((1ull << indexWidth) + 1 <= getContents().size())
+    return emitOpError("has an index too narrow (")
+           << indexWidth << " bit" << ((indexWidth > 1) ? "s" : "") << ") to select all of its inputs";
+
+  // Make sure that the result type is wide enough to represent all of the LUT's possible values.
+  unsigned requiredBits = 0;
+  for (int64_t value : getContents()) {
+    unsigned neededBits = APInt::getBitsNeeded(std::to_string(value), 10);
+    if (neededBits > requiredBits)
+      requiredBits = neededBits;
+  }
+  auto resultWidth = getResult().getType().getWidth();
+  if (resultWidth < requiredBits)
+    return emitOpError("has a result type too narrow to represent all possible values (required at least ")
+           << requiredBits << " bits, but got " << resultWidth << ")";
+
+  return success();
+}
+
 //===--------------------------------------------------------------------------------------------------------------===//
 // TableGen'd types and op method definitions
 //===--------------------------------------------------------------------------------------------------------------===//

@@ -219,4 +219,24 @@ def SpecHLS_LoadOp : SpecHLSOp<"load", [DeclareOpInterfaceMethods<InferTypeOpInt
     }];
 }
 
+def SpecHLS_LUTOp : SpecHLSOp<"lut", [DeclareOpInterfaceMethods<OpAsmOpInterface, ["getAsmResultNames"]>]> {
+    let arguments = (ins
+        AnyInteger:$index,
+        DenseI64ArrayAttr:$contents
+    );
+    let results = (outs AnyInteger:$result);
+
+    let assemblyFormat = [{
+        $index $contents attr-dict `:` functional-type($index, $result)
+    }];
+
+    let hasVerifier = 1;
+
+    let extraClassDefinition = [{
+        void $cppClass::getAsmResultNames(llvm::function_ref<void(mlir::Value, llvm::StringRef)> setNameFn) {
+            setNameFn(getResult(), "lut");
+        }
+    }];
+}
+
 #endif // SPECHLS_INCLUDED_DIALECT_SPECHLS_IR_SPECHLS_TD
