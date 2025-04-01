@@ -19,7 +19,3 @@ spechls.htask @task1(%in1 : i32) -> i32 {
   // CHECK: spechls.commit %[[arg]] : i32
   spechls.commit %in1 : i32
 }
-
-spechls.htask @task2(%in1 : i32) -> i32 {
-  spechls.commit %in1 : i32
-}
