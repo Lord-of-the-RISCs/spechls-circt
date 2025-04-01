@@ -375,6 +375,51 @@ LogicalResult spechls::LUTOp::verify() {
   return success();
 }
 
+ParseResult spechls::DelayOp::parse(OpAsmParser &parser, OperationState &result) {
+  auto &builder = parser.getBuilder();
+  OpAsmParser::UnresolvedOperand input, enable, init;
+  Type type;
+  uint32_t delay;
+
+  if (parser.parseOperand(input) || parser.parseKeyword("by") || parser.parseInteger(delay))
+    return failure();
+  result.addAttribute(getDepthAttrName(result.name), builder.getUI32IntegerAttr(delay));
+
+  bool hasEnable = false;
+  if (parser.parseOptionalKeyword("if").succeeded()) {
+    if (parser.parseOperand(enable))
+      return failure();
+    hasEnable = true;
+  }
+  bool hasInit = false;
+  if (parser.parseOptionalKeyword("init").succeeded()) {
+    if (parser.parseOperand(init))
+      return failure();
+    hasInit = true;
+  }
+  result.addAttribute(getOperandSegmentSizesAttrName(result.name),
+                      builder.getDenseI32ArrayAttr({1, hasEnable, hasInit}));
+
+  if (parser.parseOptionalAttrDict(result.attributes) || parser.parseColonType(type) ||
+      parser.resolveOperand(input, type, result.operands) || parser.addTypeToList(type, result.types))
+    return failure();
+  if (hasEnable && parser.resolveOperand(enable, builder.getI1Type(), result.operands))
+    return failure();
+  if (hasInit && parser.resolveOperand(init, type, result.operands))
+    return failure();
+
+  return success();
+}
+
+void spechls::DelayOp::print(OpAsmPrinter &printer) {
+  printer << ' ' << getInput() << " by " << getDepth();
+  if (getEnable())
+    printer << " if " << getEnable();
+  if (getInit())
+    printer << " init " << getInit();
+  printer << " : " << getType();
+}
+
 //===--------------------------------------------------------------------------------------------------------------===//
 // TableGen'd types and op method definitions
 //===--------------------------------------------------------------------------------------------------------------===//
