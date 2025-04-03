@@ -420,6 +420,17 @@ void spechls::DelayOp::print(OpAsmPrinter &printer) {
   printer << " : " << getType();
 }
 
+LogicalResult spechls::UnpackOp::inferReturnTypes(MLIRContext *context, std::optional<Location> loc,
+                                                  ValueRange operands, DictionaryAttr attributes,
+                                                  OpaqueProperties properties, RegionRange regions,
+                                                  SmallVectorImpl<Type> &inferredReturnTypes) {
+  UnpackOpAdaptor adaptor(operands, attributes, properties, regions);
+  StructType inputType = cast<StructType>(adaptor.getInput().getType());
+  const auto &fields = inputType.getFields();
+  inferredReturnTypes.append(fields.begin(), fields.end());
+  return success();
+}
+
 //===--------------------------------------------------------------------------------------------------------------===//
 // TableGen'd types and op method definitions
 //===--------------------------------------------------------------------------------------------------------------===//

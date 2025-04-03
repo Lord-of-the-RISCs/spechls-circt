@@ -53,7 +53,7 @@ def SpecHLS_ArrayType : SpecHLSType<"Array", "array"> {
     }];
 }
 
-def SpecHLS_StructType : SpecHLSType<"Structure", "struct"> {
+def SpecHLS_StructType : SpecHLSType<"Struct", "struct"> {
     let summary = "Structure type.";
 
     let parameters = (ins OptionalArrayRefParameter<"mlir::Type">:$fields);
@@ -278,6 +278,15 @@ def SpecHLS_FIFOOp : SpecHLSOp<"fifo",
         void $cppClass::getAsmResultNames(llvm::function_ref<void(mlir::Value, llvm::StringRef)> setNameFn) {
             setNameFn(getResult(), "fifo");
         }
+    }];
+}
+
+def SpecHLS_UnpackOp : SpecHLSOp<"unpack", [DeclareOpInterfaceMethods<InferTypeOpInterface>]> {
+    let arguments = (ins SpecHLS_StructType:$input);
+    let results = (outs Variadic<AnyType>:$results);
+
+    let assemblyFormat = [{
+        $input attr-dict `:` type($input)
     }];
 }
 
