@@ -265,4 +265,20 @@ def SpecHLS_DelayOp : SpecHLSOp<"delay",
     let hasCustomAssemblyFormat = 1;
 }
 
+def SpecHLS_FIFOOp : SpecHLSOp<"fifo",
+        [SameOperandsAndResultType, DeclareOpInterfaceMethods<OpAsmOpInterface, ["getAsmResultNames"]>]> {
+    let arguments = (ins AnyType:$input, UI32Attr:$depth);
+    let results = (outs AnyType:$result);
+
+    let assemblyFormat = [{
+        `<` $depth `>` $input attr-dict `:` type($input)
+    }];
+
+    let extraClassDefinition = [{
+        void $cppClass::getAsmResultNames(llvm::function_ref<void(mlir::Value, llvm::StringRef)> setNameFn) {
+            setNameFn(getResult(), "fifo");
+        }
+    }];
+}
+
 #endif // SPECHLS_INCLUDED_DIALECT_SPECHLS_IR_SPECHLS_TD
