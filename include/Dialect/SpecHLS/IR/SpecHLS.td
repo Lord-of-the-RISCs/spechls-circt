@@ -265,15 +265,15 @@ def SpecHLS_DelayOp : SpecHLSOp<"delay",
     let hasCustomAssemblyFormat = 1;
 }
 
-def SpecHLS_FIFOOp : SpecHLSOp<"fifo",
-        [DeclareOpInterfaceMethods<InferTypeOpInterface>,
-         DeclareOpInterfaceMethods<OpAsmOpInterface, ["getAsmResultNames"]>]> {
+def SpecHLS_FIFOOp : SpecHLSOp<"fifo", [DeclareOpInterfaceMethods<OpAsmOpInterface, ["getAsmResultNames"]>]> {
     let arguments = (ins AnyType:$input, UI32Attr:$depth);
     let results = (outs AnyType:$result);
 
     let assemblyFormat = [{
-        `<` $depth `>` $input attr-dict `:` type($input)
+        `<` $depth `>` $input attr-dict `:` functional-type($input, $result)
     }];
+
+    let hasVerifier = 1;
 
     let extraClassDefinition = [{
         void $cppClass::getAsmResultNames(llvm::function_ref<void(mlir::Value, llvm::StringRef)> setNameFn) {

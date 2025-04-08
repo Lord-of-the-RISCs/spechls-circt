@@ -420,13 +420,22 @@ void spechls::DelayOp::print(OpAsmPrinter &printer) {
   printer << " : " << getType();
 }
 
-LogicalResult spechls::FIFOOp::inferReturnTypes(MLIRContext *context, std::optional<Location> loc, ValueRange operands,
-                                                DictionaryAttr attributes, OpaqueProperties properties,
-                                                RegionRange regions, SmallVectorImpl<Type> &inferredReturnTypes) {
-  // FIFO inputs have a write enable signal, that is not forwarded to their output.
-  FIFOOpAdaptor adaptor(operands, attributes, properties, regions);
-  StructType inputType = cast<StructType>(adaptor.getInput().getType());
-  inferredReturnTypes.push_back(inputType.getFields().back());
+LogicalResult spechls::FIFOOp::verify() {
+  Type inType = getInput().getType();
+  if (!isa<StructType>(inType))
+    return emitOpError("FIFO input type expected to be a structure, but got ") << inType;
+
+  StructType structType = cast<StructType>(inType);
+  auto fields = structType.getFields();
+  if (fields.size() != 2 || !fields.front().isInteger(1)) {
+    return emitOpError(
+               "FIFO input type expected to be a structure of the form !spechls.struct<i1, output-type>, but got ")
+           << inType;
+  }
+
+  if (fields.back() != getType())
+    return emitOpError("FIFO output expected to be of type ") << fields.back() << ", but got " << getType();
+
   return success();
 }
 
