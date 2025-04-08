@@ -420,6 +420,16 @@ void spechls::DelayOp::print(OpAsmPrinter &printer) {
   printer << " : " << getType();
 }
 
+LogicalResult spechls::FIFOOp::inferReturnTypes(MLIRContext *context, std::optional<Location> loc, ValueRange operands,
+                                                DictionaryAttr attributes, OpaqueProperties properties,
+                                                RegionRange regions, SmallVectorImpl<Type> &inferredReturnTypes) {
+  // FIFO inputs have a write enable signal, that is not forwarded to their output.
+  FIFOOpAdaptor adaptor(operands, attributes, properties, regions);
+  StructType inputType = cast<StructType>(adaptor.getInput().getType());
+  inferredReturnTypes.push_back(inputType.getFields().back());
+  return success();
+}
+
 LogicalResult spechls::UnpackOp::inferReturnTypes(MLIRContext *context, std::optional<Location> loc,
                                                   ValueRange operands, DictionaryAttr attributes,
                                                   OpaqueProperties properties, RegionRange regions,

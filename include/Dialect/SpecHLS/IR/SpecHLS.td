@@ -266,7 +266,8 @@ def SpecHLS_DelayOp : SpecHLSOp<"delay",
 }
 
 def SpecHLS_FIFOOp : SpecHLSOp<"fifo",
-        [SameOperandsAndResultType, DeclareOpInterfaceMethods<OpAsmOpInterface, ["getAsmResultNames"]>]> {
+        [DeclareOpInterfaceMethods<InferTypeOpInterface>,
+         DeclareOpInterfaceMethods<OpAsmOpInterface, ["getAsmResultNames"]>]> {
     let arguments = (ins AnyType:$input, UI32Attr:$depth);
     let results = (outs AnyType:$result);
 
