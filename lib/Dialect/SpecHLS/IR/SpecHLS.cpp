@@ -142,13 +142,13 @@ LogicalResult spechls::CommitOp::verify() {
 
   // The number of committed values must match the task signature.
   auto const &results = task.getResultTypes();
-  if (getNumOperands() != results.size())
+  if (getValues().size() != results.size())
     return emitOpError("has ") << getNumOperands() << " operands, but enclosing htask (@" << task.getName()
                                << ") returns " << results.size();
 
   for (size_t i = 0, e = results.size(); i != e; ++i) {
-    if (getOperand(i).getType() != results[i])
-      return emitError() << "type of commit operand " << i << " (" << getOperand(i).getType()
+    if (getOperand(i + 1).getType() != results[i])
+      return emitError() << "type of commit operand " << i + 1 << " (" << getOperand(i + 1).getType()
                          << ") doesn't match result type (" << results[i] << ") in htask @" << task.getName();
   }
 

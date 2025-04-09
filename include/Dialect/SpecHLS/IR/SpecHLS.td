@@ -115,10 +115,13 @@ def SpecHLS_ExitOp : SpecHLSOp<"exit", [HasParent<"HKernelOp">, Terminator, Retu
 def SpecHLS_HTaskOp : SpecHLS_TaskLikeOp<"htask"> {}
 
 def SpecHLS_CommitOp : SpecHLSOp<"commit", [HasParent<"HTaskOp">, Terminator, ReturnLike]> {
-    let arguments = (ins Variadic<AnyType>:$values);
+    let arguments = (ins
+        I1:$enable,
+        Variadic<AnyType>:$values
+    );
 
     let assemblyFormat = [{
-        ($values^ `:` type($values))? attr-dict
+        $enable (`,` $values^ `:` type($values))? attr-dict
     }];
     let hasVerifier = 1;
 }

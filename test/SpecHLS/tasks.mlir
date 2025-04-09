@@ -16,6 +16,7 @@ spechls.hkernel @toplevel(%in1 : i32, %in2 : i1) -> i32 {
 // CHECK: spechls.htask @task1
 // CHECK-SAME: %[[arg:[a-zA-Z0-9]+]]
 spechls.htask @task1(%in1 : i32) -> i32 {
-  // CHECK: spechls.commit %[[arg]] : i32
-  spechls.commit %in1 : i32
+  %true = hw.constant 1 : i1
+  // CHECK: spechls.commit %true, %[[arg]] : i32
+  spechls.commit %true, %in1 : i32
 }
