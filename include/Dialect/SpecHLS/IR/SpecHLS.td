@@ -303,4 +303,13 @@ def SpecHLS_UnpackOp : SpecHLSOp<"unpack", [DeclareOpInterfaceMethods<InferTypeO
     }];
 }
 
+def SpecHLS_SyncOp : SpecHLSOp<"sync", [DeclareOpInterfaceMethods<InferTypeOpInterface>]> {
+    let arguments = (ins Variadic<AnyType>:$inputs);
+    let results = (outs AnyType:$result);
+
+    let assemblyFormat = [{
+        $inputs attr-dict `:` type($inputs)
+    }];
+}
+
 #endif // SPECHLS_INCLUDED_DIALECT_SPECHLS_IR_SPECHLS_TD

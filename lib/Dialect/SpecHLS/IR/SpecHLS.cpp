@@ -459,6 +459,14 @@ LogicalResult spechls::UnpackOp::inferReturnTypes(MLIRContext *context, std::opt
   return success();
 }
 
+LogicalResult spechls::SyncOp::inferReturnTypes(MLIRContext *context, std::optional<Location> loc, ValueRange operands,
+                                                DictionaryAttr attributes, OpaqueProperties properties,
+                                                RegionRange regions, SmallVectorImpl<Type> &inferredReturnTypes) {
+  SyncOpAdaptor adaptor(operands, attributes, properties, regions);
+  inferredReturnTypes.push_back(adaptor.getInputs().getTypes().front());
+  return success();
+}
+
 //===--------------------------------------------------------------------------------------------------------------===//
 // TableGen'd types and op method definitions
 //===--------------------------------------------------------------------------------------------------------------===//
