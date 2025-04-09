@@ -439,6 +439,15 @@ LogicalResult spechls::FIFOOp::verify() {
   return success();
 }
 
+LogicalResult spechls::PackOp::inferReturnTypes(MLIRContext *context, std::optional<Location> loc, ValueRange operands,
+                                                DictionaryAttr attributes, OpaqueProperties properties,
+                                                RegionRange regions, SmallVectorImpl<Type> &inferredReturnTypes) {
+  PackOpAdaptor adaptor(operands, attributes, properties, regions);
+  SmallVector<Type> inputTypes{adaptor.getInputs().getTypes()};
+  inferredReturnTypes.push_back(StructType::get(context, inputTypes));
+  return success();
+}
+
 LogicalResult spechls::UnpackOp::inferReturnTypes(MLIRContext *context, std::optional<Location> loc,
                                                   ValueRange operands, DictionaryAttr attributes,
                                                   OpaqueProperties properties, RegionRange regions,

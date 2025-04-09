@@ -282,6 +282,15 @@ def SpecHLS_FIFOOp : SpecHLSOp<"fifo", [DeclareOpInterfaceMethods<OpAsmOpInterfa
     }];
 }
 
+def SpecHLS_PackOp : SpecHLSOp<"pack", [DeclareOpInterfaceMethods<InferTypeOpInterface>]> {
+    let arguments = (ins Variadic<AnyType>:$inputs);
+    let results = (outs SpecHLS_StructType:$result);
+
+    let assemblyFormat = [{
+        $inputs attr-dict `:` type($inputs)
+    }];
+}
+
 def SpecHLS_UnpackOp : SpecHLSOp<"unpack", [DeclareOpInterfaceMethods<InferTypeOpInterface>]> {
     let arguments = (ins SpecHLS_StructType:$input);
     let results = (outs Variadic<AnyType>:$results);
