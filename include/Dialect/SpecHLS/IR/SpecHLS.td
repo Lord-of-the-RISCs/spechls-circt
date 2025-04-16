@@ -312,4 +312,72 @@ def SpecHLS_SyncOp : SpecHLSOp<"sync", [DeclareOpInterfaceMethods<InferTypeOpInt
     }];
 }
 
+def SpecHLS_FieldOp : SpecHLSOp<"field", [DeclareOpInterfaceMethods<InferTypeOpInterface>]> {
+    let arguments = (ins
+        I32Attr:$index,
+        SpecHLS_StructType:$input
+    );
+    let results = (outs AnyType:$result);
+
+    let assemblyFormat = [{
+        `<` $index `>` $input attr-dict `:` type($input)
+    }];
+}
+
+def SpecHLS_FSMOp : SpecHLSOp<"fsm",
+        [TypesMatchWith<"State input and output types must match", "state", "result", "$_self">]> {
+    let arguments = (ins
+        SpecHLS_StructType:$mispec,
+        SpecHLS_StructType:$state
+    );
+    let results = (outs SpecHLS_StructType:$result);
+
+    let assemblyFormat = [{
+        $mispec `,` $state attr-dict `:` type($mispec) `,` type($state)
+    }];
+}
+
+def SpecHLS_FSMCommandOp : SpecHLSOp<"fsm_command"> {
+    let arguments = (ins SpecHLS_StructType:$state);
+    let results = (outs SpecHLS_StructType:$result);
+
+    let assemblyFormat = [{
+        $state attr-dict `:` functional-type($state, $result)
+    }];
+}
+
+def SpecHLS_RewindOp : SpecHLSOp<"rewind",
+        [AttrSizedOperandSegments,
+         TypesMatchWith<"Data input and output types must match", "input", "result", "$_self">]> {
+    let arguments = (ins
+        DenseI64ArrayAttr:$depths,
+        AnyType:$input,
+        Optional<AnyType>:$rewind,
+        Optional<AnyType>:$writeCommand
+    );
+    let results = (outs AnyType:$result);
+
+    let assemblyFormat = [{
+        `<` $depths `>` $input `:` type($input)
+        (`,` $rewind^ `:` type($rewind) (`,` $writeCommand^ `:` type($writeCommand))?)? attr-dict
+    }];
+}
+
+def SpecHLS_RollbackOp : SpecHLSOp<"rollback",
+        [AttrSizedOperandSegments,
+         TypesMatchWith<"Data input and output types must match", "input", "result", "$_self">]> {
+    let arguments = (ins
+        DenseI64ArrayAttr:$depths,
+        AnyType:$input,
+        Optional<AnyType>:$rollback,
+        Optional<AnyType>:$writeCommand
+    );
+    let results = (outs AnyType:$result);
+
+    let assemblyFormat = [{
+        `<` $depths `>` $input `:` type($input)
+        (`,` $rollback^ `:` type($rollback) (`,` $writeCommand^ `:` type($writeCommand))?)? attr-dict
+    }];
+}
+
 #endif // SPECHLS_INCLUDED_DIALECT_SPECHLS_IR_SPECHLS_TD

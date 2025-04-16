@@ -467,6 +467,16 @@ LogicalResult spechls::SyncOp::inferReturnTypes(MLIRContext *context, std::optio
   return success();
 }
 
+LogicalResult spechls::FieldOp::inferReturnTypes(MLIRContext *context, std::optional<Location> loc, ValueRange operands,
+                                                 DictionaryAttr attributes, OpaqueProperties properties,
+                                                 RegionRange regions, SmallVectorImpl<Type> &inferredReturnTypes) {
+  FieldOpAdaptor adaptor(operands, attributes, properties, regions);
+  StructType inputType = cast<StructType>(adaptor.getInput().getType());
+  const auto &fields = inputType.getFields();
+  inferredReturnTypes.push_back(fields.data()[adaptor.getIndex()]);
+  return success();
+}
+
 //===--------------------------------------------------------------------------------------------------------------===//
 // TableGen'd types and op method definitions
 //===--------------------------------------------------------------------------------------------------------------===//
