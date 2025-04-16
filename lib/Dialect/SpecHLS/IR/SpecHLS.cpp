@@ -477,18 +477,6 @@ LogicalResult spechls::FieldOp::inferReturnTypes(MLIRContext *context, std::opti
   return success();
 }
 
-LogicalResult spechls::PseudoCommitOp::inferReturnTypes(MLIRContext *context, std::optional<Location> loc,
-                                                        ValueRange operands, DictionaryAttr attributes,
-                                                        OpaqueProperties properties, RegionRange regions,
-                                                        SmallVectorImpl<Type> &inferredReturnTypes) {
-  PseudoCommitOpAdaptor adaptor(operands, attributes, properties, regions);
-  SmallVector<Type> fieldTypes;
-  fieldTypes.push_back(adaptor.getEnable().getType());
-  fieldTypes.append(adaptor.getValues().getTypes().begin(), adaptor.getValues().getTypes().end());
-  inferredReturnTypes.push_back(StructType::get(context, fieldTypes));
-  return success();
-}
-
 //===--------------------------------------------------------------------------------------------------------------===//
 // TableGen'd types and op method definitions
 //===--------------------------------------------------------------------------------------------------------------===//

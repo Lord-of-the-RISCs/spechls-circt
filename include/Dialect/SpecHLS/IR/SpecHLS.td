@@ -380,16 +380,4 @@ def SpecHLS_RollbackOp : SpecHLSOp<"rollback",
     }];
 }
 
-def SpecHLS_PseudoCommitOp : SpecHLSOp<"pseudo_commit", [DeclareOpInterfaceMethods<InferTypeOpInterface>]> {
-    let arguments = (ins
-        I1:$enable,
-        Variadic<AnyType>:$values
-    );
-    let results = (outs SpecHLS_StructType:$result);
-
-    let assemblyFormat = [{
-        $enable (`,` $values^ `:` type($values))? attr-dict
-    }];
-}
-
 #endif // SPECHLS_INCLUDED_DIALECT_SPECHLS_IR_SPECHLS_TD
