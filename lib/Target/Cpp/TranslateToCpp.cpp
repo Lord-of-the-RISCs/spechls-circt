@@ -328,33 +328,47 @@ LogicalResult printOperation(CppEmitter &emitter, spechls::PrintOp printOp) {
 LogicalResult printOperation(CppEmitter &emitter, spechls::CommitOp commitOp) {
   raw_indented_ostream &os = emitter.ostream();
 
-  // TODO: Handle the enable signal
+  if (commitOp.getValues().size() == 0) {
+    os << "return";
+    return success();
+  }
+
   os << "if (";
   if (failed(emitter.emitOperand(commitOp.getEnable())))
     return failure();
   os << ") {\n";
   os.indent();
+  os << "return ";
 
-  os << "return";
-  switch (commitOp.getValues().size()) {
-  case 0:
-    break;
-  case 1:
-    os << ' ';
+  if (commitOp.getValues().size() == 1) {
     if (failed(emitter.emitOperand(commitOp.getValues().front())))
       return failure();
-    break;
-  default:
-    os << " std::make_tuple(";
+  } else {
+    os << "std::make_tuple(";
     if (failed(interleaveCommaWithError(commitOp.getValues(), os,
                                         [&](Value operand) { return emitter.emitOperand(operand); }))) {
       return failure();
     }
-    os << ')';
+    os << ")";
   }
 
+  os << ";\n";
   os.unindent();
-  os << "}";
+  os << "}\n";
+
+  os << "return ";
+  if (commitOp.getValues().size() == 1) {
+    if (failed(emitter.emitType(commitOp.getLoc(), commitOp.getValues().front().getType())))
+      return failure();
+  } else {
+    os << "std::tuple<";
+    if (failed(interleaveCommaWithError(commitOp.getValues().getTypes(), os,
+                                        [&](Type type) { return emitter.emitType(commitOp.getLoc(), type); }))) {
+      return failure();
+    }
+    os << ">";
+  }
+  os << "{}";
 
   return success();
 }
