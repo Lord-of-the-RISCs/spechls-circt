@@ -56,7 +56,7 @@ def SpecHLS_ArrayType : SpecHLSType<"Array", "array"> {
 def SpecHLS_StructType : SpecHLSType<"Struct", "struct"> {
     let summary = "Structure type.";
 
-    let parameters = (ins OptionalArrayRefParameter<"mlir::Type">:$fields);
+    let parameters = (ins ArrayRefParameter<"mlir::Type">:$fields);
 
     let assemblyFormat = [{
         `<` $fields `>`
