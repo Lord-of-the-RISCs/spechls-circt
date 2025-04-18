@@ -575,16 +575,16 @@ LogicalResult printOperation(CppEmitter &emitter, circt::comb::ReplicateOp repli
   Operation *operation = replicateOp.getOperation();
   raw_ostream &os = emitter.ostream();
 
-  if (failed(emitter.emitVariableAssignment(operation->getResult(0))))
-    return failure();
-
-  StringRef inputName = emitter.getOrCreateName(replicateOp.getInput());
-  os << inputName;
   size_t count = replicateOp.getResult().getType().getIntOrFloatBitWidth() /
                  replicateOp.getInput().getType().getIntOrFloatBitWidth();
-  for (size_t i = 0; i < count - 1; ++i)
-    os << ".concat(" << inputName << ")";
 
+  if (failed(emitter.emitAssignPrefix(*operation)))
+    return failure();
+
+  os << "replicate<" << count << ">(";
+  if (failed(emitter.emitOperands(*operation)))
+    return failure();
+  os << ")";
   return success();
 }
 
