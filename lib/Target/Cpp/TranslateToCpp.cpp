@@ -35,7 +35,7 @@ class CppEmitter {
   raw_indented_ostream os;
 
 public:
-  explicit CppEmitter(raw_ostream &os);
+  explicit CppEmitter(raw_ostream &os, bool declareStructTypes = false);
 
   raw_indented_ostream &ostream() { return os; }
 
@@ -61,6 +61,8 @@ public:
   StringRef getOrCreateName(Value value);
   StringRef getExitVariableName() { return "exit_"; }
 
+  bool shouldDeclareStructTypes() { return declareStructTypes; }
+
   class Scope {
     llvm::ScopedHashTableScope<Value, std::string> valueMapperScope;
     CppEmitter &emitter;
@@ -82,6 +84,7 @@ private:
   ValueMapper valueMapper;
 
   std::stack<int64_t> valueInScopeCount;
+  bool declareStructTypes;
 };
 
 template <typename ForwardIterator, typename UnaryFunctor, typename NullaryFunctor>
@@ -179,10 +182,12 @@ LogicalResult printOperation(CppEmitter &emitter, ModuleOp moduleOp) {
   os << "#include <io_printf.h>\n";
   os << "\n";
 
-  if (failed(printAllStructTypes(emitter, moduleOp)))
-    return failure();
+  if (emitter.shouldDeclareStructTypes()) {
+    if (failed(printAllStructTypes(emitter, moduleOp)))
+      return failure();
+    os << "\n";
+  }
 
-  os << "\n";
   for (auto &&op : moduleOp) {
     if (failed(emitter.emitOperation(op, false)))
       return failure();
@@ -676,7 +681,9 @@ LogicalResult printOperation(CppEmitter &emitter, circt::hw::ConstantOp constant
 }
 } // namespace
 
-CppEmitter::CppEmitter(raw_ostream &os) : os(os) { valueInScopeCount.push(0); }
+CppEmitter::CppEmitter(raw_ostream &os, bool declareStructTypes) : os(os), declareStructTypes(declareStructTypes) {
+  valueInScopeCount.push(0);
+}
 
 LogicalResult CppEmitter::emitOperation(Operation &op, bool trailingSemicolon) {
   LogicalResult status =
@@ -865,7 +872,7 @@ StringRef CppEmitter::getOrCreateName(Value value) {
   return *valueMapper.begin(value);
 }
 
-LogicalResult spechls::translateToCpp(Operation *op, raw_ostream &os) {
-  CppEmitter emitter(os);
+LogicalResult spechls::translateToCpp(Operation *op, raw_ostream &os, bool declareStructTypes) {
+  CppEmitter emitter(os, declareStructTypes);
   return emitter.emitOperation(*op, false);
 }

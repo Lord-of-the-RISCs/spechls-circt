@@ -10,6 +10,6 @@
 
 namespace spechls {
 
-llvm::LogicalResult translateToCpp(mlir::Operation *op, llvm::raw_ostream &os);
+llvm::LogicalResult translateToCpp(mlir::Operation *op, llvm::raw_ostream &os, bool declareStructTypes);
 
 } // namespace spechls
