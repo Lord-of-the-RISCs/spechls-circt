@@ -703,7 +703,9 @@ LogicalResult CppEmitter::emitType(Location loc, Type type) {
     return emitTupleType(loc, sType.getFields());
   }
   if (auto aType = dyn_cast<spechls::ArrayType>(type)) {
-    os << "std::array<" << aType.getElementType() << ", " << aType.getSize() << ">";
+    if (failed(emitType(loc, aType.getElementType())))
+      return failure();
+    os << "*";
     return success();
   }
   return emitError(loc, "cannot emit type ") << type;
