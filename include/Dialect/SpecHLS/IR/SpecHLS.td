@@ -56,11 +56,14 @@ def SpecHLS_ArrayType : SpecHLSType<"Array", "array"> {
 def SpecHLS_StructType : SpecHLSType<"Struct", "struct"> {
     let summary = "Structure type.";
 
-    let parameters = (ins ArrayRefParameter<"mlir::Type">:$fields);
+    let parameters = (ins
+        StringRefParameter<"struct name", [{""}]>:$name,
+        ArrayRefParameter<"::std::string">:$fieldNames,
+        ArrayRefParameter<"::mlir::Type">:$fieldTypes
+    );
 
-    let assemblyFormat = [{
-        `<` $fields `>`
-    }];
+    let hasCustomAssemblyFormat = 1;
+    let genVerifyDecl = 1;
 }
 
 //===--------------------------------------------------------------------------------------------------------------===//
@@ -285,12 +288,12 @@ def SpecHLS_FIFOOp : SpecHLSOp<"fifo", [DeclareOpInterfaceMethods<OpAsmOpInterfa
     }];
 }
 
-def SpecHLS_PackOp : SpecHLSOp<"pack", [DeclareOpInterfaceMethods<InferTypeOpInterface>]> {
+def SpecHLS_PackOp : SpecHLSOp<"pack"> {
     let arguments = (ins Variadic<AnyType>:$inputs);
     let results = (outs SpecHLS_StructType:$result);
 
     let assemblyFormat = [{
-        $inputs attr-dict `:` type($inputs)
+        $inputs attr-dict `:` functional-type($inputs, $result)
     }];
 }
 
@@ -314,14 +317,16 @@ def SpecHLS_SyncOp : SpecHLSOp<"sync", [DeclareOpInterfaceMethods<InferTypeOpInt
 
 def SpecHLS_FieldOp : SpecHLSOp<"field", [DeclareOpInterfaceMethods<InferTypeOpInterface>]> {
     let arguments = (ins
-        I32Attr:$index,
+        StrAttr:$name,
         SpecHLS_StructType:$input
     );
     let results = (outs AnyType:$result);
 
     let assemblyFormat = [{
-        `<` $index `>` $input attr-dict `:` type($input)
+        `<` $name `>` $input attr-dict `:` type($input)
     }];
+
+    let hasVerifier = 1;
 }
 
 def SpecHLS_FSMOp : SpecHLSOp<"fsm",

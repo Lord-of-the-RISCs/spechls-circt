@@ -7,6 +7,7 @@
 
 #include "Dialect/SpecHLS/IR/SpecHLSOps.h"
 
+#include <iterator>
 #include <llvm/ADT/TypeSwitch.h>
 #include <mlir/IR/BuiltinAttributes.h>
 #include <mlir/IR/DialectImplementation.h>
@@ -19,6 +20,7 @@
 
 #include "Dialect/SpecHLS/IR/SpecHLSDialect.cpp.inc"
 #include "Dialect/SpecHLS/IR/SpecHLSTypes.h"
+#include "llvm/ADT/STLExtras.h"
 
 using namespace mlir;
 
@@ -97,6 +99,48 @@ void printTaskLikeOp(T &instance, OpAsmPrinter &printer) {
 }
 
 } // namespace
+
+Type spechls::StructType::parse(AsmParser &parser) {
+  Location loc = parser.getEncodedSourceLoc(parser.getCurrentLocation());
+
+  std::string name;
+  if (parser.parseLess() || parser.parseString(&name))
+    return {};
+
+  SmallVector<Type, 4> fieldTypes;
+  SmallVector<std::string, 4> fieldNames;
+
+  if (parser.parseCommaSeparatedList(AsmParser::Delimiter::Braces, [&]() {
+        std::string fieldName;
+        Type fieldType;
+        if (parser.parseString(&fieldName) || parser.parseColonType(fieldType))
+          return failure();
+        fieldTypes.push_back(std::move(fieldType));
+        fieldNames.push_back(std::move(fieldName));
+        return success();
+      })) {
+    return {};
+  }
+
+  if (parser.parseGreater())
+    return {};
+
+  return StructType::getChecked([loc] { return emitError(loc); }, loc.getContext(), name, fieldNames, fieldTypes);
+}
+
+void spechls::StructType::print(AsmPrinter &printer) const {
+  printer << "<\"" << getName() << "\" { ";
+  llvm::interleaveComma(llvm::zip(getFieldNames(), getFieldTypes()), printer,
+                        [&](auto p) { printer << '"' << std::get<0>(p) << "\" : " << std::get<1>(p); });
+  printer << " }>";
+}
+
+LogicalResult spechls::StructType::verify(function_ref<InFlightDiagnostic()> emitError, StringRef name,
+                                          ArrayRef<std::string> fieldNames, ArrayRef<Type> fieldTypes) {
+  if (fieldNames.size() != fieldTypes.size())
+    return emitError() << "field name and field type count mismatch";
+  return success();
+}
 
 ParseResult spechls::HKernelOp::parse(OpAsmParser &parser, OperationState &result) {
   return parseTaskLikeOp<HKernelOp>(parser, result);
@@ -426,7 +470,7 @@ LogicalResult spechls::FIFOOp::verify() {
     return emitOpError("FIFO input type expected to be a structure, but got ") << inType;
 
   StructType structType = cast<StructType>(inType);
-  auto fields = structType.getFields();
+  auto fields = structType.getFieldTypes();
   if (fields.size() != 2 || !fields.front().isInteger(1)) {
     return emitOpError(
                "FIFO input type expected to be a structure of the form !spechls.struct<i1, output-type>, but got ")
@@ -439,22 +483,13 @@ LogicalResult spechls::FIFOOp::verify() {
   return success();
 }
 
-LogicalResult spechls::PackOp::inferReturnTypes(MLIRContext *context, std::optional<Location> loc, ValueRange operands,
-                                                DictionaryAttr attributes, OpaqueProperties properties,
-                                                RegionRange regions, SmallVectorImpl<Type> &inferredReturnTypes) {
-  PackOpAdaptor adaptor(operands, attributes, properties, regions);
-  SmallVector<Type> inputTypes{adaptor.getInputs().getTypes()};
-  inferredReturnTypes.push_back(StructType::get(context, inputTypes));
-  return success();
-}
-
 LogicalResult spechls::UnpackOp::inferReturnTypes(MLIRContext *context, std::optional<Location> loc,
                                                   ValueRange operands, DictionaryAttr attributes,
                                                   OpaqueProperties properties, RegionRange regions,
                                                   SmallVectorImpl<Type> &inferredReturnTypes) {
   UnpackOpAdaptor adaptor(operands, attributes, properties, regions);
   StructType inputType = cast<StructType>(adaptor.getInput().getType());
-  const auto &fields = inputType.getFields();
+  const auto &fields = inputType.getFieldTypes();
   inferredReturnTypes.append(fields.begin(), fields.end());
   return success();
 }
@@ -467,13 +502,31 @@ LogicalResult spechls::SyncOp::inferReturnTypes(MLIRContext *context, std::optio
   return success();
 }
 
+LogicalResult spechls::FieldOp::verify() {
+  StringRef fieldName = getName();
+  StructType inputType = getInput().getType();
+  auto fieldNames = inputType.getFieldNames();
+  if (std::find(fieldNames.begin(), fieldNames.end(), fieldName) == fieldNames.end())
+    return emitOpError("invalid field name '") << fieldName << "' for struct " << inputType;
+  return success();
+}
+
 LogicalResult spechls::FieldOp::inferReturnTypes(MLIRContext *context, std::optional<Location> loc, ValueRange operands,
                                                  DictionaryAttr attributes, OpaqueProperties properties,
                                                  RegionRange regions, SmallVectorImpl<Type> &inferredReturnTypes) {
   FieldOpAdaptor adaptor(operands, attributes, properties, regions);
   StructType inputType = cast<StructType>(adaptor.getInput().getType());
-  const auto &fields = inputType.getFields();
-  inferredReturnTypes.push_back(fields.data()[adaptor.getIndex()]);
+
+  auto fieldNames = inputType.getFieldNames();
+  auto fieldTypes = inputType.getFieldTypes();
+  size_t i = 0;
+  for (auto &&name : fieldNames) {
+    if (name == adaptor.getName()) {
+      inferredReturnTypes.push_back(fieldTypes[i]);
+      break;
+    }
+    ++i;
+  }
   return success();
 }
 

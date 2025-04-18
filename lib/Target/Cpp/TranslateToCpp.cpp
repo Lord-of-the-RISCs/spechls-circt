@@ -47,6 +47,7 @@ public:
   LogicalResult emitType(Location loc, Type type);
   LogicalResult emitTypes(Location loc, ArrayRef<Type> types);
   LogicalResult emitTupleType(Location loc, ArrayRef<Type> types);
+  LogicalResult emitStructDefinition(Location loc, spechls::StructType structType);
 
   LogicalResult emitAttribute(Location loc, Attribute attr);
 
@@ -131,6 +132,28 @@ LogicalResult printAllVariables(CppEmitter &emitter, Operation *taskLikeOp) {
   return success();
 }
 
+LogicalResult printAllStructTypes(CppEmitter &emitter, ModuleOp moduleOp) {
+  DenseSet<StringRef> generatedStructs{};
+
+  WalkResult result = moduleOp.walk<WalkOrder::PreOrder>([&](Operation *op) -> WalkResult {
+    for (Type type : op->getResultTypes()) {
+      if (auto sType = dyn_cast<spechls::StructType>(type)) {
+        if (!generatedStructs.contains(sType.getName())) {
+          if (failed(emitter.emitStructDefinition(op->getLoc(), sType)))
+            return WalkResult(op->emitError("unable to declare structure type for op"));
+          generatedStructs.insert(sType.getName());
+        }
+      }
+    }
+    return WalkResult::advance();
+  });
+
+  if (result.wasInterrupted())
+    return failure();
+
+  return success();
+}
+
 LogicalResult printFunctionBody(CppEmitter &emitter, Operation *taskLikeOp, Region::BlockListType &blocks,
                                 bool indent = true) {
   raw_indented_ostream &os = emitter.ostream();
@@ -156,6 +179,10 @@ LogicalResult printOperation(CppEmitter &emitter, ModuleOp moduleOp) {
   os << "#include <io_printf.h>\n";
   os << "\n";
 
+  if (failed(printAllStructTypes(emitter, moduleOp)))
+    return failure();
+
+  os << "\n";
   for (auto &&op : moduleOp) {
     if (failed(emitter.emitOperation(op, false)))
       return failure();
@@ -391,10 +418,9 @@ LogicalResult printOperation(CppEmitter &emitter, spechls::FieldOp fieldOp) {
 
   if (failed(emitter.emitVariableAssignment(operation->getResult(0))))
     return failure();
-  os << "std::get<" << fieldOp.getIndex() << ">(";
-  if (failed(emitter.emitOperands(*operation)))
+  if (failed(emitter.emitOperand(fieldOp.getInput())))
     return failure();
-  os << ")";
+  os << "." << fieldOp.getName();
 
   return success();
 }
@@ -700,7 +726,8 @@ LogicalResult CppEmitter::emitType(Location loc, Type type) {
     return emitTupleType(loc, tType.getTypes());
   }
   if (auto sType = dyn_cast<spechls::StructType>(type)) {
-    return emitTupleType(loc, sType.getFields());
+    os << sType.getName();
+    return success();
   }
   if (auto aType = dyn_cast<spechls::ArrayType>(type)) {
     if (failed(emitType(loc, aType.getElementType())))
@@ -728,6 +755,24 @@ LogicalResult CppEmitter::emitTupleType(Location loc, ArrayRef<Type> types) {
   if (failed(interleaveCommaWithError(types, os, [&](Type type) { return emitType(loc, type); })))
     return failure();
   os << ">";
+  return success();
+}
+
+LogicalResult CppEmitter::emitStructDefinition(Location loc, spechls::StructType structType) {
+  os << "struct " << structType.getName() << " {\n";
+  os.indent();
+
+  auto fieldNames = structType.getFieldNames();
+  auto fieldTypes = structType.getFieldTypes();
+
+  for (size_t i = 0; i < fieldTypes.size(); ++i) {
+    if (failed(emitType(loc, fieldTypes[i])))
+      return failure();
+    os << " " << fieldNames[i] << ";\n";
+  }
+
+  os.unindent();
+  os << "};\n";
   return success();
 }
 
