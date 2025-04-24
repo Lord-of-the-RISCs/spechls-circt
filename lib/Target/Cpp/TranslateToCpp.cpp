@@ -361,35 +361,46 @@ LogicalResult printOperation(CppEmitter &emitter, spechls::PrintOp printOp) {
 LogicalResult printOperation(CppEmitter &emitter, spechls::CommitOp commitOp) {
   raw_indented_ostream &os = emitter.ostream();
 
+  os << "return";
   if (commitOp.getValues().size() == 0) {
-    os << "return";
+    return success();
+  }
+  os << " ";
+
+  bool alwaysEnabled = false;
+  Value enable = commitOp.getEnable();
+  if (auto constantOp = dyn_cast<circt::hw::ConstantOp>(enable.getDefiningOp())) {
+    // Special case for supernodes with always-enabled outputs (i.e., non-speculative supernodes).
+    alwaysEnabled = constantOp.getValue().getBoolValue();
+  }
+
+  auto emitCommitValues = [&]() {
+    if (commitOp.getValues().size() == 1) {
+      if (failed(emitter.emitOperand(commitOp.getValues().front())))
+        return failure();
+    } else {
+      os << "std::make_tuple(";
+      if (failed(interleaveCommaWithError(commitOp.getValues(), os,
+                                          [&](Value operand) { return emitter.emitOperand(operand); }))) {
+        return failure();
+      }
+      os << ")";
+    }
+    return success();
+  };
+
+  if (alwaysEnabled) {
+    if (failed(emitCommitValues()))
+      return failure();
     return success();
   }
 
-  os << "if (";
-  if (failed(emitter.emitOperand(commitOp.getEnable())))
+  if (failed(emitter.emitOperand(enable)))
     return failure();
-  os << ") {\n";
-  os.indent();
-  os << "return ";
-
-  if (commitOp.getValues().size() == 1) {
-    if (failed(emitter.emitOperand(commitOp.getValues().front())))
-      return failure();
-  } else {
-    os << "std::make_tuple(";
-    if (failed(interleaveCommaWithError(commitOp.getValues(), os,
-                                        [&](Value operand) { return emitter.emitOperand(operand); }))) {
-      return failure();
-    }
-    os << ")";
-  }
-
-  os << ";\n";
-  os.unindent();
-  os << "}\n";
-
-  os << "return ";
+  os << " ? ";
+  if (failed(emitCommitValues()))
+    return failure();
+  os << " : ";
   if (commitOp.getValues().size() == 1) {
     if (failed(emitter.emitType(commitOp.getLoc(), commitOp.getValues().front().getType())))
       return failure();
