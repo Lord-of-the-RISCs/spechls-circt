@@ -668,18 +668,6 @@ LogicalResult printOperation(CppEmitter &emitter, circt::comb::ConcatOp concatOp
 
   return success();
 }
-
-LogicalResult printConstantOp(CppEmitter &emitter, Operation *operation, Attribute value) {
-  if (failed(emitter.emitVariableAssignment(operation->getResult(0))))
-    return failure();
-  return emitter.emitAttribute(operation->getLoc(), value);
-}
-
-LogicalResult printOperation(CppEmitter &emitter, circt::hw::ConstantOp constantOp) {
-  Operation *operation = constantOp.getOperation();
-  Attribute value = constantOp.getValueAttr();
-  return printConstantOp(emitter, operation, value);
-}
 } // namespace
 
 CppEmitter::CppEmitter(raw_ostream &os, bool declareStructTypes) : os(os), declareStructTypes(declareStructTypes) {
@@ -687,6 +675,8 @@ CppEmitter::CppEmitter(raw_ostream &os, bool declareStructTypes) : os(os), decla
 }
 
 LogicalResult CppEmitter::emitOperation(Operation &op, bool trailingSemicolon) {
+  bool skipLineEnding = false;
+
   LogicalResult status =
       TypeSwitch<Operation *, LogicalResult>(&op)
           // Builtin ops.
@@ -697,7 +687,10 @@ LogicalResult CppEmitter::emitOperation(Operation &op, bool trailingSemicolon) {
                 circt::comb::SubOp, circt::comb::ReplicateOp, circt::comb::XorOp>(
               [&](auto op) { return printOperation(*this, op); })
           // HW ops.
-          .Case<circt::hw::ConstantOp>([&](auto op) { return printOperation(*this, op); })
+          .Case<circt::hw::ConstantOp>([&](auto op) {
+            skipLineEnding = true;
+            return success();
+          })
           // SpecHLS ops.
           .Case<spechls::AlphaOp, spechls::CallOp, spechls::CommitOp, spechls::DelayOp, spechls::ExitOp,
                 spechls::FieldOp, spechls::FIFOOp, spechls::FSMCommandOp, spechls::FSMOp, spechls::GammaOp,
@@ -709,11 +702,17 @@ LogicalResult CppEmitter::emitOperation(Operation &op, bool trailingSemicolon) {
   if (failed(status))
     return failure();
 
-  os << (trailingSemicolon ? ";\n" : "\n");
+  if (!skipLineEnding)
+    os << (trailingSemicolon ? ";\n" : "\n");
   return success();
 }
 
 LogicalResult CppEmitter::emitOperand(Value value) {
+  Operation *op = value.getDefiningOp();
+  if (op) {
+    if (auto constantOp = dyn_cast<circt::hw::ConstantOp>(op))
+      return emitAttribute(op->getLoc(), constantOp.getValueAttr());
+  }
   os << getOrCreateName(value);
   return success();
 }
@@ -874,12 +873,6 @@ StringRef CppEmitter::getValueNamePrefix(Value value) {
     return "sub";
   if (isa<circt::comb::XorOp>(op))
     return "xor";
-  // HW ops.
-  if (auto constantOp = dyn_cast<circt::hw::ConstantOp>(op)) {
-    if (constantOp.getValue().getBitWidth() == 1)
-      return constantOp.getValue().getBoolValue() ? "true" : "false";
-    return constantOp.getValue().isZero() ? "zero" : "cst";
-  }
   // SpecHLS ops.
   if (isa<spechls::AlphaOp>(op))
     return "alpha";
