@@ -654,15 +654,16 @@ LogicalResult printOperation(CppEmitter &emitter, circt::comb::ExtractOp extract
   Operation *operation = extractOp.getOperation();
   raw_ostream &os = emitter.ostream();
 
-  if (failed(emitter.emitVariableAssignment(operation->getResult(0))))
-    return failure();
-  if (failed(emitter.emitOperand(extractOp.getOperand())))
-    return failure();
-
   uint32_t lowBit = extractOp.getLowBit();
   uint32_t highBit = lowBit + extractOp.getType().getIntOrFloatBitWidth();
-  os << ".range(" << lowBit << ", " << highBit << ")";
 
+  if (failed(emitter.emitAssignPrefix(*operation)))
+    return failure();
+
+  os << "extract<" << lowBit << ", " << highBit << ">(";
+  if (failed(emitter.emitOperands(*operation)))
+    return failure();
+  os << ")";
   return success();
 }
 
@@ -670,15 +671,14 @@ LogicalResult printOperation(CppEmitter &emitter, circt::comb::ConcatOp concatOp
   Operation *operation = concatOp.getOperation();
   raw_ostream &os = emitter.ostream();
 
-  if (failed(emitter.emitVariableAssignment(operation->getResult(0))))
+  if (failed(emitter.emitAssignPrefix(*operation)))
     return failure();
-  if (failed(emitter.emitOperand(concatOp.getOperand(0))))
-    return failure();
-  os << ".concat(";
-  if (failed(emitter.emitOperand(concatOp.getOperand(1))))
+
+  os << "concat<" << concatOp.getOperand(0).getType().getIntOrFloatBitWidth() << ", "
+     << concatOp.getOperand(1).getType().getIntOrFloatBitWidth() << ">(";
+  if (failed(emitter.emitOperands(*operation)))
     return failure();
   os << ")";
-
   return success();
 }
 } // namespace
