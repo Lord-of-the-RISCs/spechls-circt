@@ -78,6 +78,7 @@ public:
 
 private:
   static bool shouldMapToUnsigned(IntegerType::SignednessSemantics semantics);
+  static StringRef getValueNamePrefix(Value value);
 
 private:
   using ValueMapper = llvm::ScopedHashTable<Value, std::string>;
@@ -215,7 +216,7 @@ LogicalResult printOperation(CppEmitter &emitter, spechls::HKernelOp hkernelOp) 
                                              false)))
     return failure();
   os << " = false;\n\n";
-  os << "while(!" << emitter.getExitVariableName() << ") {\n";
+  os << "while (!" << emitter.getExitVariableName() << ") {\n";
 
   if (failed(printFunctionBody(emitter, operation, hkernelOp.getBlocks())))
     return failure();
@@ -824,6 +825,95 @@ bool CppEmitter::shouldMapToUnsigned(IntegerType::SignednessSemantics semantics)
   llvm_unreachable("Unexpected IntegerType::SignednessSemantics");
 }
 
+StringRef CppEmitter::getValueNamePrefix(Value value) {
+  Operation *op = value.getDefiningOp();
+  if (!op)
+    return "arg";
+  // Comb ops.
+  if (isa<circt::comb::AddOp>(op))
+    return "add";
+  if (isa<circt::comb::AndOp>(op))
+    return "and";
+  if (isa<circt::comb::ConcatOp>(op))
+    return "concat";
+  if (isa<circt::comb::DivSOp>(op) || isa<circt::comb::DivUOp>(op))
+    return "div";
+  if (isa<circt::comb::ExtractOp>(op))
+    return "extract";
+  if (auto icmpOp = dyn_cast<circt::comb::ICmpOp>(op)) {
+    switch (icmpOp.getPredicate()) {
+    case circt::comb::ICmpPredicate::eq:
+      return "eq";
+    case circt::comb::ICmpPredicate::ne:
+      return "ne";
+    case circt::comb::ICmpPredicate::slt:
+    case circt::comb::ICmpPredicate::ult:
+      return "lt";
+    case circt::comb::ICmpPredicate::sle:
+    case circt::comb::ICmpPredicate::ule:
+      return "le";
+    case circt::comb::ICmpPredicate::sgt:
+    case circt::comb::ICmpPredicate::ugt:
+      return "gt";
+    case circt::comb::ICmpPredicate::sge:
+    case circt::comb::ICmpPredicate::uge:
+      return "ge";
+    default:
+      return "v";
+    }
+  }
+  if (isa<circt::comb::MulOp>(op))
+    return "mul";
+  if (isa<circt::comb::MuxOp>(op))
+    return "mux";
+  if (isa<circt::comb::OrOp>(op))
+    return "or";
+  if (isa<circt::comb::ReplicateOp>(op))
+    return "replicate";
+  if (isa<circt::comb::SubOp>(op))
+    return "sub";
+  if (isa<circt::comb::XorOp>(op))
+    return "xor";
+  // HW ops.
+  if (auto constantOp = dyn_cast<circt::hw::ConstantOp>(op)) {
+    if (constantOp.getValue().getBitWidth() == 1)
+      return constantOp.getValue().getBoolValue() ? "true" : "false";
+    return constantOp.getValue().isZero() ? "zero" : "cst";
+  }
+  // SpecHLS ops.
+  if (isa<spechls::AlphaOp>(op))
+    return "alpha";
+  if (auto call = dyn_cast<spechls::CallOp>(op))
+    return call.getCallee();
+  if (isa<spechls::DelayOp>(op))
+    return "delay";
+  if (auto field = dyn_cast<spechls::FieldOp>(op))
+    return field.getName();
+  if (isa<spechls::FIFOOp>(op))
+    return "fifo";
+  if (isa<spechls::FSMOp>(op))
+    return "fsm";
+  if (isa<spechls::FSMCommandOp>(op))
+    return "fsm_command";
+  if (isa<spechls::GammaOp>(op))
+    return "gamma";
+  if (auto launch = dyn_cast<spechls::LaunchOp>(op))
+    return launch.getCallee();
+  if (isa<spechls::LoadOp>(op))
+    return "load";
+  if (isa<spechls::LUTOp>(op))
+    return "lut";
+  if (isa<spechls::MuOp>(op))
+    return "mu";
+  if (isa<spechls::PrintOp>(op))
+    return "print_state";
+  if (isa<spechls::RewindOp>(op))
+    return "rewind";
+  if (isa<spechls::RollbackOp>(op))
+    return "rollback";
+  return "v";
+}
+
 LogicalResult CppEmitter::emitVariableDeclaration(OpResult result, bool trailingSemicolon) {
   if (hasValueInScope(result))
     return result.getDefiningOp()->emitError("result variable for the operation already declared");
@@ -867,8 +957,9 @@ LogicalResult CppEmitter::emitAssignPrefix(Operation &op) {
 }
 
 StringRef CppEmitter::getOrCreateName(Value value) {
-  if (!valueMapper.count(value))
-    valueMapper.insert(value, llvm::formatv("v{0}", ++valueInScopeCount.top()));
+  if (!valueMapper.count(value)) {
+    valueMapper.insert(value, llvm::formatv("{0}_{1}", getValueNamePrefix(value), ++valueInScopeCount.top()));
+  }
   return *valueMapper.begin(value);
 }
 
