@@ -124,6 +124,10 @@ LogicalResult printFunctionArgs(CppEmitter &emitter, Operation *taskLikeOp, Regi
 
 LogicalResult printAllVariables(CppEmitter &emitter, Operation *taskLikeOp) {
   WalkResult result = taskLikeOp->walk<WalkOrder::PreOrder>([&](Operation *op) -> WalkResult {
+    // Skip inlined operations.
+    if (isa<circt::hw::ConstantOp>(op) || isa<spechls::FieldOp>(op))
+      return WalkResult::advance();
+
     for (OpResult result : op->getResults()) {
       if (failed(emitter.emitVariableDeclaration(result, true)))
         return WalkResult(op->emitError("unable to declare result variable for op"));
