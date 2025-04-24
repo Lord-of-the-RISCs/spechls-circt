@@ -888,16 +888,16 @@ StringRef CppEmitter::getValueNamePrefix(Value value) {
     return "fsm";
   if (isa<spechls::FSMCommandOp>(op))
     return "fsm_command";
-  if (isa<spechls::GammaOp>(op))
-    return "gamma";
+  if (auto gammaOp = dyn_cast<spechls::GammaOp>(op))
+    return gammaOp.getSymName();
   if (auto launch = dyn_cast<spechls::LaunchOp>(op))
     return launch.getCallee();
   if (isa<spechls::LoadOp>(op))
     return "load";
   if (isa<spechls::LUTOp>(op))
     return "lut";
-  if (isa<spechls::MuOp>(op))
-    return "mu";
+  if (auto muOp = dyn_cast<spechls::MuOp>(op))
+    return muOp.getSymName();
   if (isa<spechls::PrintOp>(op))
     return "print_state";
   if (isa<spechls::RewindOp>(op))
