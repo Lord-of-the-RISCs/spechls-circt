@@ -144,14 +144,25 @@ LogicalResult printAllStructTypes(CppEmitter &emitter, ModuleOp moduleOp) {
   DenseSet<StringRef> generatedStructs{};
 
   WalkResult result = moduleOp.walk<WalkOrder::PreOrder>([&](Operation *op) -> WalkResult {
-    for (Type type : op->getResultTypes()) {
+    auto emitStruct = [&](Type type) -> LogicalResult {
       if (auto sType = dyn_cast<spechls::StructType>(type)) {
         if (!generatedStructs.contains(sType.getName())) {
           if (failed(emitter.emitStructDefinition(op->getLoc(), sType)))
-            return WalkResult(op->emitError("unable to declare structure type for op"));
+            return op->emitError("unable to declare structure type for op");
           generatedStructs.insert(sType.getName());
         }
       }
+      return success();
+    };
+    for (Type type : op->getResultTypes()) {
+      LogicalResult result = emitStruct(type);
+      if (failed(result))
+        return WalkResult(result);
+    }
+    for (Type type : op->getOperandTypes()) {
+      LogicalResult result = emitStruct(type);
+      if (failed(result))
+        return WalkResult(result);
     }
     return WalkResult::advance();
   });
