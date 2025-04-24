@@ -429,19 +429,6 @@ LogicalResult printOperation(CppEmitter &emitter, spechls::FSMOp fsmOp) {
   return printCallOp(emitter, operation, callee);
 }
 
-LogicalResult printOperation(CppEmitter &emitter, spechls::FieldOp fieldOp) {
-  Operation *operation = fieldOp.getOperation();
-  raw_ostream &os = emitter.ostream();
-
-  if (failed(emitter.emitVariableAssignment(operation->getResult(0))))
-    return failure();
-  if (failed(emitter.emitOperand(fieldOp.getInput())))
-    return failure();
-  os << "." << fieldOp.getName();
-
-  return success();
-}
-
 LogicalResult printOperation(CppEmitter &emitter, spechls::RewindOp rewindOp) {
   Operation *operation = rewindOp.getOperation();
   raw_ostream &os = emitter.ostream();
@@ -697,17 +684,17 @@ LogicalResult CppEmitter::emitOperation(Operation &op, bool trailingSemicolon) {
                 circt::comb::ExtractOp, circt::comb::ICmpOp, circt::comb::MulOp, circt::comb::MuxOp, circt::comb::OrOp,
                 circt::comb::SubOp, circt::comb::ReplicateOp, circt::comb::XorOp>(
               [&](auto op) { return printOperation(*this, op); })
-          // HW ops.
-          .Case<circt::hw::ConstantOp>([&](auto op) {
+          // SpecHLS ops.
+          .Case<spechls::AlphaOp, spechls::CallOp, spechls::CommitOp, spechls::DelayOp, spechls::ExitOp,
+                spechls::FIFOOp, spechls::FSMCommandOp, spechls::FSMOp, spechls::GammaOp, spechls::HKernelOp,
+                spechls::HTaskOp, spechls::LaunchOp, spechls::LoadOp, spechls::LUTOp, spechls::MuOp, spechls::PackOp,
+                spechls::PrintOp, spechls::RewindOp, spechls::RollbackOp, spechls::UnpackOp>(
+              [&](auto op) { return printOperation(*this, op); })
+          // Inlined operations.
+          .Case<circt::hw::ConstantOp, spechls::FieldOp>([&](auto op) {
             skipLineEnding = true;
             return success();
           })
-          // SpecHLS ops.
-          .Case<spechls::AlphaOp, spechls::CallOp, spechls::CommitOp, spechls::DelayOp, spechls::ExitOp,
-                spechls::FieldOp, spechls::FIFOOp, spechls::FSMCommandOp, spechls::FSMOp, spechls::GammaOp,
-                spechls::HKernelOp, spechls::HTaskOp, spechls::LaunchOp, spechls::LoadOp, spechls::LUTOp, spechls::MuOp,
-                spechls::PackOp, spechls::PrintOp, spechls::RewindOp, spechls::RollbackOp, spechls::UnpackOp>(
-              [&](auto op) { return printOperation(*this, op); })
           .Default([&](Operation *) { return op.emitOpError("unable to find printer for op"); });
 
   if (failed(status))
@@ -723,6 +710,12 @@ LogicalResult CppEmitter::emitOperand(Value value) {
   if (op) {
     if (auto constantOp = dyn_cast<circt::hw::ConstantOp>(op))
       return emitAttribute(op->getLoc(), constantOp.getValueAttr());
+    if (auto fieldOp = dyn_cast<spechls::FieldOp>(op)) {
+      if (failed(emitOperand(fieldOp.getInput())))
+        return failure();
+      os << "." << fieldOp.getName();
+      return success();
+    }
   }
   os << getOrCreateName(value);
   return success();
