@@ -104,6 +104,10 @@ inline LogicalResult interleaveWithError(ForwardIterator begin, ForwardIterator 
   return success();
 }
 
+bool isSelfInitializedDelay(spechls::DelayOp delayOp) {
+  return delayOp.getInit() && delayOp.getInit().getDefiningOp() == delayOp.getOperation();
+}
+
 template <typename Container, typename UnaryFunctor, typename NullaryFunctor>
 inline LogicalResult interleaveWithError(const Container &c, UnaryFunctor eachFn, NullaryFunctor betweenFn) {
   return interleaveWithError(c.begin(), c.end(), eachFn, betweenFn);
@@ -278,6 +282,18 @@ LogicalResult printOperation(CppEmitter &emitter, spechls::HTaskOp htaskOp) {
     return failure();
   os << "\n";
 
+  // Emit delay initialization.
+  for (auto &&op : htaskOp.getBody().front()) {
+    if (auto delayOp = dyn_cast<spechls::DelayOp>(op)) {
+      if (delayOp.getInit() && !isSelfInitializedDelay(delayOp)) {
+        os << "delay_init_" << emitter.getOrCreateName(delayOp) << "(";
+        if (failed(emitter.emitOperand(delayOp.getInit())))
+          return failure();
+        os << ");\n";
+      }
+    }
+  }
+
   if (failed(printFunctionBody(emitter, operation, htaskOp.getBlocks(), false)))
     return failure();
 
@@ -306,8 +322,24 @@ LogicalResult printOperation(CppEmitter &emitter, spechls::LaunchOp launchOp) {
 
 LogicalResult printOperation(CppEmitter &emitter, spechls::DelayOp delayOp) {
   Operation *operation = delayOp.getOperation();
-  StringRef callee = llvm::formatv("delay<{0}>", delayOp.getDepth()).sstr<16>();
-  return printCallOp(emitter, operation, callee);
+  raw_ostream &os = emitter.ostream();
+
+  if (failed(emitter.emitAssignPrefix(*operation)))
+    return failure();
+
+  os << "delay<" << delayOp.getDepth() << ">(";
+  // Self-initialized delays are a workaround. They should be generated as non-initialized delays.
+  if (isSelfInitializedDelay(delayOp)) {
+    SmallVector<Value> operands{delayOp.getOperands()};
+    operands.erase(std::remove(operands.begin(), operands.end(), delayOp.getInit()));
+    if (failed(interleaveCommaWithError(operands, os, [&](Value operand) { return emitter.emitOperand(operand); })))
+      return failure();
+  } else {
+    if (failed(emitter.emitOperands(*operation)))
+      return failure();
+  }
+  os << ")";
+  return success();
 }
 
 LogicalResult printOperation(CppEmitter &emitter, spechls::ExitOp exitOp) {
