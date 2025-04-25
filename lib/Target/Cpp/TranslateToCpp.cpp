@@ -184,7 +184,7 @@ LogicalResult printFunctionBody(CppEmitter &emitter, Operation *taskLikeOp, Regi
     os.indent();
 
   for (auto &&block : blocks) {
-    for (auto &&op : block.getOperations()) {
+    for (auto &&op : block) {
       if (failed(emitter.emitOperation(op, true)))
         return failure();
     }
@@ -192,6 +192,25 @@ LogicalResult printFunctionBody(CppEmitter &emitter, Operation *taskLikeOp, Regi
 
   if (indent)
     os.unindent();
+  return success();
+}
+
+LogicalResult printDelayInitialization(CppEmitter &emitter, Region::BlockListType &blocks) {
+  raw_ostream &os = emitter.ostream();
+
+  for (auto &&block : blocks) {
+    for (auto &&op : block) {
+      if (auto delayOp = dyn_cast<spechls::DelayOp>(op)) {
+        if (!delayOp.getInit() || isSelfInitializedDelay(delayOp))
+          continue;
+        os << "delay_init_" << emitter.getOrCreateName(delayOp) << "(";
+        if (failed(emitter.emitOperand(delayOp.getInit())))
+          return failure();
+        os << ");\n";
+      }
+    }
+  }
+
   return success();
 }
 
@@ -228,6 +247,9 @@ LogicalResult printOperation(CppEmitter &emitter, spechls::HKernelOp hkernelOp) 
   os.indent();
 
   if (failed(printAllVariables(emitter, operation)))
+    return failure();
+
+  if (failed(printDelayInitialization(emitter, hkernelOp.getBody().getBlocks())))
     return failure();
 
   auto exit = cast<spechls::ExitOp>(hkernelOp.getBody().front().getTerminator());
@@ -282,17 +304,8 @@ LogicalResult printOperation(CppEmitter &emitter, spechls::HTaskOp htaskOp) {
     return failure();
   os << "\n";
 
-  // Emit delay initialization.
-  for (auto &&op : htaskOp.getBody().front()) {
-    if (auto delayOp = dyn_cast<spechls::DelayOp>(op)) {
-      if (delayOp.getInit() && !isSelfInitializedDelay(delayOp)) {
-        os << "delay_init_" << emitter.getOrCreateName(delayOp) << "(";
-        if (failed(emitter.emitOperand(delayOp.getInit())))
-          return failure();
-        os << ");\n";
-      }
-    }
-  }
+  if (failed(printDelayInitialization(emitter, htaskOp.getBody().getBlocks())))
+    return failure();
 
   if (failed(printFunctionBody(emitter, operation, htaskOp.getBlocks(), false)))
     return failure();
