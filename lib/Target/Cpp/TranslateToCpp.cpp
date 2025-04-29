@@ -108,6 +108,10 @@ bool isSelfInitializedDelay(spechls::DelayOp delayOp) {
   return delayOp.getInit() && delayOp.getInit().getDefiningOp() == delayOp.getOperation();
 }
 
+std::string getDelayBufferName(CppEmitter &emitter, spechls::DelayOp delayOp) {
+  return emitter.getOrCreateName(delayOp).str() + "_buffer";
+}
+
 template <typename Container, typename UnaryFunctor, typename NullaryFunctor>
 inline LogicalResult interleaveWithError(const Container &c, UnaryFunctor eachFn, NullaryFunctor betweenFn) {
   return interleaveWithError(c.begin(), c.end(), eachFn, betweenFn);
@@ -127,6 +131,8 @@ LogicalResult printFunctionArgs(CppEmitter &emitter, Operation *taskLikeOp, Regi
 }
 
 LogicalResult printAllVariables(CppEmitter &emitter, Operation *taskLikeOp) {
+  raw_ostream &os = emitter.ostream();
+
   WalkResult result = taskLikeOp->walk<WalkOrder::PreOrder>([&](Operation *op) -> WalkResult {
     // Skip inlined operations.
     if (isa<circt::hw::ConstantOp>(op) || isa<spechls::FieldOp>(op))
@@ -135,6 +141,13 @@ LogicalResult printAllVariables(CppEmitter &emitter, Operation *taskLikeOp) {
     for (OpResult result : op->getResults()) {
       if (failed(emitter.emitVariableDeclaration(result, true)))
         return WalkResult(op->emitError("unable to declare result variable for op"));
+    }
+
+    // Declare delay buffers.
+    if (auto delayOp = dyn_cast<spechls::DelayOp>(op)) {
+      if (failed(emitter.emitType(op->getLoc(), delayOp.getType())))
+        return failure();
+      os << " " << getDelayBufferName(emitter, delayOp) << "[" << delayOp.getDepth() << "];\n";
     }
     return WalkResult::advance();
   });
@@ -340,7 +353,7 @@ LogicalResult printOperation(CppEmitter &emitter, spechls::DelayOp delayOp) {
   if (failed(emitter.emitAssignPrefix(*operation)))
     return failure();
 
-  os << "delay<" << delayOp.getDepth() << ">(";
+  os << "delay<" << delayOp.getDepth() << ">(" << getDelayBufferName(emitter, delayOp) << ", ";
   // Self-initialized delays are a workaround. They should be generated as non-initialized delays.
   if (isSelfInitializedDelay(delayOp)) {
     SmallVector<Value> operands{delayOp.getOperands()};
