@@ -19,7 +19,4 @@ T delay(T (&buffer)[N], T value, bool enable = true) {
   return result;
 }
 
-template <typename T, unsigned int... Depths>
-T rewind() {}
-
 #endif // CODEGEN_INCLUDED_SPECHLS_SUPPORT_H

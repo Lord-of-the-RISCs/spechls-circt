@@ -9,6 +9,7 @@
 #include "Dialect/SpecHLS/IR/SpecHLSTypes.h"
 #include "Target/Cpp/Export.h"
 
+#include <algorithm>
 #include <circt/Dialect/Comb/CombOps.h>
 #include <circt/Dialect/HW/HWOps.h>
 #include <llvm/ADT/ScopedHashTable.h>
@@ -547,7 +548,9 @@ LogicalResult printOperation(CppEmitter &emitter, spechls::RewindOp rewindOp) {
     return failure();
 
   os << "rewind<";
-  interleaveComma(rewindOp.getDepths(), os);
+  if (failed(emitter.emitType(rewindOp.getLoc(), rewindOp.getType())))
+    return failure();
+  os << ", " << llvm::NextPowerOf2(*std::max_element(rewindOp.getDepths().begin(), rewindOp.getDepths().end()) + 1);
   os << ">(";
   if (failed(emitter.emitOperands(*operation)))
     return failure();
