@@ -78,7 +78,7 @@ public:
 
 private:
   static bool shouldMapToUnsigned(IntegerType::SignednessSemantics semantics);
-  static StringRef getValueNamePrefix(Value value);
+  static std::string getValueNamePrefix(Value value);
 
 private:
   using ValueMapper = llvm::ScopedHashTable<Value, std::string>;
@@ -522,13 +522,13 @@ LogicalResult printOperation(CppEmitter &emitter, spechls::CommitOp commitOp) {
 
 LogicalResult printOperation(CppEmitter &emitter, spechls::FSMCommandOp fsmCommandOp) {
   Operation *operation = fsmCommandOp.getOperation();
-  StringRef callee = "fsm_command";
+  std::string callee = ("fsm_" + fsmCommandOp.getName() + "_command").str();
   return printCallOp(emitter, operation, callee);
 }
 
 LogicalResult printOperation(CppEmitter &emitter, spechls::FSMOp fsmOp) {
   Operation *operation = fsmOp.getOperation();
-  StringRef callee = "fsm";
+  std::string callee = ("fsm_" + fsmOp.getName() + "_next").str();
   return printCallOp(emitter, operation, callee);
 }
 
@@ -931,7 +931,7 @@ bool CppEmitter::shouldMapToUnsigned(IntegerType::SignednessSemantics semantics)
   llvm_unreachable("Unexpected IntegerType::SignednessSemantics");
 }
 
-StringRef CppEmitter::getValueNamePrefix(Value value) {
+std::string CppEmitter::getValueNamePrefix(Value value) {
   Operation *op = value.getDefiningOp();
   if (!op)
     return "arg";
@@ -984,27 +984,27 @@ StringRef CppEmitter::getValueNamePrefix(Value value) {
   if (isa<spechls::AlphaOp>(op))
     return "alpha";
   if (auto call = dyn_cast<spechls::CallOp>(op))
-    return call.getCallee();
+    return call.getCallee().str();
   if (isa<spechls::DelayOp>(op))
     return "delay";
   if (auto field = dyn_cast<spechls::FieldOp>(op))
-    return field.getName();
+    return field.getName().str();
   if (isa<spechls::FIFOOp>(op))
     return "fifo";
-  if (isa<spechls::FSMOp>(op))
-    return "fsm";
-  if (isa<spechls::FSMCommandOp>(op))
-    return "fsm_command";
+  if (auto fsmOp = dyn_cast<spechls::FSMOp>(op))
+    return ("fsm_" + fsmOp.getName() + "_next").str();
+  if (auto fsmCommandOp = dyn_cast<spechls::FSMCommandOp>(op))
+    return ("fsm_" + fsmCommandOp.getName() + "_command").str();
   if (auto gammaOp = dyn_cast<spechls::GammaOp>(op))
-    return gammaOp.getSymName();
+    return gammaOp.getSymName().str();
   if (auto launch = dyn_cast<spechls::LaunchOp>(op))
-    return launch.getCallee();
+    return launch.getCallee().str();
   if (isa<spechls::LoadOp>(op))
     return "load";
   if (isa<spechls::LUTOp>(op))
     return "lut";
   if (auto muOp = dyn_cast<spechls::MuOp>(op))
-    return muOp.getSymName();
+    return muOp.getSymName().str();
   if (isa<spechls::PrintOp>(op))
     return "print_state";
   if (isa<spechls::RewindOp>(op))

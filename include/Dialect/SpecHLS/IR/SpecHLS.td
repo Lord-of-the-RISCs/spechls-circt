@@ -332,22 +332,26 @@ def SpecHLS_FieldOp : SpecHLSOp<"field", [DeclareOpInterfaceMethods<InferTypeOpI
 def SpecHLS_FSMOp : SpecHLSOp<"fsm",
         [TypesMatchWith<"State input and output types must match", "state", "result", "$_self">]> {
     let arguments = (ins
+        StrAttr:$name,
         SpecHLS_StructType:$mispec,
         SpecHLS_StructType:$state
     );
     let results = (outs SpecHLS_StructType:$result);
 
     let assemblyFormat = [{
-        $mispec `,` $state attr-dict `:` type($mispec) `,` type($state)
+        $name `,` $mispec `,` $state attr-dict `:` type($mispec) `,` type($state)
     }];
 }
 
 def SpecHLS_FSMCommandOp : SpecHLSOp<"fsm_command"> {
-    let arguments = (ins SpecHLS_StructType:$state);
+    let arguments = (ins
+        StrAttr:$name,
+        SpecHLS_StructType:$state
+    );
     let results = (outs SpecHLS_StructType:$result);
 
     let assemblyFormat = [{
-        $state attr-dict `:` functional-type($state, $result)
+        $name `,` $state attr-dict `:` functional-type($state, $result)
     }];
 }
 
