@@ -216,7 +216,10 @@ LogicalResult printDelayInitialization(CppEmitter &emitter, Region::BlockListTyp
       if (auto delayOp = dyn_cast<spechls::DelayOp>(op)) {
         if (!delayOp.getInit() || isSelfInitializedDelay(delayOp))
           continue;
-        os << "delay_init_" << emitter.getOrCreateName(delayOp) << "(";
+        os << "delay_init_" << emitter.getOrCreateName(delayOp) << "<";
+        if (failed(emitter.emitType(delayOp.getLoc(), delayOp.getType())))
+          return failure();
+        os << ", " << delayOp.getDepth() << ">(" << getDelayBufferName(emitter, delayOp) << ", ";
         if (failed(emitter.emitOperand(delayOp.getInit())))
           return failure();
         os << ");\n";
@@ -232,6 +235,7 @@ LogicalResult printOperation(CppEmitter &emitter, ModuleOp moduleOp) {
   os << "#include <tuple>\n";
   os << "#include <ap_int.h>\n";
   os << "#include <io_printf.h>\n";
+  os << "#include <spechls-support.h>\n";
   os << "\n";
 
   if (emitter.shouldDeclareStructTypes()) {
@@ -375,7 +379,10 @@ LogicalResult printOperation(CppEmitter &emitter, spechls::DelayOp delayOp) {
   if (failed(emitter.emitAssignPrefix(*operation)))
     return failure();
 
-  os << "delay<" << delayOp.getDepth() << ">(" << getDelayBufferName(emitter, delayOp) << ", ";
+  os << "delay<";
+  if (failed(emitter.emitType(delayOp.getLoc(), delayOp.getType())))
+    return failure();
+  os << ", " << delayOp.getDepth() << ">(" << getDelayBufferName(emitter, delayOp) << ", ";
   // Self-initialized delays are a workaround. They should be generated as non-initialized delays.
   if (isSelfInitializedDelay(delayOp)) {
     SmallVector<Value> operands{delayOp.getOperands()};
