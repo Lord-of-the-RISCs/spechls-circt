@@ -361,8 +361,8 @@ def SpecHLS_RewindOp : SpecHLSOp<"rewind",
     let arguments = (ins
         DenseI64ArrayAttr:$depths,
         AnyType:$input,
-        Optional<AnyType>:$rewind,
-        Optional<AnyType>:$writeCommand
+        Optional<AnyInteger>:$rewind,
+        Optional<I1>:$writeCommand
     );
     let results = (outs AnyType:$result);
 
@@ -378,8 +378,8 @@ def SpecHLS_RollbackOp : SpecHLSOp<"rollback",
     let arguments = (ins
         DenseI64ArrayAttr:$depths,
         AnyType:$input,
-        Optional<AnyType>:$rollback,
-        Optional<AnyType>:$writeCommand
+        Optional<AnyInteger>:$rollback,
+        Optional<I1>:$writeCommand
     );
     let results = (outs AnyType:$result);
 
