@@ -7,7 +7,6 @@
 
 #include "Dialect/SpecHLS/IR/SpecHLSOps.h"
 
-#include <iterator>
 #include <llvm/ADT/TypeSwitch.h>
 #include <mlir/IR/BuiltinAttributes.h>
 #include <mlir/IR/DialectImplementation.h>
