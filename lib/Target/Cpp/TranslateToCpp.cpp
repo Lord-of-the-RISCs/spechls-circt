@@ -256,7 +256,7 @@ LogicalResult printOperation(CppEmitter &emitter, spechls::HKernelOp hkernelOp) 
   Operation *operation = hkernelOp.getOperation();
   if (failed(printFunctionArgs(emitter, operation, hkernelOp.getArguments())))
     return failure();
-  os << ") {\n";
+  os << ") {\n#pragma HLS inline recursive\n";
   os.indent();
 
   if (failed(printAllVariables(emitter, operation)))
