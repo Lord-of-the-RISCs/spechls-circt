@@ -8,7 +8,6 @@
 #include "Dialect/SpecHLS/IR/SpecHLSOps.h"
 #include "Dialect/SpecHLS/IR/SpecHLSTypes.h"
 #include "Target/Cpp/Export.h"
-#include "circt/Dialect/Comb/CombDialect.h"
 
 #include <circt/Dialect/Comb/CombOps.h>
 #include <circt/Dialect/HW/HWOps.h>
@@ -59,6 +58,7 @@ public:
   LogicalResult emitAssignPrefix(Operation &op);
 
   StringRef getOrCreateName(Value value);
+  StringRef getInitVariableName() { return "init_"; }
   StringRef getExitVariableName() { return "exit_"; }
 
   bool shouldDeclareStructTypes() { return declareStructTypes; }
@@ -265,16 +265,29 @@ LogicalResult printOperation(CppEmitter &emitter, spechls::HKernelOp hkernelOp) 
   if (failed(printDelayInitialization(emitter, hkernelOp.getBody().getBlocks())))
     return failure();
 
+  // Generate the exit variable.
   auto exit = cast<spechls::ExitOp>(hkernelOp.getBody().front().getTerminator());
   if (failed(emitter.emitVariableDeclaration(exit.getLoc(), exit.getGuard().getType(), emitter.getExitVariableName(),
-                                             false)))
+                                             false))) {
     return failure();
-  os << " = false;\n\n";
+  }
+  os << " = false;\n";
+
+  // Generate the init variable.
+  if (failed(emitter.emitVariableDeclaration(hkernelOp.getLoc(), IntegerType::get(hkernelOp.getContext(), 1),
+                                             emitter.getInitVariableName(), false))) {
+    return failure();
+  }
+  os << " = true;\n\n";
+
   os << "while (!" << emitter.getExitVariableName() << ") {\n";
+  os.indent();
 
-  if (failed(printFunctionBody(emitter, operation, hkernelOp.getBlocks())))
+  if (failed(printFunctionBody(emitter, operation, hkernelOp.getBlocks(), false)))
     return failure();
+  os << emitter.getInitVariableName() << " = false;\n";
 
+  os.unindent();
   os << "}\n";
 
   os << "return";
@@ -306,7 +319,7 @@ LogicalResult printOperation(CppEmitter &emitter, spechls::HTaskOp htaskOp) {
   raw_indented_ostream &os = emitter.ostream();
   if (failed(emitter.emitTypes(htaskOp.getLoc(), htaskOp.getFunctionType().getResults())))
     return failure();
-  os << ' ' << htaskOp.getName() << "(";
+  os << ' ' << htaskOp.getName() << "(bool " << emitter.getInitVariableName() << ", ";
   Operation *operation = htaskOp.getOperation();
   if (failed(printFunctionArgs(emitter, operation, htaskOp.getArguments())))
     return failure();
@@ -342,8 +355,17 @@ LogicalResult printCallOp(CppEmitter &emitter, Operation *operation, StringRef c
 
 LogicalResult printOperation(CppEmitter &emitter, spechls::LaunchOp launchOp) {
   Operation *operation = launchOp.getOperation();
+  raw_ostream &os = emitter.ostream();
   StringRef callee = launchOp.getCallee();
-  return printCallOp(emitter, operation, callee);
+
+  if (failed(emitter.emitAssignPrefix(*operation)))
+    return failure();
+
+  os << callee << "(" << emitter.getInitVariableName() << ", ";
+  if (failed(emitter.emitOperands(*operation)))
+    return failure();
+  os << ")";
+  return success();
 }
 
 LogicalResult printOperation(CppEmitter &emitter, spechls::DelayOp delayOp) {
@@ -376,8 +398,16 @@ LogicalResult printOperation(CppEmitter &emitter, spechls::ExitOp exitOp) {
 
 LogicalResult printOperation(CppEmitter &emitter, spechls::MuOp muOp) {
   Operation *operation = muOp.getOperation();
-  StringRef callee = "mu";
-  return printCallOp(emitter, operation, callee);
+  raw_ostream &os = emitter.ostream();
+
+  if (failed(emitter.emitAssignPrefix(*operation)))
+    return failure();
+
+  os << "mu(" << emitter.getInitVariableName() << ", ";
+  if (failed(emitter.emitOperands(*operation)))
+    return failure();
+  os << ")";
+  return success();
 }
 
 LogicalResult printOperation(CppEmitter &emitter, spechls::PackOp packOp) {
