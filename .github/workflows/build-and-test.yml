@@ -19,6 +19,7 @@ jobs:
         with:
           source: "."
           extensions: "h,cpp"
+          exclude: "./codegen"
           clangFormatVersion: 16
 
   build:
