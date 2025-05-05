@@ -227,7 +227,7 @@ LogicalResult printDelayInitialization(CppEmitter &emitter, Region::BlockListTyp
       if (auto delayOp = dyn_cast<spechls::DelayOp>(op)) {
         if (!delayOp.getInit() || isSelfInitializedDelay(delayOp))
           continue;
-        os << "delay_init_" << emitter.getOrCreateName(delayOp) << "<";
+        os << "delay_init<";
         if (failed(emitter.emitType(delayOp.getLoc(), delayOp.getType())))
           return failure();
         os << ", " << delayOp.getDepth() << ">(" << getDelayBufferName(emitter, delayOp) << ", ";
@@ -472,7 +472,10 @@ LogicalResult printOperation(CppEmitter &emitter, spechls::MuOp muOp) {
   if (failed(emitter.emitAssignPrefix(*operation)))
     return failure();
 
-  os << "mu(" << emitter.getInitVariableName() << ", ";
+  os << "mu<";
+  if (failed(emitter.emitType(muOp.getLoc(), muOp.getType())))
+    return failure();
+  os << ">(" << emitter.getInitVariableName() << ", ";
   if (failed(emitter.emitOperands(*operation)))
     return failure();
   os << ")";
@@ -819,7 +822,10 @@ LogicalResult printOperation(CppEmitter &emitter, circt::comb::ExtractOp extract
   if (failed(emitter.emitAssignPrefix(*operation)))
     return failure();
 
-  os << "extract<" << lowBit << ", " << highBit << ">(";
+  os << "extract<";
+  if (failed(emitter.emitType(extractOp.getLoc(), extractOp.getInput().getType())))
+    return failure();
+  os << ", " << lowBit << ", " << highBit << ">(";
   if (failed(emitter.emitOperands(*operation)))
     return failure();
   os << ")";
