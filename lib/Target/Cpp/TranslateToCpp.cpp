@@ -9,7 +9,6 @@
 #include "Dialect/SpecHLS/IR/SpecHLSTypes.h"
 #include "Target/Cpp/Export.h"
 
-#include <algorithm>
 #include <circt/Dialect/Comb/CombOps.h>
 #include <circt/Dialect/HW/HWOps.h>
 #include <llvm/ADT/ScopedHashTable.h>
@@ -19,13 +18,16 @@
 #include <llvm/Support/LogicalResult.h>
 #include <llvm/Support/raw_ostream.h>
 #include <mlir/IR/Attributes.h>
+#include <mlir/IR/Block.h>
 #include <mlir/IR/BuiltinOps.h>
 #include <mlir/IR/Diagnostics.h>
+#include <mlir/IR/Location.h>
 #include <mlir/IR/Operation.h>
 #include <mlir/IR/Visitors.h>
 #include <mlir/Support/IndentedOstream.h>
 #include <mlir/Support/LLVM.h>
 
+#include <algorithm>
 #include <stack>
 
 using namespace mlir;
@@ -131,6 +133,14 @@ LogicalResult printFunctionArgs(CppEmitter &emitter, Operation *taskLikeOp, Regi
   });
 }
 
+LogicalResult printFunctionArgTypes(CppEmitter &emitter, Operation *taskLikeOp, Region::BlockArgListType arguments) {
+  raw_indented_ostream &os = emitter.ostream();
+
+  return interleaveCommaWithError(arguments, os, [&](BlockArgument arg) -> LogicalResult {
+    return emitter.emitType(taskLikeOp->getLoc(), arg.getType());
+  });
+}
+
 LogicalResult printAllVariables(CppEmitter &emitter, Operation *taskLikeOp) {
   raw_ostream &os = emitter.ostream();
 
@@ -231,6 +241,40 @@ LogicalResult printDelayInitialization(CppEmitter &emitter, Region::BlockListTyp
   return success();
 }
 
+LogicalResult printFunctionSignature(CppEmitter &emitter, Operation *op, StringRef funcName, ArrayRef<Type> resultTypes,
+                                     Block::BlockArgListType arguments, bool addInit = false) {
+  raw_indented_ostream &os = emitter.ostream();
+  if (failed(emitter.emitTypes(op->getLoc(), resultTypes)))
+    return failure();
+  os << ' ' << funcName << "(";
+  if (addInit) {
+    os << "bool";
+    if (arguments.size() > 0)
+      os << ", ";
+  }
+  if (failed(printFunctionArgTypes(emitter, op, arguments)))
+    return failure();
+  os << ")";
+  return success();
+}
+
+LogicalResult printFunctionPrototype(CppEmitter &emitter, Operation *op, StringRef funcName, ArrayRef<Type> resultTypes,
+                                     Block::BlockArgListType arguments, bool addInit = false) {
+  raw_indented_ostream &os = emitter.ostream();
+  if (failed(emitter.emitTypes(op->getLoc(), resultTypes)))
+    return failure();
+  os << ' ' << funcName << "(";
+  if (addInit) {
+    os << "bool " << emitter.getInitVariableName();
+    if (arguments.size() > 0)
+      os << ", ";
+  }
+  if (failed(printFunctionArgs(emitter, op, arguments)))
+    return failure();
+  os << ")";
+  return success();
+}
+
 LogicalResult printOperation(CppEmitter &emitter, ModuleOp moduleOp) {
   raw_indented_ostream &os = emitter.ostream();
   os << "#include <tuple>\n";
@@ -246,6 +290,23 @@ LogicalResult printOperation(CppEmitter &emitter, ModuleOp moduleOp) {
   }
 
   for (auto &&op : moduleOp) {
+    if (auto hkernelOp = dyn_cast<spechls::HKernelOp>(op)) {
+      if (failed(printFunctionSignature(emitter, hkernelOp.getOperation(), hkernelOp.getName(),
+                                        hkernelOp.getFunctionType().getResults(), hkernelOp.getArguments()))) {
+        return failure();
+      }
+      os << ";\n";
+    } else if (auto htaskOp = dyn_cast<spechls::HTaskOp>(op)) {
+      if (failed(printFunctionSignature(emitter, htaskOp.getOperation(), htaskOp.getName(),
+                                        htaskOp.getFunctionType().getResults(), htaskOp.getArguments(), true))) {
+        return failure();
+      }
+      os << ";\n";
+    }
+  }
+  os << "\n";
+
+  for (auto &&op : moduleOp) {
     if (failed(emitter.emitOperation(op, false)))
       return failure();
   }
@@ -255,16 +316,16 @@ LogicalResult printOperation(CppEmitter &emitter, ModuleOp moduleOp) {
 LogicalResult printOperation(CppEmitter &emitter, spechls::HKernelOp hkernelOp) {
   CppEmitter::Scope scope(emitter);
   raw_indented_ostream &os = emitter.ostream();
-  if (failed(emitter.emitTypes(hkernelOp.getLoc(), hkernelOp.getFunctionType().getResults())))
+  Operation *op = hkernelOp.getOperation();
+
+  if (failed(printFunctionPrototype(emitter, op, hkernelOp.getName(), hkernelOp.getFunctionType().getResults(),
+                                    hkernelOp.getArguments()))) {
     return failure();
-  os << ' ' << hkernelOp.getName() << "(";
-  Operation *operation = hkernelOp.getOperation();
-  if (failed(printFunctionArgs(emitter, operation, hkernelOp.getArguments())))
-    return failure();
-  os << ") {\n#pragma HLS inline recursive\n";
+  }
+  os << " {\n#pragma HLS inline recursive\n";
   os.indent();
 
-  if (failed(printAllVariables(emitter, operation)))
+  if (failed(printAllVariables(emitter, op)))
     return failure();
 
   if (failed(printDelayInitialization(emitter, hkernelOp.getBody().getBlocks())))
@@ -288,7 +349,7 @@ LogicalResult printOperation(CppEmitter &emitter, spechls::HKernelOp hkernelOp) 
   os << "while (!" << emitter.getExitVariableName() << ") {\n";
   os.indent();
 
-  if (failed(printFunctionBody(emitter, operation, hkernelOp.getBlocks(), false)))
+  if (failed(printFunctionBody(emitter, op, hkernelOp.getBlocks(), false)))
     return failure();
   os << emitter.getInitVariableName() << " = false;\n";
 
@@ -322,23 +383,23 @@ LogicalResult printOperation(CppEmitter &emitter, spechls::HKernelOp hkernelOp) 
 LogicalResult printOperation(CppEmitter &emitter, spechls::HTaskOp htaskOp) {
   CppEmitter::Scope scope(emitter);
   raw_indented_ostream &os = emitter.ostream();
-  if (failed(emitter.emitTypes(htaskOp.getLoc(), htaskOp.getFunctionType().getResults())))
+  Operation *op = htaskOp.getOperation();
+
+  if (failed(printFunctionPrototype(emitter, op, htaskOp.getName(), htaskOp.getFunctionType().getResults(),
+                                    htaskOp.getArguments(), true))) {
     return failure();
-  os << ' ' << htaskOp.getName() << "(bool " << emitter.getInitVariableName() << ", ";
-  Operation *operation = htaskOp.getOperation();
-  if (failed(printFunctionArgs(emitter, operation, htaskOp.getArguments())))
-    return failure();
-  os << ") {\n";
+  }
+  os << " {\n";
   os.indent();
 
-  if (failed(printAllVariables(emitter, operation)))
+  if (failed(printAllVariables(emitter, op)))
     return failure();
   os << "\n";
 
   if (failed(printDelayInitialization(emitter, htaskOp.getBody().getBlocks())))
     return failure();
 
-  if (failed(printFunctionBody(emitter, operation, htaskOp.getBlocks(), false)))
+  if (failed(printFunctionBody(emitter, op, htaskOp.getBlocks(), false)))
     return failure();
 
   os.unindent();
