@@ -554,15 +554,12 @@ LogicalResult printOperation(CppEmitter &emitter, spechls::CommitOp commitOp) {
       if (failed(emitter.emitOperand(commitOp.getValues().front())))
         return failure();
     } else {
-      os << "(";
-      if (failed(emitter.emitTypes(commitOp.getLoc(), commitOp.getParentOp().getFunctionType().getResults())))
-        return failure();
-      os << "){";
+      os << "std::make_tuple(";
       if (failed(interleaveCommaWithError(commitOp.getValues(), os,
                                           [&](Value operand) { return emitter.emitOperand(operand); }))) {
         return failure();
       }
-      os << "}";
+      os << ")";
     }
     return success();
   };
