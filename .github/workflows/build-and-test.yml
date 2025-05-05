@@ -19,7 +19,7 @@ jobs:
         with:
           source: "."
           extensions: "h,cpp"
-          clangFormatVersion: 19
+          clangFormatVersion: 16
 
   build:
     name: Build and test
