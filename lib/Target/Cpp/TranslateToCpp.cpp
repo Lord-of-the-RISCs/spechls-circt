@@ -49,6 +49,7 @@ public:
   LogicalResult emitType(Location loc, Type type);
   LogicalResult emitTypes(Location loc, ArrayRef<Type> types);
   LogicalResult emitStructDefinition(Location loc, spechls::StructType structType);
+  LogicalResult emitFunctionPrototype(Location loc, StringRef callee, ArrayRef<Type> argumentTypes, Type returnType);
 
   LogicalResult emitAttribute(Location loc, Attribute attr);
 
@@ -206,6 +207,47 @@ LogicalResult printAllStructTypes(CppEmitter &emitter, ModuleOp moduleOp) {
   return success();
 }
 
+LogicalResult printAllFunctionPrototypes(CppEmitter &emitter, ModuleOp moduleOp) {
+  // NOTE: We assume that we don't rely on function overloading, otherwise we would need to differentiate functions by
+  // argument types as well as by name.
+  StringSet<> declaredFunctions{};
+
+  WalkResult result = moduleOp.walk<WalkOrder::PreOrder>([&](Operation *op) -> WalkResult {
+    if (auto callOp = dyn_cast<spechls::CallOp>(op)) {
+      if (!declaredFunctions.contains(callOp.getCallee())) {
+        SmallVector<Type> operandTypes;
+        for (auto &&type : callOp.getOperandTypes())
+          operandTypes.push_back(type);
+        LogicalResult result =
+            emitter.emitFunctionPrototype(op->getLoc(), callOp.getCallee(), operandTypes, callOp.getType());
+        if (failed(result))
+          return WalkResult(result);
+        declaredFunctions.insert(callOp.getCallee());
+      }
+    } else if (auto fsmCommandOp = dyn_cast<spechls::FSMCommandOp>(op)) {
+      std::string callee = ("fsm_" + fsmCommandOp.getName() + "_command").str();
+      LogicalResult result = emitter.emitFunctionPrototype(op->getLoc(), callee, {fsmCommandOp.getState().getType()},
+                                                           fsmCommandOp.getType());
+      if (failed(result))
+        return WalkResult(result);
+      declaredFunctions.insert(callee);
+    } else if (auto fsmOp = dyn_cast<spechls::FSMOp>(op)) {
+      std::string callee = ("fsm_" + fsmOp.getName() + "_next").str();
+      LogicalResult result = emitter.emitFunctionPrototype(
+          op->getLoc(), callee, {fsmOp.getMispec().getType(), fsmOp.getState().getType()}, fsmOp.getType());
+      if (failed(result))
+        return WalkResult(result);
+      declaredFunctions.insert(callee);
+    }
+    return WalkResult::advance();
+  });
+
+  if (result.wasInterrupted())
+    return failure();
+
+  return success();
+}
+
 LogicalResult printFunctionBody(CppEmitter &emitter, Operation *taskLikeOp, Region::BlockListType &blocks,
                                 bool indent = true) {
   raw_indented_ostream &os = emitter.ostream();
@@ -292,6 +334,10 @@ LogicalResult printOperation(CppEmitter &emitter, ModuleOp moduleOp) {
       return failure();
     os << "\n";
   }
+
+  if (failed(printAllFunctionPrototypes(emitter, moduleOp)))
+    return failure();
+  os << "\n";
 
   for (auto &&op : moduleOp) {
     if (auto hkernelOp = dyn_cast<spechls::HKernelOp>(op)) {
@@ -947,6 +993,17 @@ LogicalResult CppEmitter::emitStructDefinition(Location loc, spechls::StructType
 
   os.unindent();
   os << "};\n";
+  return success();
+}
+
+LogicalResult CppEmitter::emitFunctionPrototype(Location loc, StringRef callee, ArrayRef<Type> argumentTypes,
+                                                Type returnType) {
+  if (failed(emitType(loc, returnType)))
+    return failure();
+  os << " " << callee << "(";
+  if (failed(interleaveCommaWithError(argumentTypes, os, [&](Type type) { return emitType(loc, type); })))
+    return failure();
+  os << ");\n";
   return success();
 }
 
