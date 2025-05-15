@@ -469,7 +469,9 @@ LogicalResult printOperation(CppEmitter &emitter, spechls::DelayOp delayOp) {
 
 LogicalResult printOperation(CppEmitter &emitter, spechls::ExitOp exitOp) {
   raw_ostream &os = emitter.ostream();
-  os << emitter.getExitVariableName() << " = " << emitter.getOrCreateName(exitOp.getGuard());
+  os << emitter.getExitVariableName() << " = ";
+  if (failed(emitter.emitOperand(exitOp.getGuard())))
+    return failure();
   return success();
 }
 
