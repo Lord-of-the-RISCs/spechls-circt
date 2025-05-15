@@ -604,8 +604,10 @@ LogicalResult printOperation(CppEmitter &emitter, spechls::PrintOp printOp) {
     return failure();
   if (printOp.getArgs().size() > 0)
     os << ", ";
-  if (failed(
-          interleaveCommaWithError(printOp.getArgs(), os, [&](Value operand) { return emitter.emitOperand(operand); })))
+  if (failed(interleaveCommaWithError(printOp.getArgs(), os, [&](Value operand) {
+        os << "(long)";
+        return emitter.emitOperand(operand);
+      })))
     return failure();
   os << ")";
   return success();
