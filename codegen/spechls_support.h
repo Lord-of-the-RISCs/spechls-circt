@@ -8,6 +8,8 @@
 #ifndef CODEGEN_INCLUDED_SPECHLS_SUPPORT_H
 #define CODEGEN_INCLUDED_SPECHLS_SUPPORT_H
 
+#include <algorithm>
+
 #include "ap_int.h"
 
 template <typename T>
@@ -15,19 +17,19 @@ constexpr T mu(bool first, T init, T loop) {
   return first ? init : loop;
 }
 
-template <typename T, int N>
+template <typename T, unsigned int N>
 constexpr void delay_init(T (&buffer)[N], T value) {
   for (int i = 0; i < N; ++i)
     buffer[i] = value;
 }
 
-template <typename T, int N>
-constexpr T delay(T (&buffer)[N], T value, bool enable = true, [[maybe_unused]] T init = {}) {
+template <typename T, unsigned int Depth>
+constexpr T delay(T *buffer, T value, bool enable = true, [[maybe_unused]] T init = {}) {
   T result = buffer[0];
   if (enable) {
-    for (int i = 0; i < N - 1; ++i)
+    for (int i = 0; i < Depth - 1; ++i)
       buffer[i] = buffer[i + 1];
-    buffer[N - 1] = value;
+    buffer[Depth - 1] = value;
   }
   return result;
 }
@@ -48,6 +50,50 @@ constexpr ap_int<N * M> replicate(ap_int<M> input) {
 template <int N, int M>
 constexpr ap_int<N + M> concat(ap_int<N> lhs, ap_int<M> rhs) {
   return lhs.concat(rhs);
+}
+
+template <typename T, unsigned int... Depths>
+constexpr T resolve_offset(unsigned int offset, T *values, T default_value) {
+  T result = default_value;
+  auto update = [&](unsigned int d) {
+    if (offset == d)
+      result = values[d];
+  };
+  (update(Depths), ...);
+  return result;
+}
+
+template <typename T, unsigned int Offset, unsigned int... Depths>
+constexpr T rollback(T *buffer, T value, unsigned int offset, bool next_input) {
+  constexpr unsigned int max_depth = std::max({0u, Depths...}) + 1;
+  unsigned int off = offset - Offset;
+  if (next_input) {
+    for (int i = 0; i < max_depth - 1; ++i)
+      buffer[i] = buffer[i + 1];
+  }
+  T result = resolve_offset<T, Depths...>(off, buffer, value);
+
+  return result;
+}
+
+template <typename T, typename... Ts>
+constexpr T gamma(unsigned int select, Ts... values) {
+  T result = T{};
+  unsigned int idx = 0;
+  auto update = [&](T value) {
+    if (select == idx++)
+      result = value;
+  };
+  (update(values), ...);
+  return result;
+}
+
+template <typename T>
+constexpr T *alpha(T *array, unsigned int index, T value, bool we) {
+  if (we) {
+    array[index] = value;
+  }
+  return array;
 }
 
 #endif // CODEGEN_INCLUDED_SPECHLS_SUPPORT_H
