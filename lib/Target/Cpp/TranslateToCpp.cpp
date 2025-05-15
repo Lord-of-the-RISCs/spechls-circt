@@ -282,7 +282,6 @@ LogicalResult printFunctionPrototype(CppEmitter &emitter, Operation *op, StringR
 
 LogicalResult printOperation(CppEmitter &emitter, ModuleOp moduleOp) {
   raw_indented_ostream &os = emitter.ostream();
-  os << "#include <tuple>\n";
   os << "#include <ap_int.h>\n";
   os << "#include <io_printf.h>\n";
   os << "#include <spechls-support.h>\n";
