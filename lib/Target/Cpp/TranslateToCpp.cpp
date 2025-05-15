@@ -48,7 +48,6 @@ public:
 
   LogicalResult emitType(Location loc, Type type);
   LogicalResult emitTypes(Location loc, ArrayRef<Type> types);
-  LogicalResult emitTupleType(Location loc, ArrayRef<Type> types);
   LogicalResult emitStructDefinition(Location loc, spechls::StructType structType);
 
   LogicalResult emitAttribute(Location loc, Attribute attr);
@@ -907,9 +906,6 @@ LogicalResult CppEmitter::emitType(Location loc, Type type) {
       os << "ap_int<" << iType.getWidth() << '>';
     return success();
   }
-  if (auto tType = dyn_cast<TupleType>(type)) {
-    return emitTupleType(loc, tType.getTypes());
-  }
   if (auto sType = dyn_cast<spechls::StructType>(type)) {
     os << sType.getName();
     return success();
@@ -931,16 +927,8 @@ LogicalResult CppEmitter::emitTypes(Location loc, ArrayRef<Type> types) {
   case 1:
     return emitType(loc, types.front());
   default:
-    return emitTupleType(loc, types);
-  }
-}
-
-LogicalResult CppEmitter::emitTupleType(Location loc, ArrayRef<Type> types) {
-  os << "std::tuple<";
-  if (failed(interleaveCommaWithError(types, os, [&](Type type) { return emitType(loc, type); })))
     return failure();
-  os << ">";
-  return success();
+  }
 }
 
 LogicalResult CppEmitter::emitStructDefinition(Location loc, spechls::StructType structType) {
@@ -1120,9 +1108,7 @@ LogicalResult CppEmitter::emitAssignPrefix(Operation &op) {
     break;
   }
   default:
-    os << "std::tie(";
-    interleaveComma(op.getResults(), os, [&](Value result) { os << getOrCreateName(result); });
-    os << ") = ";
+    return op.emitOpError("unexpected operation with multiple results");
   }
   return success();
 }
