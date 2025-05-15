@@ -571,8 +571,19 @@ LogicalResult printOperation(CppEmitter &emitter, spechls::CallOp callOp) {
 
 LogicalResult printOperation(CppEmitter &emitter, spechls::GammaOp gammaOp) {
   Operation *operation = gammaOp.getOperation();
-  StringRef callee = "gamma";
-  return printCallOp(emitter, operation, callee);
+  raw_ostream &os = emitter.ostream();
+
+  if (failed(emitter.emitAssignPrefix(*operation)))
+    return failure();
+
+  os << "gamma<";
+  if (failed(emitter.emitType(gammaOp.getLoc(), gammaOp.getType())))
+    return failure();
+  os << ">(";
+  if (failed(emitter.emitOperands(*operation)))
+    return failure();
+  os << ")";
+  return success();
 }
 
 LogicalResult printOperation(CppEmitter &emitter, spechls::PrintOp printOp) {
