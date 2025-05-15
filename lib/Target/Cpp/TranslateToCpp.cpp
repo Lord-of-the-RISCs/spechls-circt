@@ -115,6 +115,10 @@ std::string getDelayBufferName(CppEmitter &emitter, spechls::DelayOp delayOp) {
   return emitter.getOrCreateName(delayOp).str() + "_buffer";
 }
 
+std::string getRollbackBufferName(CppEmitter &emitter, spechls::RollbackOp rollbackOp) {
+  return emitter.getOrCreateName(rollbackOp).str() + "_buffer";
+}
+
 template <typename Container, typename UnaryFunctor, typename NullaryFunctor>
 inline LogicalResult interleaveWithError(const Container &c, UnaryFunctor eachFn, NullaryFunctor betweenFn) {
   return interleaveWithError(c.begin(), c.end(), eachFn, betweenFn);
@@ -154,12 +158,18 @@ LogicalResult printAllVariables(CppEmitter &emitter, Operation *taskLikeOp) {
         return WalkResult(op->emitError("unable to declare result variable for op"));
     }
 
-    // Declare delay buffers.
+    // Declare static buffers.
     if (auto delayOp = dyn_cast<spechls::DelayOp>(op)) {
       os << "static ";
       if (failed(emitter.emitType(op->getLoc(), delayOp.getType())))
         return failure();
       os << " " << getDelayBufferName(emitter, delayOp) << "[" << delayOp.getDepth() << "];\n";
+    } else if (auto rollbackOp = dyn_cast<spechls::RollbackOp>(op)) {
+      os << "static ";
+      if (failed(emitter.emitType(op->getLoc(), rollbackOp.getType())))
+        return failure();
+      os << " " << getRollbackBufferName(emitter, rollbackOp) << "["
+         << *std::max_element(rollbackOp.getDepths().begin(), rollbackOp.getDepths().end()) << "];\n";
     }
     return WalkResult::advance();
   });
@@ -663,8 +673,15 @@ LogicalResult printOperation(CppEmitter &emitter, spechls::RollbackOp rollbackOp
     return failure();
 
   os << "rollback<";
-  interleaveComma(rollbackOp.getDepths(), os);
-  os << ">(";
+  if (failed(emitter.emitType(rollbackOp.getLoc(), rollbackOp.getType())))
+    return failure();
+  os << ", " << rollbackOp.getOffset() << ", ";
+  if (failed(interleaveCommaWithError(rollbackOp.getDepths(), os, [&](uint64_t depth) {
+        os << depth;
+        return success();
+      })))
+    return failure();
+  os << ">(" << getRollbackBufferName(emitter, rollbackOp) << ", ";
   if (failed(emitter.emitOperands(*operation)))
     return failure();
   os << ")";
