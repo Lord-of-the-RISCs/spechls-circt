@@ -97,6 +97,13 @@ void printTaskLikeOp(T &instance, OpAsmPrinter &printer) {
   printer.printRegion(instance.getBody(), false, true);
 }
 
+template <typename T>
+LogicalResult verifyTaskLikeOp(T &instance) {
+  if (instance.getResultTypes().size() > 1)
+    return instance.emitOpError("expected a single result");
+  return success();
+}
+
 } // namespace
 
 Type spechls::StructType::parse(AsmParser &parser) {
@@ -147,6 +154,8 @@ ParseResult spechls::HKernelOp::parse(OpAsmParser &parser, OperationState &resul
 
 void spechls::HKernelOp::print(OpAsmPrinter &printer) { printTaskLikeOp(*this, printer); }
 
+LogicalResult spechls::HKernelOp::verify() { return verifyTaskLikeOp(*this); }
+
 LogicalResult spechls::ExitOp::verify() {
   ArrayRef<Type> results;
   StringRef taskName;
@@ -180,19 +189,15 @@ ParseResult spechls::HTaskOp::parse(OpAsmParser &parser, OperationState &result)
 
 void spechls::HTaskOp::print(OpAsmPrinter &printer) { printTaskLikeOp(*this, printer); }
 
+LogicalResult spechls::HTaskOp::verify() { return verifyTaskLikeOp(*this); }
+
 LogicalResult spechls::CommitOp::verify() {
   auto task = cast<HTaskOp>((*this)->getParentOp());
 
-  // The number of committed values must match the task signature.
-  auto const &results = task.getResultTypes();
-  if (getValues().size() != results.size())
-    return emitOpError("has ") << getNumOperands() << " operands, but enclosing htask (@" << task.getName()
-                               << ") returns " << results.size();
-
-  for (size_t i = 0, e = results.size(); i != e; ++i) {
-    if (getOperand(i + 1).getType() != results[i])
-      return emitError() << "type of commit operand " << i + 1 << " (" << getOperand(i + 1).getType()
-                         << ") doesn't match result type (" << results[i] << ") in htask @" << task.getName();
+  auto const &result = task.getResultTypes().front();
+  if (getValue().getType() != result) {
+    return emitError() << "type of commit operand (" << getValue().getType() << ") doesn't match result type ("
+                       << result << ") in htask @" << task.getName();
   }
 
   return success();

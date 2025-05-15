@@ -366,12 +366,15 @@ LogicalResult printOperation(CppEmitter &emitter, spechls::HKernelOp hkernelOp) 
       return failure();
     break;
   default:
-    os << " std::make_tuple(";
+    os << " (";
+    if (failed(emitter.emitType(exit.getLoc(), hkernelOp.getResultTypes().front())))
+      return failure();
+    os << "){";
     if (failed(interleaveCommaWithError(exit.getValues(), os,
                                         [&](Value operand) { return emitter.emitOperand(operand); }))) {
       return failure();
     }
-    os << ')';
+    os << "}";
   }
   os << ";\n";
 
@@ -488,10 +491,12 @@ LogicalResult printOperation(CppEmitter &emitter, spechls::PackOp packOp) {
 
   if (failed(emitter.emitVariableAssignment(operation->getResult(0))))
     return failure();
-  os << "std::make_tuple(";
+  if (failed(emitter.emitType(packOp.getLoc(), packOp.getType())))
+    return failure();
+  os << "{";
   if (failed(emitter.emitOperands(*operation)))
     return failure();
-  os << ")";
+  os << "}";
 
   return success();
 }
@@ -537,7 +542,7 @@ LogicalResult printOperation(CppEmitter &emitter, spechls::CommitOp commitOp) {
   raw_indented_ostream &os = emitter.ostream();
 
   os << "return";
-  if (commitOp.getValues().size() == 0) {
+  if (!commitOp.getValue()) {
     return success();
   }
   os << " ";
@@ -549,23 +554,8 @@ LogicalResult printOperation(CppEmitter &emitter, spechls::CommitOp commitOp) {
     alwaysEnabled = constantOp.getValue().getBoolValue();
   }
 
-  auto emitCommitValues = [&]() {
-    if (commitOp.getValues().size() == 1) {
-      if (failed(emitter.emitOperand(commitOp.getValues().front())))
-        return failure();
-    } else {
-      os << "std::make_tuple(";
-      if (failed(interleaveCommaWithError(commitOp.getValues(), os,
-                                          [&](Value operand) { return emitter.emitOperand(operand); }))) {
-        return failure();
-      }
-      os << ")";
-    }
-    return success();
-  };
-
   if (alwaysEnabled) {
-    if (failed(emitCommitValues()))
+    if (failed(emitter.emitOperand(commitOp.getValue())))
       return failure();
     return success();
   }
@@ -573,20 +563,11 @@ LogicalResult printOperation(CppEmitter &emitter, spechls::CommitOp commitOp) {
   if (failed(emitter.emitOperand(enable)))
     return failure();
   os << " ? ";
-  if (failed(emitCommitValues()))
+  if (failed(emitter.emitOperand(commitOp.getValue())))
     return failure();
   os << " : ";
-  if (commitOp.getValues().size() == 1) {
-    if (failed(emitter.emitType(commitOp.getLoc(), commitOp.getValues().front().getType())))
-      return failure();
-  } else {
-    os << "std::tuple<";
-    if (failed(interleaveCommaWithError(commitOp.getValues().getTypes(), os,
-                                        [&](Type type) { return emitter.emitType(commitOp.getLoc(), type); }))) {
-      return failure();
-    }
-    os << ">";
-  }
+  if (failed(emitter.emitType(commitOp.getLoc(), commitOp.getValue().getType())))
+    return failure();
   os << "{}";
 
   return success();

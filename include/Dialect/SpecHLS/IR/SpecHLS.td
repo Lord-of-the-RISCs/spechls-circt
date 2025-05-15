@@ -81,6 +81,7 @@ class SpecHLS_TaskLikeOp<string mnemonic, list<Trait> traits = []> :
     let regions = (region SizedRegion<1>:$body);
 
     let hasCustomAssemblyFormat = 1;
+    let hasVerifier = 1;
 
     let extraClassDeclaration = [{
         //===------------------------------------------------------------------===//
@@ -120,11 +121,11 @@ def SpecHLS_HTaskOp : SpecHLS_TaskLikeOp<"htask"> {}
 def SpecHLS_CommitOp : SpecHLSOp<"commit", [HasParent<"HTaskOp">, Terminator, ReturnLike]> {
     let arguments = (ins
         I1:$enable,
-        Variadic<AnyType>:$values
+        Optional<AnyType>:$value
     );
 
     let assemblyFormat = [{
-        $enable (`,` $values^ `:` type($values))? attr-dict
+        $enable (`,` $value^ `:` type($value))? attr-dict
     }];
     let hasVerifier = 1;
 }
