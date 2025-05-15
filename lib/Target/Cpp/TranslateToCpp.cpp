@@ -156,6 +156,7 @@ LogicalResult printAllVariables(CppEmitter &emitter, Operation *taskLikeOp) {
 
     // Declare delay buffers.
     if (auto delayOp = dyn_cast<spechls::DelayOp>(op)) {
+      os << "static ";
       if (failed(emitter.emitType(op->getLoc(), delayOp.getType())))
         return failure();
       os << " " << getDelayBufferName(emitter, delayOp) << "[" << delayOp.getDepth() << "];\n";
