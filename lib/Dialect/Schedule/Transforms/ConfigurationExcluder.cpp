@@ -32,15 +32,12 @@ void ConfigurationExcluderPass::runOnOperation() {
   auto &body = circuitOp.getBody();
 
   int64_t sumDistances = 0;
-  SmallVector<Operation *> gammas;
   StringRef gammaAttrName = "spechls.gamma";
   StringRef muAttrName = "spechls.mu";
   StringRef allowUnitIIAttrName = "spechls.allow_unit_ii";
   StringRef distanceArrayAttrName = "distances";
 
   for (auto &&op : body.getOps()) {
-    if (op.hasAttr(gammaAttrName))
-      gammas.push_back(&op);
     for (auto &&attr : op.getAttrOfType<ArrayAttr>(distanceArrayAttrName))
       sumDistances += cast<IntegerAttr>(attr).getInt();
   }
