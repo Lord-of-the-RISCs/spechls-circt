@@ -7,6 +7,7 @@
 
 #include <circt/Dialect/Comb/CombDialect.h>
 #include <circt/Dialect/HW/HWDialect.h>
+#include <circt/Dialect/SSP/SSPDialect.h>
 #include <mlir/Tools/mlir-opt/MlirOptMain.h>
 #include <mlir/Transforms/Passes.h>
 
@@ -16,7 +17,8 @@
 
 int main(int argc, char **argv) {
   mlir::DialectRegistry registry;
-  registry.insert<spechls::SpecHLSDialect, schedule::ScheduleDialect, circt::comb::CombDialect, circt::hw::HWDialect>();
+  registry.insert<spechls::SpecHLSDialect, schedule::ScheduleDialect, circt::comb::CombDialect, circt::hw::HWDialect,
+                  circt::ssp::SSPDialect>();
 
   mlir::registerCanonicalizerPass();
   schedule::registerSchedulePasses();
