@@ -63,6 +63,7 @@ void ConfigurationExcluderPass::runOnOperation() {
     }
 
     while (!workList.empty()) {
+      bool skip = false;
       Operation *op = workList.front();
       workList.pop();
       auto distanceArray = op->getAttrOfType<ArrayAttr>(distanceArrayAttrName).getValue();
@@ -76,8 +77,10 @@ void ConfigurationExcluderPass::runOnOperation() {
       for (size_t predIndex = 0; predIndex < op->getNumOperands(); ++predIndex) {
         int64_t distance = cast<IntegerAttr>(distanceArray[predIndex]).getInt();
         if (iteration - distance < 0) {
-          nextCycle = 0;
-          nextTimeInCycles = 0.0;
+          if (isGamma) {
+            nextCycle = 0;
+            nextTimeInCycles = 0.0;
+          }
         } else {
           int64_t predEndCycle = 0;
           double predEndTimeInCycles = 0.0;
@@ -118,10 +121,15 @@ void ConfigurationExcluderPass::runOnOperation() {
             }
           } else {
             workList.push(op);
-            continue;
+            skip = true;
+            break;
           }
         }
       }
+
+      // Move to the next node in the worklist.
+      if (skip)
+        continue;
 
       if (isMu && (iteration > sumDistances + 1) && (nextCycle - startTimes[op][iteration - 1] > 1)) {
         for (auto &&op : body.getOps()) {
