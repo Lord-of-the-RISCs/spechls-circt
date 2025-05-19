@@ -5,9 +5,11 @@
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 
+#include <mlir/Support/LLVM.h>
+
 #include "Dialect/Schedule/IR/ScheduleOps.h"
 #include "Dialect/Schedule/Transforms/Passes.h" // IWYU pragma: keep
-#include "mlir/Support/LLVM.h"
+
 #include <queue>
 
 using namespace mlir;
@@ -132,6 +134,7 @@ void ConfigurationExcluderPass::runOnOperation() {
         continue;
 
       if (isMu && (iteration > sumDistances + 1) && (nextCycle - startTimes[op][iteration - 1] > 1)) {
+#if 0
         for (auto &&op : body.getOps()) {
           if (auto operation = dyn_cast<schedule::OperationOp>(op)) {
             int depth = 15;
@@ -145,19 +148,21 @@ void ConfigurationExcluderPass::runOnOperation() {
                 llvm::errs() << "\n";
               }
             };
-            // printOp("_5", "mu(r): ");
-            // printOp("_60", "mux(ctrl_fwdr1): ");
-            // printOp("_65", "gamma(r): ");
-            // printOp("_67", "r[]: ");
-            // printOp("_69", "gamma(forward_r_1): ");
-            // printOp("_70", "add: ");
-            // printOp("_71", "mul: ");
-            // printOp("_72", "sub: ");
-            // printOp("_73", "div: ");
-            // printOp("_101", "gamma(merge__0): ");
-            // printOp("_105", "alpha(r): ");
+
+            printOp("_5", "mu(r): ");
+            printOp("_60", "mux(ctrl_fwdr1): ");
+            printOp("_65", "gamma(r): ");
+            printOp("_67", "r[]: ");
+            printOp("_69", "gamma(forward_r_1): ");
+            printOp("_70", "add: ");
+            printOp("_71", "mul: ");
+            printOp("_72", "sub: ");
+            printOp("_73", "div: ");
+            printOp("_101", "gamma(merge__0): ");
+            printOp("_105", "alpha(r): ");
           }
         }
+#endif
         circuitOp->setAttr(allowUnitIIAttrName, BoolAttr::get(circuitOp.getContext(), false));
         return;
       }
