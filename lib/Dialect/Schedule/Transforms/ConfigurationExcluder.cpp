@@ -7,6 +7,8 @@
 
 #include "Dialect/Schedule/IR/ScheduleOps.h"
 #include "Dialect/Schedule/Transforms/Passes.h" // IWYU pragma: keep
+#include "mlir/Support/LLVM.h"
+#include <queue>
 
 using namespace mlir;
 
@@ -55,16 +57,23 @@ void ConfigurationExcluderPass::runOnOperation() {
   }
 
   for (int64_t iteration = 0; iteration < iterationCount; ++iteration) {
+    std::queue<Operation *> workList;
     for (auto &&op : body.getOps()) {
-      auto distanceArray = op.getAttrOfType<ArrayAttr>(distanceArrayAttrName).getValue();
+      workList.push(&op);
+    }
 
-      bool isGamma = op.hasAttr(gammaAttrName);
-      bool isMu = op.hasAttr(muAttrName);
+    while (!workList.empty()) {
+      Operation *op = workList.front();
+      workList.pop();
+      auto distanceArray = op->getAttrOfType<ArrayAttr>(distanceArrayAttrName).getValue();
+
+      bool isGamma = op->hasAttr(gammaAttrName);
+      bool isMu = op->hasAttr(muAttrName);
       int64_t nextCycle = isGamma ? std::numeric_limits<int64_t>::max() : 0;
       double nextTimeInCycles = 0.0;
 
       // Compute the unrolled schedule.
-      for (size_t predIndex = 0; predIndex < op.getNumOperands(); ++predIndex) {
+      for (size_t predIndex = 0; predIndex < op->getNumOperands(); ++predIndex) {
         int64_t distance = cast<IntegerAttr>(distanceArray[predIndex]).getInt();
         if (iteration - distance < 0) {
           nextCycle = 0;
@@ -73,7 +82,7 @@ void ConfigurationExcluderPass::runOnOperation() {
           int64_t predEndCycle = 0;
           double predEndTimeInCycles = 0.0;
 
-          Operation *pred = op.getOperand(predIndex).getDefiningOp();
+          Operation *pred = op->getOperand(predIndex).getDefiningOp();
           int64_t predLatency = pred->getAttrOfType<IntegerAttr>("latency").getInt();
           double predInDelay = pred->getAttrOfType<FloatAttr>("inDelay").getValueAsDouble();
           double predOutDelay = pred->getAttrOfType<FloatAttr>("outDelay").getValueAsDouble();
@@ -82,8 +91,11 @@ void ConfigurationExcluderPass::runOnOperation() {
           if (offset < startTimes[pred].size()) {
             if (predLatency > 0) {
               predEndCycle = startTimes[pred][offset] + predLatency;
+              if (startTimesInCycles[pred][offset] + predInDelay > targetClock)
+                predEndCycle += 1;
               predEndTimeInCycles = predOutDelay;
-            } else if (startTimesInCycles[pred][offset] + predInDelay + predOutDelay > targetClock) {
+            } else if (startTimesInCycles[pred][offset] + predInDelay > targetClock) {
+              assert(predInDelay == predOutDelay);
               predEndCycle = startTimes[pred][offset] + 1;
               predEndTimeInCycles = predOutDelay;
             } else {
@@ -105,19 +117,45 @@ void ConfigurationExcluderPass::runOnOperation() {
               nextTimeInCycles = std::max(nextTimeInCycles, predEndTimeInCycles);
             }
           } else {
-            nextCycle = 0;
-            nextTimeInCycles = 0.0;
+            workList.push(op);
+            continue;
           }
         }
       }
 
-      if (isMu && (iteration > sumDistances + 1) && (nextCycle - startTimes[&op][iteration - 1] > 1)) {
+      if (isMu && (iteration > sumDistances + 1) && (nextCycle - startTimes[op][iteration - 1] > 1)) {
+        for (auto &&op : body.getOps()) {
+          if (auto operation = dyn_cast<schedule::OperationOp>(op)) {
+            int depth = 15;
+            auto printOp = [&](StringRef name, StringRef prefix = "") {
+              if (operation.getSymName() == name) {
+                std::string spaces(32 - prefix.size(), ' ');
+                llvm::errs() << prefix << spaces;
+                for (int i = 0; i < depth; ++i) {
+                  llvm::errs() << startTimes[&op][iteration - 1 - i] << ", ";
+                }
+                llvm::errs() << "\n";
+              }
+            };
+            // printOp("_5", "mu(r): ");
+            // printOp("_60", "mux(ctrl_fwdr1): ");
+            // printOp("_65", "gamma(r): ");
+            // printOp("_67", "r[]: ");
+            // printOp("_69", "gamma(forward_r_1): ");
+            // printOp("_70", "add: ");
+            // printOp("_71", "mul: ");
+            // printOp("_72", "sub: ");
+            // printOp("_73", "div: ");
+            // printOp("_101", "gamma(merge__0): ");
+            // printOp("_105", "alpha(r): ");
+          }
+        }
         circuitOp->setAttr(allowUnitIIAttrName, BoolAttr::get(circuitOp.getContext(), false));
         return;
       }
 
-      startTimes[&op].push_back(nextCycle);
-      startTimesInCycles[&op].push_back(nextTimeInCycles);
+      startTimes[op].push_back(nextCycle);
+      startTimesInCycles[op].push_back(nextTimeInCycles);
     }
   }
 
