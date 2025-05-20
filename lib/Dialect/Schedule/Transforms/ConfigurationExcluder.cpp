@@ -9,6 +9,7 @@
 
 #include "Dialect/Schedule/IR/ScheduleOps.h"
 #include "Dialect/Schedule/Transforms/Passes.h" // IWYU pragma: keep
+#include "llvm/Support/raw_ostream.h"
 
 #include <queue>
 
@@ -74,6 +75,124 @@ void ConfigurationExcluderPass::runOnOperation() {
       bool isMu = op->hasAttr(muAttrName);
       int64_t nextCycle = isGamma ? std::numeric_limits<int64_t>::max() : 0;
       double nextTimeInCycle = 0.0;
+
+      if (isMu) {
+        int64_t distance = cast<IntegerAttr>(distanceArray[1]).getInt();
+        int64_t offset = iteration - distance;
+        if (offset >= 0) {
+          auto *alpha = op->getOperand(1).getDefiningOp();
+          alpha->print(llvm::errs());
+          llvm::errs() << ": " << startTimes[alpha].back() << "\n";
+          auto *gamma_merge0 = alpha->getOperand(1).getDefiningOp();
+          llvm::errs() << "  ";
+          gamma_merge0->print(llvm::errs());
+          llvm::errs() << ": " << startTimes[gamma_merge0].back() << "\n";
+          for (auto &&operand : gamma_merge0->getOperands()) {
+            llvm::errs() << startTimes[operand.getDefiningOp()].back() << "\n";
+          }
+          llvm::errs() << "---\n";
+        }
+      }
+
+      if (cast<schedule::OperationOp>(op).getSymName() == "_92") {
+        llvm::errs() << "@_92:\n";
+        for (auto &&operand : op->getOperands()) {
+          if (startTimes[operand.getDefiningOp()].size() >= 2)
+            llvm::errs() << startTimes[operand.getDefiningOp()][startTimes[operand.getDefiningOp()].size() - 2] << "\n";
+        }
+        llvm::errs() << "---\n";
+      } else if (cast<schedule::OperationOp>(op).getSymName() == "_104") {
+        llvm::errs() << "@_104:\n";
+        for (auto &&operand : op->getOperands()) {
+          if (startTimes[operand.getDefiningOp()].size() >= 2)
+            llvm::errs() << startTimes[operand.getDefiningOp()][startTimes[operand.getDefiningOp()].size() - 2] << "\n";
+        }
+        llvm::errs() << "---\n";
+      } else if (cast<schedule::OperationOp>(op).getSymName() == "_10") {
+        llvm::errs() << "@_10:\n";
+        for (auto &&operand : op->getOperands()) {
+          if (!startTimes[operand.getDefiningOp()].empty())
+            llvm::errs() << startTimes[operand.getDefiningOp()].back() << "\n";
+        }
+        llvm::errs() << "---\n";
+      } else if (cast<schedule::OperationOp>(op).getSymName() == "_51") {
+        llvm::errs() << "@_51:\n";
+        for (auto &&operand : op->getOperands()) {
+          if (!startTimes[operand.getDefiningOp()].empty())
+            llvm::errs() << startTimes[operand.getDefiningOp()].back() << "\n";
+        }
+        llvm::errs() << "---\n";
+      } else if (cast<schedule::OperationOp>(op).getSymName() == "_52") {
+        llvm::errs() << "@_52:\n";
+        for (auto &&operand : op->getOperands()) {
+          if (!startTimes[operand.getDefiningOp()].empty())
+            llvm::errs() << startTimes[operand.getDefiningOp()].back() << "\n";
+        }
+        llvm::errs() << "---\n";
+      } else if (cast<schedule::OperationOp>(op).getSymName() == "_54") {
+        llvm::errs() << "@_54:\n";
+        for (auto &&operand : op->getOperands()) {
+          if (!startTimes[operand.getDefiningOp()].empty())
+            llvm::errs() << startTimes[operand.getDefiningOp()].back() << "\n";
+        }
+        llvm::errs() << "---\n";
+      } else if (cast<schedule::OperationOp>(op).getSymName() == "_68") {
+        llvm::errs() << "@_68:\n";
+        for (auto &&operand : op->getOperands()) {
+          if (!startTimes[operand.getDefiningOp()].empty())
+            llvm::errs() << startTimes[operand.getDefiningOp()].back() << "\n";
+        }
+        llvm::errs() << "---\n";
+      } else if (cast<schedule::OperationOp>(op).getSymName() == "_80") {
+        llvm::errs() << "@_80:\n";
+        for (auto &&operand : op->getOperands()) {
+          if (!startTimes[operand.getDefiningOp()].empty())
+            llvm::errs() << startTimes[operand.getDefiningOp()].back() << "\n";
+        }
+        llvm::errs() << "---\n";
+      } else if (cast<schedule::OperationOp>(op).getSymName() == "_81") {
+        llvm::errs() << "@_81:\n";
+        for (auto &&operand : op->getOperands()) {
+          if (!startTimes[operand.getDefiningOp()].empty())
+            llvm::errs() << startTimes[operand.getDefiningOp()].back() << "\n";
+        }
+        llvm::errs() << "---\n";
+      } else if (cast<schedule::OperationOp>(op).getSymName() == "_86") {
+        llvm::errs() << "@_86:\n";
+        for (auto &&operand : op->getOperands()) {
+          if (!startTimes[operand.getDefiningOp()].empty())
+            llvm::errs() << startTimes[operand.getDefiningOp()].back() << "\n";
+        }
+        llvm::errs() << "---\n";
+      } else if (cast<schedule::OperationOp>(op).getSymName() == "_91") {
+        llvm::errs() << "@_91:\n";
+        for (auto &&operand : op->getOperands()) {
+          if (!startTimes[operand.getDefiningOp()].empty())
+            llvm::errs() << startTimes[operand.getDefiningOp()].back() << "\n";
+        }
+        llvm::errs() << "---\n";
+      } else if (cast<schedule::OperationOp>(op).getSymName() == "_99") {
+        llvm::errs() << "@_99:\n";
+        for (auto &&operand : op->getOperands()) {
+          if (!startTimes[operand.getDefiningOp()].empty())
+            llvm::errs() << startTimes[operand.getDefiningOp()].back() << "\n";
+        }
+        llvm::errs() << "---\n";
+      } else if (cast<schedule::OperationOp>(op).getSymName() == "_100") {
+        llvm::errs() << "@_100:\n";
+        for (auto &&operand : op->getOperands()) {
+          if (!startTimes[operand.getDefiningOp()].empty())
+            llvm::errs() << startTimes[operand.getDefiningOp()].back() << "\n";
+        }
+        llvm::errs() << "---\n";
+      } else if (cast<schedule::OperationOp>(op).getSymName() == "_101") {
+        llvm::errs() << "@_101:\n";
+        for (auto &&operand : op->getOperands()) {
+          if (!startTimes[operand.getDefiningOp()].empty())
+            llvm::errs() << startTimes[operand.getDefiningOp()].back() << "\n";
+        }
+        llvm::errs() << "---\n";
+      }
 
       // Compute the unrolled schedule.
       for (size_t predIndex = 0; predIndex < op->getNumOperands(); ++predIndex) {
