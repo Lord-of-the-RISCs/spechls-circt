@@ -48,14 +48,14 @@ void ConfigurationExcluderPass::runOnOperation() {
   int64_t iterationCount = 2 * (sumDistances + 1);
 
   DenseMap<Operation *, SmallVector<int64_t>> startTimes;
-  DenseMap<Operation *, SmallVector<double>> startTimesInCycles;
+  DenseMap<Operation *, SmallVector<double>> startTimesInCycle;
 
   for (auto &&op : body.getOps()) {
     startTimes.try_emplace(&op, SmallVector<int64_t>());
-    startTimesInCycles.try_emplace(&op, SmallVector<double>());
+    startTimesInCycle.try_emplace(&op, SmallVector<double>());
     // The size of these vectors is used in the following code, so we only reserve and don't allocate.
     startTimes[&op].reserve(iterationCount);
-    startTimesInCycles[&op].reserve(iterationCount);
+    startTimesInCycle[&op].reserve(iterationCount);
   }
 
   for (int64_t iteration = 0; iteration < iterationCount; ++iteration) {
@@ -73,7 +73,7 @@ void ConfigurationExcluderPass::runOnOperation() {
       bool isGamma = op->hasAttr(gammaAttrName);
       bool isMu = op->hasAttr(muAttrName);
       int64_t nextCycle = isGamma ? std::numeric_limits<int64_t>::max() : 0;
-      double nextTimeInCycles = 0.0;
+      double nextTimeInCycle = 0.0;
 
       // Compute the unrolled schedule.
       for (size_t predIndex = 0; predIndex < op->getNumOperands(); ++predIndex) {
@@ -81,11 +81,11 @@ void ConfigurationExcluderPass::runOnOperation() {
         if (iteration - distance < 0) {
           if (isGamma) {
             nextCycle = 0;
-            nextTimeInCycles = 0.0;
+            nextTimeInCycle = 0.0;
           }
         } else {
           int64_t predEndCycle = 0;
-          double predEndTimeInCycles = 0.0;
+          double predEndTimeInCycle = 0.0;
 
           Operation *pred = op->getOperand(predIndex).getDefiningOp();
           int64_t predLatency = pred->getAttrOfType<IntegerAttr>("latency").getInt();
@@ -96,30 +96,30 @@ void ConfigurationExcluderPass::runOnOperation() {
           if (offset < startTimes[pred].size()) {
             if (predLatency > 0) {
               predEndCycle = startTimes[pred][offset] + predLatency;
-              if (startTimesInCycles[pred][offset] + predInDelay > targetClock)
+              if (startTimesInCycle[pred][offset] + predInDelay > targetClock)
                 predEndCycle += 1;
-              predEndTimeInCycles = predOutDelay;
-            } else if (startTimesInCycles[pred][offset] + predInDelay > targetClock) {
+              predEndTimeInCycle = predOutDelay;
+            } else if (startTimesInCycle[pred][offset] + predInDelay > targetClock) {
               assert(predInDelay == predOutDelay);
               predEndCycle = startTimes[pred][offset] + 1;
-              predEndTimeInCycles = predOutDelay;
+              predEndTimeInCycle = predOutDelay;
             } else {
               predEndCycle = startTimes[pred][offset];
-              predEndTimeInCycles = startTimesInCycles[pred][offset] + predOutDelay;
+              predEndTimeInCycle = startTimesInCycle[pred][offset] + predOutDelay;
             }
 
             if (isGamma) {
               if (nextCycle > predEndCycle) {
                 nextCycle = predEndCycle;
-                nextTimeInCycles = predEndTimeInCycles;
+                nextTimeInCycle = predEndTimeInCycle;
               } else if (predEndCycle == nextCycle) {
-                nextTimeInCycles = std::min(nextTimeInCycles, predEndTimeInCycles);
+                nextTimeInCycle = std::min(nextTimeInCycle, predEndTimeInCycle);
               }
             } else if (predEndCycle > nextCycle) {
               nextCycle = predEndCycle;
-              nextTimeInCycles = predEndTimeInCycles;
+              nextTimeInCycle = predEndTimeInCycle;
             } else if (predEndCycle == nextCycle) {
-              nextTimeInCycles = std::max(nextTimeInCycles, predEndTimeInCycles);
+              nextTimeInCycle = std::max(nextTimeInCycle, predEndTimeInCycle);
             }
           } else {
             workList.push(op);
@@ -168,7 +168,7 @@ void ConfigurationExcluderPass::runOnOperation() {
       }
 
       startTimes[op].push_back(nextCycle);
-      startTimesInCycles[op].push_back(nextTimeInCycles);
+      startTimesInCycle[op].push_back(nextTimeInCycle);
     }
   }
 
