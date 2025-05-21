@@ -12,7 +12,7 @@
 #include <memory>
 
 namespace spechls {
-  
+
 std::unique_ptr<mlir::Pass> createScheduleToSSP();
 
 #define GEN_PASS_REGISTRATION
