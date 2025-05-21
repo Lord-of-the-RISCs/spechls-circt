@@ -6,14 +6,14 @@
 //
 
 #include "Dialect/Schedule/Transforms/Passes.h" // IWYU pragma: keep
-#include "circt/Dialect/SSP/SSPAttributes.h"
-#include "circt/Dialect/SSP/SSPPasses.h"
-#include "mlir/IR/BuiltinAttributes.h"
-#include "mlir/Pass/PassManager.h"
 
+#include <circt/Dialect/SSP/SSPAttributes.h>
 #include <circt/Dialect/SSP/SSPOps.h>
+#include <circt/Dialect/SSP/SSPPasses.h>
+#include <mlir/IR/BuiltinAttributes.h>
 #include <mlir/IR/BuiltinOps.h>
 #include <mlir/IR/Diagnostics.h>
+#include <mlir/Pass/PassManager.h>
 
 using namespace mlir;
 
