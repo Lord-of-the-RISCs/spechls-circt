@@ -21,7 +21,7 @@ int main(int argc, char **argv) {
   registry.insert<spechls::SpecHLSDialect, schedule::ScheduleDialect, circt::comb::CombDialect, circt::hw::HWDialect,
                   circt::ssp::SSPDialect>();
 
-  mlir::registerCanonicalizerPass();
+  mlir::registerTransformsPasses();
   schedule::registerSchedulePasses();
   schedule::registerScheduleToSSPPass();
 
