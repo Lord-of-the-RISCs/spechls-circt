@@ -9,6 +9,7 @@
 
 #include <llvm/ADT/TypeSwitch.h>
 #include <mlir/IR/DialectImplementation.h>
+#include <mlir/Support/LLVM.h>
 
 #include "Dialect/Schedule/IR/ScheduleDialect.cpp.inc"
 
@@ -27,6 +28,12 @@ void schedule::ScheduleDialect::initialize() {
 #define GET_TYPEDEF_LIST
 #include "Dialect/Schedule/IR/ScheduleTypes.cpp.inc"
       >();
+}
+
+LogicalResult schedule::OperationOp::verify() {
+  if (getNumOperands() != getDistances().size())
+    return emitOpError("expects ") << getNumOperands() << " distances, but got " << getDistances().size();
+  return success();
 }
 
 //===--------------------------------------------------------------------------------------------------------------===//
