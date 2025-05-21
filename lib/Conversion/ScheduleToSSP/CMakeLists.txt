@@ -1,5 +1,5 @@
-add_circt_conversion_library(SPECHLSscheduleToSSP
-  scheduleToSSP.cpp
+add_circt_conversion_library(ScheduleToSSP
+  ScheduleToSSP.cpp
 
   DEPENDS
   SPECHLSConversionPassIncGen

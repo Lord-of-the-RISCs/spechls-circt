@@ -8,16 +8,12 @@
 #ifndef SPECHLS_CONVERSION_PASSES_H
 #define SPECHLS_CONVERSION_PASSES_H
 
-#include "circt/Support/LLVM.h"
-#include <memory>
+#include <mlir/Pass/Pass.h>
 
-namespace spechls {
-  
-std::unique_ptr<mlir::Pass> createScheduleToSSP();
-
+namespace schedule {
+#define GEN_PASS_DECL
 #define GEN_PASS_REGISTRATION
 #include "Conversion/Passes.h.inc"
-
-}; // namespace spechls
+}; // namespace schedule
 
 #endif // SPECHLS_CONVERSION_PASSES_H

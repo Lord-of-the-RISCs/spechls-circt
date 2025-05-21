@@ -4,7 +4,7 @@ target_link_libraries(spechls-opt PRIVATE
     SpecHLS
     Schedule
     ScheduleTransforms
-    SPECHLSscheduleToSSP
+    ScheduleToSSP
     MLIR
     CIRCT
 )
