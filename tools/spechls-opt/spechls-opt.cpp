@@ -13,6 +13,7 @@
 
 #include "Dialect/Schedule/IR/Schedule.h"
 #include "Dialect/Schedule/Transforms/Passes.h"
+#include "Conversion/Passes.h"
 #include "Dialect/SpecHLS/IR/SpecHLS.h"
 
 int main(int argc, char **argv) {
@@ -22,6 +23,7 @@ int main(int argc, char **argv) {
 
   mlir::registerCanonicalizerPass();
   schedule::registerSchedulePasses();
+  spechls::registerscheduleToSSPPass();
 
   return mlir::asMainReturnCode(mlir::MlirOptMain(argc, argv, "SpecHLS optimizer driver", registry));
 }
