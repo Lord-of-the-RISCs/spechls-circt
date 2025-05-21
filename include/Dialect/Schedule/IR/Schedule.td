@@ -78,6 +78,8 @@ def Schedule_OperationOp : ScheduleOp<"operation", [HasParent<"CircuitOp">]> {
     let assemblyFormat = [{
         attr-dict $sym_name `(` $dependences `:` $distances `,` $inDelay `,` $latency `,` $outDelay `)`
     }];
+
+    let hasVerifier = 1;
 }
 
 #endif // SPECHLS_INCLUDED_DIALECT_SCHEDULE_IR_SCHEDULE_TD
