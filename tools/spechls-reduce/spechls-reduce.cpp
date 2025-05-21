@@ -8,6 +8,7 @@
 #include <circt/Dialect/SSP/SSPDialect.h>
 #include <mlir/IR/MLIRContext.h>
 #include <mlir/Tools/mlir-reduce/MlirReduceMain.h>
+#include <mlir/Transforms/Passes.h>
 
 #include "Dialect/Schedule/IR/Schedule.h"
 #include "Dialect/SpecHLS/IR/SpecHLS.h"
@@ -16,6 +17,8 @@ int main(int argc, char **argv) {
   mlir::DialectRegistry registry;
   registry.insert<spechls::SpecHLSDialect, schedule::ScheduleDialect, circt::ssp::SSPDialect>();
   mlir::MLIRContext context(registry);
+
+  mlir::registerTransformsPasses();
 
   return mlir::failed(mlir::mlirReduceMain(argc, argv, context));
 }
