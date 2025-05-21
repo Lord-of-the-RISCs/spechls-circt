@@ -129,6 +129,13 @@ void ConfigurationExcluderPass::runOnOperation() {
             llvm::errs() << startTimes[operand.getDefiningOp()].back() << "\n";
         }
         llvm::errs() << "---\n";
+      } else if (cast<schedule::OperationOp>(op).getSymName() == "_53") {
+        llvm::errs() << "@_53:\n";
+        for (auto &&operand : op->getOperands()) {
+          if (!startTimes[operand.getDefiningOp()].empty())
+            llvm::errs() << startTimes[operand.getDefiningOp()].back() << "\n";
+        }
+        llvm::errs() << "---\n";
       } else if (cast<schedule::OperationOp>(op).getSymName() == "_54") {
         llvm::errs() << "@_54:\n";
         for (auto &&operand : op->getOperands()) {
@@ -145,6 +152,13 @@ void ConfigurationExcluderPass::runOnOperation() {
         llvm::errs() << "---\n";
       } else if (cast<schedule::OperationOp>(op).getSymName() == "_80") {
         llvm::errs() << "@_80:\n";
+        for (auto &&operand : op->getOperands()) {
+          if (!startTimes[operand.getDefiningOp()].empty())
+            llvm::errs() << startTimes[operand.getDefiningOp()].back() << "\n";
+        }
+        llvm::errs() << "---\n";
+      } else if (cast<schedule::OperationOp>(op).getSymName() == "_84") {
+        llvm::errs() << "@_84:\n";
         for (auto &&operand : op->getOperands()) {
           if (!startTimes[operand.getDefiningOp()].empty())
             llvm::errs() << startTimes[operand.getDefiningOp()].back() << "\n";
