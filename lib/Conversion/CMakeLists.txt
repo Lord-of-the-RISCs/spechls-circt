@@ -1,1 +1,1 @@
-add_subdirectory(scheduleToSSP)
+add_subdirectory(ScheduleToSSP)

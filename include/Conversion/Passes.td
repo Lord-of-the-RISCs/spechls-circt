@@ -11,12 +11,11 @@
 include "mlir/Pass/PassBase.td"
 include "Dialect/Schedule/IR/Schedule.td"
 
-def scheduleToSSP : Pass<"convert-schedule-to-ssp", "schedule::CircuitOp"> {
+def ScheduleToSSPPass : Pass<"convert-schedule-to-ssp", "schedule::CircuitOp"> {
   let summary = "Convert schedule dialect to SSP";
-  let constructor = "spechls::createScheduleToSSP()";
   let dependentDialects = [
-    "circt::ssp::SSPDialect",
-    "schedule::ScheduleDialect"
+    "::circt::ssp::SSPDialect",
+    "::schedule::ScheduleDialect"
   ];
 }
 

@@ -5,27 +5,25 @@
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 
-#include "Conversion/scheduleToSSP.h"
 #include "Conversion/Passes.h"
-#include "Dialect/Schedule/IR/Schedule.h"
 #include "Dialect/Schedule/IR/ScheduleOps.h"
-#include "circt/Dialect/SSP/SSPAttributes.h"
-#include "circt/Dialect/SSP/SSPDialect.h"
-#include "circt/Dialect/SSP/SSPOps.h"
-#include "mlir/IR/Attributes.h"
-#include "mlir/IR/BuiltinAttributes.h"
-#include "mlir/IR/Operation.h"
-#include "mlir/Pass/Pass.h"
-#include "mlir/Transforms/DialectConversion.h"
-#include "llvm/ADT/DenseMap.h"
-#include "llvm/ADT/SmallVector.h"
 
-namespace spechls {
-#define GEN_PASS_DEF_SCHEDULETOSSP
+#include <circt/Dialect/SSP/SSPAttributes.h>
+#include <circt/Dialect/SSP/SSPDialect.h>
+#include <circt/Dialect/SSP/SSPOps.h>
+#include <llvm/ADT/DenseMap.h>
+#include <llvm/ADT/SmallVector.h>
+#include <mlir/IR/Attributes.h>
+#include <mlir/IR/BuiltinAttributes.h>
+#include <mlir/IR/Operation.h>
+#include <mlir/Pass/Pass.h>
+#include <mlir/Transforms/DialectConversion.h>
+
+namespace schedule {
+#define GEN_PASS_DEF_SCHEDULETOSSPPASS
 #include "Conversion/Passes.h.inc"
-}; // namespace spechls
+}; // namespace schedule
 
-using namespace spechls;
 using namespace circt;
 using namespace mlir;
 
@@ -39,8 +37,6 @@ struct ScheduleToSSPOpConversion : OpConversionPattern<schedule::CircuitOp> {
 
     rewriter.setInsertionPointAfter(op);
     auto instanceOp = rewriter.create<ssp::InstanceOp>(op->getLoc(), rewriter.getStringAttr("ChainingCyclicProblem"));
-//    auto instanceOp =
-//        rewriter.replaceOpWithNewOp<ssp::InstanceOp>(op, rewriter.getStringAttr("ChainingCyclicProblem"));
 
     rewriter.setInsertionPointToStart(instanceOp.getBodyBlock());
     auto library = rewriter.create<ssp::OperatorLibraryOp>(op.getLoc());
@@ -49,12 +45,13 @@ struct ScheduleToSSPOpConversion : OpConversionPattern<schedule::CircuitOp> {
     instanceOp->setAttr("spechls.period", op.getTargetClockAttr());
 
     llvm::DenseMap<schedule::OperationOp, ssp::OperationOp> operationMap;
+    int idx = 0;
 
     for (auto &&operation : op.getBody().front()) {
       if (auto scheduleOp = dyn_cast<schedule::OperationOp>(operation)) {
 
         auto operationName = scheduleOp.getSymName();
-        std::string operatorName = "operator_" + operationName.str();
+        std::string operatorName = "operator_" + std::to_string(idx++); // operationName.str();
 
         llvm::SmallVector<mlir::Attribute> operatorPropertyValues;
 
@@ -91,13 +88,16 @@ struct ScheduleToSSPOpConversion : OpConversionPattern<schedule::CircuitOp> {
             deps.push_back(ssp::DependenceAttr::get(
                 rewriter.getContext(), opId++,
                 ::mlir::FlatSymbolRefAttr::get(rewriter.getStringAttr(
-                    cast<schedule::OperationOp>(scheduleOp.getOperand(i).getDefiningOp()).getSymName())),
+                    std::to_string(reinterpret_cast<uintptr_t>(scheduleOp.getOperand(i).getDefiningOp())))),
+                // cast<schedule::OperationOp>(scheduleOp.getOperand(i).getDefiningOp()).getSymName())),
                 rewriter.getArrayAttr(distanceAttrArray)));
           }
         }
         rewriter.setInsertionPointToEnd(graph.getBodyBlock());
         auto newOperation = rewriter.create<ssp::OperationOp>(
-            scheduleOp->getLoc(), 1, operands, rewriter.getStringAttr(operationName), rewriter.getArrayAttr(deps));
+            scheduleOp->getLoc(), 1, operands,
+            rewriter.getStringAttr(std::to_string(reinterpret_cast<uintptr_t>(scheduleOp.getOperation()))),
+            rewriter.getArrayAttr(deps));
 
         llvm::SmallVector<mlir::Attribute> properties;
         properties.push_back(ssp::LinkedOperatorTypeAttr::get(rewriter.getContext(),
@@ -121,9 +121,9 @@ struct ScheduleToSSPOpConversion : OpConversionPattern<schedule::CircuitOp> {
 
 namespace {
 
-struct ConvertScheduleToSSPPass : public spechls::impl::scheduleToSSPBase<ConvertScheduleToSSPPass> {
+struct ConvertScheduleToSSPPass : public schedule::impl::ScheduleToSSPPassBase<ConvertScheduleToSSPPass> {
   void runOnOperation() override;
-  using scheduleToSSPBase<ConvertScheduleToSSPPass>::scheduleToSSPBase;
+  using ScheduleToSSPPassBase<ConvertScheduleToSSPPass>::ScheduleToSSPPassBase;
 };
 
 void populateScheduleToSSPConversionPatterns(RewritePatternSet &patterns) {
@@ -143,5 +143,3 @@ void ConvertScheduleToSSPPass::runOnOperation() {
   if (failed(mlir::applyPartialConversion(getOperation(), target, std::move(patterns))))
     return signalPassFailure();
 }
-
-std::unique_ptr<mlir::Pass> spechls::createScheduleToSSP() { return std::make_unique<ConvertScheduleToSSPPass>(); }

@@ -3,6 +3,8 @@ add_executable(spechls-reduce spechls-reduce.cpp)
 target_link_libraries(spechls-reduce PRIVATE
     SpecHLS
     Schedule
+    ScheduleTransforms
+    ScheduleToSSP
     MLIR
     CIRCT
 )

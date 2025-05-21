@@ -4,6 +4,7 @@ add_library(gecosapi SHARED
 target_link_libraries(gecosapi PUBLIC
     ScheduleCAPI
     SpecHLSCAPI
+    ScheduleToSSP
     CIRCT
     MLIR
 )
