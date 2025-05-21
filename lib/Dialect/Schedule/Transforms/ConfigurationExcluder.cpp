@@ -76,6 +76,7 @@ void ConfigurationExcluderPass::runOnOperation() {
       int64_t nextCycle = isGamma ? std::numeric_limits<int64_t>::max() : 0;
       double nextTimeInCycle = 0.0;
 
+#if 0
       if (isMu) {
         int64_t distance = cast<IntegerAttr>(distanceArray[1]).getInt();
         int64_t offset = iteration - distance;
@@ -207,6 +208,7 @@ void ConfigurationExcluderPass::runOnOperation() {
         }
         llvm::errs() << "---\n";
       }
+#endif
 
       // Compute the unrolled schedule.
       for (size_t predIndex = 0; predIndex < op->getNumOperands(); ++predIndex) {

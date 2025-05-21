@@ -25,4 +25,9 @@ def ConfigurationExcluderPass : Pass<"config-excluder", "schedule::CircuitOp"> {
     let dependentDialects = ["::schedule::ScheduleDialect"];
 }
 
+def CheckSchedulePass : Pass<"check-schedule", "::mlir::ModuleOp"> {
+    let summary = "Check the schedule.";
+    let dependentDialects = ["::schedule::ScheduleDialect", "::circt::ssp::SSPDialect"];
+}
+
 #endif // SPECHLS_INCLUDED_DIALECT_SCHEDULE_TRANSFORMS_PASSES_TD
