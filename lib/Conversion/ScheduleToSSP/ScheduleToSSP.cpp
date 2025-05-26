@@ -50,8 +50,7 @@ struct ScheduleToSSPOpConversion : OpConversionPattern<schedule::CircuitOp> {
     for (auto &&operation : op.getBody().front()) {
       if (auto scheduleOp = dyn_cast<schedule::OperationOp>(operation)) {
 
-        auto operationName = scheduleOp.getSymName();
-        std::string operatorName = "operator_" + std::to_string(idx++); // operationName.str();
+        std::string operatorName = "operator_" + std::to_string(idx++);
 
         llvm::SmallVector<mlir::Attribute> operatorPropertyValues;
 
@@ -63,7 +62,7 @@ struct ScheduleToSSPOpConversion : OpConversionPattern<schedule::CircuitOp> {
             ssp::OutgoingDelayAttr::get(rewriter.getContext(), scheduleOp.getOutDelayAttr()));
 
         rewriter.setInsertionPointToEnd(library.getBodyBlock());
-        auto operatorOp = rewriter.create<ssp::OperatorTypeOp>(op.getLoc(), operatorName,
+        rewriter.create<ssp::OperatorTypeOp>(op.getLoc(), operatorName,
                                                                rewriter.getArrayAttr(operatorPropertyValues));
 
         ::llvm::SmallVector<mlir::Attribute> deps;
