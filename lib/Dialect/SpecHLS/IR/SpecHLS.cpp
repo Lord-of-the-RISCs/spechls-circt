@@ -156,33 +156,6 @@ void spechls::HKernelOp::print(OpAsmPrinter &printer) { printTaskLikeOp(*this, p
 
 LogicalResult spechls::HKernelOp::verify() { return verifyTaskLikeOp(*this); }
 
-LogicalResult spechls::ExitOp::verify() {
-  ArrayRef<Type> results;
-  StringRef taskName;
-
-  if (auto task = dyn_cast<HKernelOp>((*this)->getParentOp())) {
-    results = task.getResultTypes();
-    taskName = task.getName();
-  } else if (auto task = dyn_cast<HTaskOp>((*this)->getParentOp())) {
-    results = task.getResultTypes();
-    taskName = task.getName();
-  } else
-    return emitOpError("expected parent to be an hkernel or an htask op");
-
-  // The number of committed values must match the task signature.
-  if (getNumOperands() - 1 != results.size())
-    return emitOpError("has ") << getNumOperands() - 1 << " operands, but enclosing hkernel (@" << taskName
-                               << ") returns " << results.size();
-
-  for (size_t i = 0, e = results.size(); i != e; ++i) {
-    if (getOperand(i + 1).getType() != results[i])
-      return emitError() << "type of exit operand " << i << " (" << getOperand(i + 1).getType()
-                         << ") doesn't match result type (" << results[i] << ") in hkernel @" << taskName;
-  }
-
-  return success();
-}
-
 ParseResult spechls::HTaskOp::parse(OpAsmParser &parser, OperationState &result) {
   return parseTaskLikeOp<HTaskOp>(parser, result);
 }
@@ -209,27 +182,13 @@ ParseResult spechls::ExitOp::parse(OpAsmParser &parser, OperationState &result) 
       parser.resolveOperand(guard, parser.getBuilder().getI1Type(), result.operands))
     return failure();
 
-  if (parser.parseOptionalKeyword("with").succeeded()) {
-    SmallVector<OpAsmParser::UnresolvedOperand> values;
-    SmallVector<Type> valueTypes;
-    SMLoc valueLoc = parser.getCurrentLocation();
-    if (parser.parseOperandList(values) || parser.parseColonTypeList(valueTypes) ||
-        parser.resolveOperands(values, valueTypes, valueLoc, result.operands))
-      return failure();
-  }
-
   if (parser.parseOptionalAttrDict(result.attributes))
     return failure();
 
   return success();
 }
 
-void spechls::ExitOp::print(OpAsmPrinter &printer) {
-  printer << " if " << getGuard();
-
-  if (getValues().size() > 0)
-    printer << " with " << getValues() << " : " << getValues().getTypes();
-}
+void spechls::ExitOp::print(OpAsmPrinter &printer) { printer << " if " << getGuard(); }
 
 CallInterfaceCallable spechls::LaunchOp::getCallableForCallee() {
   return (*this)->getAttrOfType<SymbolRefAttr>(getCalleeAttrName());

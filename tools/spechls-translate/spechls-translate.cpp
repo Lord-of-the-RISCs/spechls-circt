@@ -21,10 +21,15 @@ int main(int argc, char **argv) {
   static llvm::cl::opt<bool> declareStructTypes(
       "declare-struct-types", llvm::cl::desc("Declare structure types at the top of the emitted C++ file"),
       llvm::cl::init(false));
+  static llvm::cl::opt<bool> declareFunctions(
+      "declare-functions", llvm::cl::desc("Declare called functions at the top of the emitted C++ file"),
+      llvm::cl::init(false));
 
   mlir::TranslateFromMLIRRegistration registration(
       "spechls-to-cpp", "Translate SpecHLS to C++",
-      [](mlir::Operation *op, llvm::raw_ostream &os) { return spechls::translateToCpp(op, os, declareStructTypes); },
+      [](mlir::Operation *op, llvm::raw_ostream &os) {
+        return spechls::translateToCpp(op, os, declareStructTypes, declareFunctions);
+      },
       [](mlir::DialectRegistry &registry) {
         registry.insert<spechls::SpecHLSDialect, circt::comb::CombDialect, circt::hw::HWDialect>();
       });

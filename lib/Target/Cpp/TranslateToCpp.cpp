@@ -37,7 +37,7 @@ class CppEmitter {
   raw_indented_ostream os;
 
 public:
-  explicit CppEmitter(raw_ostream &os, bool declareStructTypes = false);
+  explicit CppEmitter(raw_ostream &os, bool declareStructTypes = false, bool declareFunctions = false);
 
   raw_indented_ostream &ostream() { return os; }
 
@@ -47,6 +47,7 @@ public:
   LogicalResult emitOperands(Operation &op);
 
   LogicalResult emitType(Location loc, Type type);
+  LogicalResult emitReference(Location loc, Type type);
   LogicalResult emitTypes(Location loc, ArrayRef<Type> types);
   LogicalResult emitStructDefinition(Location loc, spechls::StructType structType);
   LogicalResult emitFunctionPrototype(Location loc, StringRef callee, ArrayRef<Type> argumentTypes, Type returnType);
@@ -54,7 +55,8 @@ public:
   LogicalResult emitAttribute(Location loc, Attribute attr);
 
   LogicalResult emitVariableDeclaration(OpResult result, bool trailingSemicolon);
-  LogicalResult emitVariableDeclaration(Location loc, Type type, StringRef name, bool trailingSemicolon);
+  LogicalResult emitVariableDeclaration(Location loc, Type type, StringRef name, bool trailingSemicolon,
+                                        bool isReference = false);
 
   LogicalResult emitVariableAssignment(OpResult result);
 
@@ -65,6 +67,7 @@ public:
   StringRef getExitVariableName() { return "exit_"; }
 
   bool shouldDeclareStructTypes() { return declareStructTypes; }
+  bool shouldDeclareFunctions() { return declareFunctions; }
 
   class Scope {
     llvm::ScopedHashTableScope<Value, std::string> valueMapperScope;
@@ -89,6 +92,7 @@ private:
 
   std::stack<int64_t> valueInScopeCount;
   bool declareStructTypes;
+  bool declareFunctions;
 };
 
 template <typename ForwardIterator, typename UnaryFunctor, typename NullaryFunctor>
@@ -129,19 +133,24 @@ inline LogicalResult interleaveCommaWithError(const Container &c, raw_ostream &o
   return interleaveWithError(c.begin(), c.end(), eachFn, [&]() { os << ", "; });
 }
 
-LogicalResult printFunctionArgs(CppEmitter &emitter, Operation *taskLikeOp, Region::BlockArgListType arguments) {
+LogicalResult printFunctionArgs(CppEmitter &emitter, Operation *taskLikeOp, Region::BlockArgListType arguments,
+                                bool useReferences) {
   raw_indented_ostream &os = emitter.ostream();
 
   return interleaveCommaWithError(arguments, os, [&](BlockArgument arg) -> LogicalResult {
-    return emitter.emitVariableDeclaration(taskLikeOp->getLoc(), arg.getType(), emitter.getOrCreateName(arg), false);
+    return emitter.emitVariableDeclaration(taskLikeOp->getLoc(), arg.getType(), emitter.getOrCreateName(arg), false,
+                                           useReferences);
   });
 }
 
-LogicalResult printFunctionArgTypes(CppEmitter &emitter, Operation *taskLikeOp, Region::BlockArgListType arguments) {
+LogicalResult printFunctionArgTypes(CppEmitter &emitter, Operation *taskLikeOp, Region::BlockArgListType arguments,
+                                    bool useReferences) {
   raw_indented_ostream &os = emitter.ostream();
 
   return interleaveCommaWithError(arguments, os, [&](BlockArgument arg) -> LogicalResult {
-    return emitter.emitType(taskLikeOp->getLoc(), arg.getType());
+    return (useReferences && !isa<spechls::ArrayType>(arg.getType()))
+               ? emitter.emitReference(taskLikeOp->getLoc(), arg.getType())
+               : emitter.emitType(taskLikeOp->getLoc(), arg.getType());
   });
 }
 
@@ -228,8 +237,8 @@ LogicalResult printAllFunctionPrototypes(CppEmitter &emitter, ModuleOp moduleOp)
         SmallVector<Type> operandTypes;
         for (auto &&type : callOp.getOperandTypes())
           operandTypes.push_back(type);
-        LogicalResult result =
-            emitter.emitFunctionPrototype(op->getLoc(), callOp.getCallee(), operandTypes, callOp.getType());
+        LogicalResult result = emitter.emitFunctionPrototype(op->getLoc(), callOp.getCallee(), operandTypes,
+                                                             callOp.getNumResults() != 0 ? callOp.getType(0) : Type{});
         if (failed(result))
           return WalkResult(result);
         declaredFunctions.insert(callOp.getCallee());
@@ -299,7 +308,8 @@ LogicalResult printDelayInitialization(CppEmitter &emitter, Region::BlockListTyp
 }
 
 LogicalResult printFunctionSignature(CppEmitter &emitter, Operation *op, StringRef funcName, ArrayRef<Type> resultTypes,
-                                     Block::BlockArgListType arguments, bool addInit = false) {
+                                     Block::BlockArgListType arguments, bool addInit = false,
+                                     bool useReferences = false) {
   raw_indented_ostream &os = emitter.ostream();
   if (failed(emitter.emitTypes(op->getLoc(), resultTypes)))
     return failure();
@@ -309,14 +319,15 @@ LogicalResult printFunctionSignature(CppEmitter &emitter, Operation *op, StringR
     if (arguments.size() > 0)
       os << ", ";
   }
-  if (failed(printFunctionArgTypes(emitter, op, arguments)))
+  if (failed(printFunctionArgTypes(emitter, op, arguments, useReferences)))
     return failure();
   os << ")";
   return success();
 }
 
 LogicalResult printFunctionPrototype(CppEmitter &emitter, Operation *op, StringRef funcName, ArrayRef<Type> resultTypes,
-                                     Block::BlockArgListType arguments, bool addInit = false) {
+                                     Block::BlockArgListType arguments, bool addInit = false,
+                                     bool useReferences = false) {
   raw_indented_ostream &os = emitter.ostream();
   if (failed(emitter.emitTypes(op->getLoc(), resultTypes)))
     return failure();
@@ -326,7 +337,7 @@ LogicalResult printFunctionPrototype(CppEmitter &emitter, Operation *op, StringR
     if (arguments.size() > 0)
       os << ", ";
   }
-  if (failed(printFunctionArgs(emitter, op, arguments)))
+  if (failed(printFunctionArgs(emitter, op, arguments, useReferences)))
     return failure();
   os << ")";
   return success();
@@ -345,14 +356,17 @@ LogicalResult printOperation(CppEmitter &emitter, ModuleOp moduleOp) {
     os << "\n";
   }
 
-  if (failed(printAllFunctionPrototypes(emitter, moduleOp)))
-    return failure();
-  os << "\n";
+  if (emitter.shouldDeclareFunctions()) {
+    if (failed(printAllFunctionPrototypes(emitter, moduleOp)))
+      return failure();
+    os << "\n";
+  }
 
   for (auto &&op : moduleOp) {
     if (auto hkernelOp = dyn_cast<spechls::HKernelOp>(op)) {
       if (failed(printFunctionSignature(emitter, hkernelOp.getOperation(), hkernelOp.getName(),
-                                        hkernelOp.getFunctionType().getResults(), hkernelOp.getArguments()))) {
+                                        hkernelOp.getFunctionType().getResults(), hkernelOp.getArguments(), false,
+                                        true))) {
         return failure();
       }
       os << ";\n";
@@ -379,7 +393,7 @@ LogicalResult printOperation(CppEmitter &emitter, spechls::HKernelOp hkernelOp) 
   Operation *op = hkernelOp.getOperation();
 
   if (failed(printFunctionPrototype(emitter, op, hkernelOp.getName(), hkernelOp.getFunctionType().getResults(),
-                                    hkernelOp.getArguments()))) {
+                                    hkernelOp.getArguments(), false, true))) {
     return failure();
   }
   os << " {\n#pragma HLS inline recursive\n";
@@ -415,29 +429,6 @@ LogicalResult printOperation(CppEmitter &emitter, spechls::HKernelOp hkernelOp) 
 
   os.unindent();
   os << "}\n";
-
-  os << "return";
-  switch (exit.getValues().size()) {
-  case 0:
-    break;
-  case 1:
-    os << ' ';
-    if (failed(emitter.emitOperand(exit.getValues().front())))
-      return failure();
-    break;
-  default:
-    os << " (";
-    if (failed(emitter.emitType(exit.getLoc(), hkernelOp.getResultTypes().front())))
-      return failure();
-    os << "){";
-    if (failed(interleaveCommaWithError(exit.getValues(), os,
-                                        [&](Value operand) { return emitter.emitOperand(operand); }))) {
-      return failure();
-    }
-    os << "}";
-  }
-  os << ";\n";
-
   os.unindent();
   os << "}";
   return success();
@@ -703,8 +694,22 @@ LogicalResult printOperation(CppEmitter &emitter, spechls::RollbackOp rollbackOp
 
 LogicalResult printOperation(CppEmitter &emitter, spechls::FIFOOp fifoOp) {
   Operation *operation = fifoOp.getOperation();
-  StringRef callee = llvm::formatv("fifo<{0}>", fifoOp.getDepth()).sstr<16>();
-  return printCallOp(emitter, operation, callee);
+  raw_ostream &os = emitter.ostream();
+
+  if (failed(emitter.emitAssignPrefix(*operation)))
+    return failure();
+
+  os << "fifo<";
+  if (failed(emitter.emitType(fifoOp.getLoc(), fifoOp.getType())))
+    return failure();
+  os << ", ";
+  if (failed(emitter.emitType(fifoOp.getLoc(), fifoOp.getOperand().getType())))
+    return failure();
+  os << ", " << fifoOp.getDepth() << ">(";
+  if (failed(emitter.emitOperands(*operation)))
+    return failure();
+  os << ")";
+  return success();
 }
 
 LogicalResult printOperation(CppEmitter &emitter, spechls::UnpackOp unpackOp) {
@@ -918,7 +923,8 @@ LogicalResult printOperation(CppEmitter &emitter, circt::comb::ConcatOp concatOp
 }
 } // namespace
 
-CppEmitter::CppEmitter(raw_ostream &os, bool declareStructTypes) : os(os), declareStructTypes(declareStructTypes) {
+CppEmitter::CppEmitter(raw_ostream &os, bool declareStructTypes, bool declareFunctions)
+    : os(os), declareStructTypes(declareStructTypes), declareFunctions(declareFunctions) {
   valueInScopeCount.push(0);
 }
 
@@ -976,11 +982,15 @@ LogicalResult CppEmitter::emitOperands(Operation &op) {
 }
 
 LogicalResult CppEmitter::emitType(Location loc, Type type) {
+  if (!type) {
+    os << "void";
+    return success();
+  }
   if (auto iType = dyn_cast<IntegerType>(type)) {
-    if (shouldMapToUnsigned(iType.getSignedness()))
-      os << "ap_uint<" << iType.getWidth() << '>';
+    if (iType.getWidth() == 1 || shouldMapToUnsigned(iType.getSignedness()))
+      os << "ap_uint<" << iType.getWidth() << ">";
     else
-      os << "ap_int<" << iType.getWidth() << '>';
+      os << "ap_int<" << iType.getWidth() << ">";
     return success();
   }
   if (auto sType = dyn_cast<spechls::StructType>(type)) {
@@ -996,6 +1006,13 @@ LogicalResult CppEmitter::emitType(Location loc, Type type) {
   return emitError(loc, "cannot emit type ") << type;
 }
 
+LogicalResult CppEmitter::emitReference(Location loc, Type type) {
+  if (failed(emitType(loc, type)))
+    return failure();
+  os << " &";
+  return success();
+}
+
 LogicalResult CppEmitter::emitTypes(Location loc, ArrayRef<Type> types) {
   switch (types.size()) {
   case 0:
@@ -1009,6 +1026,7 @@ LogicalResult CppEmitter::emitTypes(Location loc, ArrayRef<Type> types) {
 }
 
 LogicalResult CppEmitter::emitStructDefinition(Location loc, spechls::StructType structType) {
+  os << "#ifndef DEFINED_" << structType.getName() << "\n";
   os << "struct " << structType.getName() << " {\n";
   os.indent();
 
@@ -1022,7 +1040,7 @@ LogicalResult CppEmitter::emitStructDefinition(Location loc, spechls::StructType
   }
 
   os.unindent();
-  os << "};\n";
+  os << "};\n#endif\n";
   return success();
 }
 
@@ -1169,10 +1187,14 @@ LogicalResult CppEmitter::emitVariableDeclaration(OpResult result, bool trailing
                                  trailingSemicolon);
 }
 
-LogicalResult CppEmitter::emitVariableDeclaration(Location loc, Type type, StringRef name, bool trailingSemicolon) {
+LogicalResult CppEmitter::emitVariableDeclaration(Location loc, Type type, StringRef name, bool trailingSemicolon,
+                                                  bool isReference) {
   if (failed(emitType(loc, type)))
     return failure();
-  os << ' ' << name;
+  os << " ";
+  if (isReference)
+    os << "&";
+  os << name;
   if (trailingSemicolon)
     os << ";\n";
   return success();
@@ -1208,7 +1230,7 @@ StringRef CppEmitter::getOrCreateName(Value value) {
   return *valueMapper.begin(value);
 }
 
-LogicalResult spechls::translateToCpp(Operation *op, raw_ostream &os, bool declareStructTypes) {
-  CppEmitter emitter(os, declareStructTypes);
+LogicalResult spechls::translateToCpp(Operation *op, raw_ostream &os, bool declareStructTypes, bool declareFunctions) {
+  CppEmitter emitter(os, declareStructTypes, declareFunctions);
   return emitter.emitOperation(*op, false);
 }

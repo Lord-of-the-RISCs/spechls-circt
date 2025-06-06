@@ -48,6 +48,14 @@ constexpr ap_int<N * M> replicate(ap_int<M> input) {
 }
 
 template <int N, int M>
+constexpr ap_uint<N * M> replicate(ap_uint<M> input) {
+  ap_uint<N * M> result = 0;
+  for (int i = 0; i < N; ++i)
+    result = result.concat(input);
+  return result;
+}
+
+template <int N, int M>
 constexpr ap_int<N + M> concat(ap_int<N> lhs, ap_int<M> rhs) {
   return lhs.concat(rhs);
 }
@@ -94,6 +102,12 @@ constexpr T *alpha(T *array, unsigned int index, T value, bool we) {
     array[index] = value;
   }
   return array;
+}
+
+template <typename Result, typename Arg, int Depth>
+constexpr Result fifo(Arg arg) {
+  // TODO
+  return Result{};
 }
 
 #endif // CODEGEN_INCLUDED_SPECHLS_SUPPORT_H

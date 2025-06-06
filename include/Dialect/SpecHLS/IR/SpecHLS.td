@@ -110,10 +110,9 @@ class SpecHLS_TaskLikeOp<string mnemonic, list<Trait> traits = []> :
 def SpecHLS_HKernelOp : SpecHLS_TaskLikeOp<"hkernel"> {}
 
 def SpecHLS_ExitOp : SpecHLSOp<"exit", [HasParent<"HKernelOp">, Terminator, ReturnLike]> {
-    let arguments = (ins I1:$guard, Variadic<AnyType>:$values);
+    let arguments = (ins I1:$guard);
 
     let hasCustomAssemblyFormat = 1;
-    let hasVerifier = 1;
 }
 
 def SpecHLS_HTaskOp : SpecHLS_TaskLikeOp<"htask"> {}
@@ -198,7 +197,7 @@ def SpecHLS_CallOp : SpecHLSOp<"call",
         OptionalAttr<DictArrayAttr>:$arg_attrs,
         OptionalAttr<DictArrayAttr>:$res_attrs
     );
-    let results = (outs AnyType:$result);
+    let results = (outs Optional<AnyType>:$result);
 
     let assemblyFormat = [{
         $callee `(` $arguments `)` attr-dict `:` functional-type($arguments, $result)
@@ -206,7 +205,8 @@ def SpecHLS_CallOp : SpecHLSOp<"call",
 
     let extraClassDefinition = [{
         void $cppClass::getAsmResultNames(llvm::function_ref<void(mlir::Value, llvm::StringRef)> setNameFn) {
-            setNameFn(getResult(), getCallee());
+            if(getNumResults() != 0)
+                setNameFn(getResult(), getCallee());
         }
     }];
 }
