@@ -23,15 +23,18 @@ constexpr void delay_init(T (&buffer)[N], T value) {
     buffer[i] = value;
 }
 
-template <typename T, unsigned int Depth>
-constexpr T delay(T *buffer, T value, bool enable = true, [[maybe_unused]] T init = {}) {
-  T result = buffer[0];
+template <typename T, unsigned int N>
+constexpr T delay_pop(T (&buffer)[N]) {
+  return buffer[0];
+}
+
+template <typename T, unsigned int N>
+constexpr void delay_push(T (&buffer)[N], T value, bool enable = true) {
   if (enable) {
-    for (int i = 0; i < Depth - 1; ++i)
+    for (int i = 0; i < N - 1; ++i)
       buffer[i] = buffer[i + 1];
-    buffer[Depth - 1] = value;
+    buffer[N - 1] = value;
   }
-  return result;
 }
 
 template <typename T, int Min, int Max>
@@ -104,10 +107,32 @@ constexpr T *alpha(T *array, unsigned int index, T value, bool we) {
   return array;
 }
 
-template <typename Result, typename Arg, int Depth>
-constexpr Result fifo(Arg arg) {
-  // TODO
-  return Result{};
+template <typename T>
+struct FifoType {
+  T data;
+  bool full = false;
+  bool empty = true;
+};
+
+template <typename T>
+struct FifoInputType {
+  bool write;
+  T data;
+};
+
+template <typename T>
+constexpr void fifo_read(FifoType<T> &fifo) {
+  fifo.empty = true;
+  fifo.full = false;
+}
+
+template <typename Arg, typename T>
+constexpr void fifo_write(FifoType<T> &fifo, const Arg &input) {
+  if (input.write) {
+    fifo.empty = false;
+    fifo.full = true;
+    fifo.data = input.data;
+  }
 }
 
 #endif // CODEGEN_INCLUDED_SPECHLS_SUPPORT_H

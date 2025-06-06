@@ -8,6 +8,7 @@
 #include "Dialect/SpecHLS/IR/SpecHLSOps.h"
 #include "Dialect/SpecHLS/IR/SpecHLSTypes.h"
 #include "Target/Cpp/Export.h"
+#include "llvm/ADT/STLExtras.h"
 
 #include <circt/Dialect/Comb/CombOps.h>
 #include <circt/Dialect/HW/HWOps.h>
@@ -123,6 +124,10 @@ std::string getRollbackBufferName(CppEmitter &emitter, spechls::RollbackOp rollb
   return emitter.getOrCreateName(rollbackOp).str() + "_buffer";
 }
 
+std::string getFifoBufferName(CppEmitter &emitter, spechls::FIFOOp fifoOp) {
+  return emitter.getOrCreateName(fifoOp).str() + "_buffer";
+}
+
 template <typename Container, typename UnaryFunctor, typename NullaryFunctor>
 inline LogicalResult interleaveWithError(const Container &c, UnaryFunctor eachFn, NullaryFunctor betweenFn) {
   return interleaveWithError(c.begin(), c.end(), eachFn, betweenFn);
@@ -163,8 +168,9 @@ LogicalResult printAllVariables(CppEmitter &emitter, Operation *taskLikeOp) {
       return WalkResult::advance();
 
     for (OpResult result : op->getResults()) {
-      if (failed(emitter.emitVariableDeclaration(result, true)))
+      if (failed(emitter.emitVariableDeclaration(result, false)))
         return WalkResult(op->emitError("unable to declare result variable for op"));
+      os << "{};\n";
     }
 
     // Declare static buffers.
@@ -178,7 +184,12 @@ LogicalResult printAllVariables(CppEmitter &emitter, Operation *taskLikeOp) {
       if (failed(emitter.emitType(op->getLoc(), rollbackOp.getType())))
         return failure();
       os << " " << getRollbackBufferName(emitter, rollbackOp) << "["
-         << *std::max_element(rollbackOp.getDepths().begin(), rollbackOp.getDepths().end()) << "];\n";
+         << *std::max_element(rollbackOp.getDepths().begin(), rollbackOp.getDepths().end()) + 1 << "];\n";
+    } else if (auto fifoOp = dyn_cast<spechls::FIFOOp>(op)) {
+      os << "static FifoType<";
+      if (failed(emitter.emitType(op->getLoc(), fifoOp.getType())))
+        return failure();
+      os << "> " << getFifoBufferName(emitter, fifoOp) << ";\n";
     }
     return WalkResult::advance();
   });
@@ -264,24 +275,6 @@ LogicalResult printAllFunctionPrototypes(CppEmitter &emitter, ModuleOp moduleOp)
   if (result.wasInterrupted())
     return failure();
 
-  return success();
-}
-
-LogicalResult printFunctionBody(CppEmitter &emitter, Operation *taskLikeOp, Region::BlockListType &blocks,
-                                bool indent = true) {
-  raw_indented_ostream &os = emitter.ostream();
-  if (indent)
-    os.indent();
-
-  for (auto &&block : blocks) {
-    for (auto &&op : block) {
-      if (failed(emitter.emitOperation(op, true)))
-        return failure();
-    }
-  }
-
-  if (indent)
-    os.unindent();
   return success();
 }
 
@@ -423,8 +416,11 @@ LogicalResult printOperation(CppEmitter &emitter, spechls::HKernelOp hkernelOp) 
   os << "while (!" << emitter.getExitVariableName() << ") {\n";
   os.indent();
 
-  if (failed(printFunctionBody(emitter, op, hkernelOp.getBlocks(), false)))
-    return failure();
+  for (auto &&op : hkernelOp.getBody().front()) {
+    if (failed(emitter.emitOperation(op, true)))
+      return failure();
+  }
+
   os << emitter.getInitVariableName() << " = false;\n";
 
   os.unindent();
@@ -453,8 +449,31 @@ LogicalResult printOperation(CppEmitter &emitter, spechls::HTaskOp htaskOp) {
   if (failed(printDelayInitialization(emitter, htaskOp.getBody().getBlocks())))
     return failure();
 
-  if (failed(printFunctionBody(emitter, op, htaskOp.getBlocks(), false)))
-    return failure();
+  SmallVector<spechls::DelayOp> delays;
+  for (auto &&op : htaskOp.getBody().front()) {
+    if (isa<spechls::CommitOp>(op)) {
+      // Print delay push operations just before the end of the task.
+      for (auto &&delay : delays) {
+        os << "delay_push<";
+        if (failed(emitter.emitType(delay.getLoc(), delay.getType())))
+          return failure();
+        os << ", " << delay.getDepth() << ">(" << getDelayBufferName(emitter, delay) << ", ";
+        if (failed(emitter.emitOperand(delay.getInput())))
+          return failure();
+        if (delay.getEnable()) {
+          os << ", ";
+          if (failed(emitter.emitOperand(delay.getEnable())))
+            return failure();
+        }
+        os << ");\n";
+      }
+    } else if (auto delayOp = dyn_cast<spechls::DelayOp>(op)) {
+      delays.push_back(delayOp);
+    }
+    if (failed(emitter.emitOperation(op, true))) {
+      return failure();
+    }
+  }
 
   os.unindent();
   os << "}";
@@ -475,8 +494,40 @@ LogicalResult printCallOp(CppEmitter &emitter, Operation *operation, StringRef c
 
 LogicalResult printOperation(CppEmitter &emitter, spechls::LaunchOp launchOp) {
   Operation *operation = launchOp.getOperation();
-  raw_ostream &os = emitter.ostream();
+  raw_indented_ostream &os = emitter.ostream();
   StringRef callee = launchOp.getCallee();
+
+  SmallVector<spechls::FIFOOp> fifoInputs;
+  SmallVector<std::pair<Value, spechls::FIFOOp>> fifoOutputs;
+  for (auto &&op : launchOp.getOperands()) {
+    if (auto fifoOp = dyn_cast_if_present<spechls::FIFOOp>(op.getDefiningOp())) {
+      fifoInputs.push_back(fifoOp);
+    }
+  }
+  for (auto &&res : launchOp.getResults()) {
+    for (auto &&user : res.getUsers()) {
+      if (auto fifoOp = dyn_cast_if_present<spechls::FIFOOp>(user)) {
+        fifoOutputs.push_back({res, fifoOp});
+      }
+    }
+  }
+
+  if (!fifoInputs.empty() || !fifoOutputs.empty()) {
+    os << "if (";
+    llvm::interleave(
+        fifoInputs.begin(), fifoInputs.end(),
+        [&](auto &fifo) { os << "!" << getFifoBufferName(emitter, fifo) << ".empty"; }, [&]() { os << " && "; });
+    if (!fifoInputs.empty() && !fifoOutputs.empty())
+      os << " && ";
+    llvm::interleave(
+        fifoOutputs.begin(), fifoOutputs.end(),
+        [&](auto &fifo) { os << "!" << getFifoBufferName(emitter, fifo.second) << ".full"; }, [&]() { os << " && "; });
+    os << ") {\n";
+    os.indent();
+    for (auto &&in : fifoInputs) {
+      os << "fifo_read(" << getFifoBufferName(emitter, in) << ");\n";
+    }
+  }
 
   if (failed(emitter.emitAssignPrefix(*operation)))
     return failure();
@@ -485,6 +536,17 @@ LogicalResult printOperation(CppEmitter &emitter, spechls::LaunchOp launchOp) {
   if (failed(emitter.emitOperands(*operation)))
     return failure();
   os << ")";
+
+  if (!fifoInputs.empty() || !fifoOutputs.empty()) {
+    os << ";\n";
+    for (auto &&out : fifoOutputs) {
+      os << "fifo_write(" << getFifoBufferName(emitter, out.second) << ", " << emitter.getOrCreateName(out.first)
+         << ");\n";
+    }
+    os.unindent();
+    os << "}";
+  }
+
   return success();
 }
 
@@ -495,21 +557,10 @@ LogicalResult printOperation(CppEmitter &emitter, spechls::DelayOp delayOp) {
   if (failed(emitter.emitAssignPrefix(*operation)))
     return failure();
 
-  os << "delay<";
+  os << "delay_pop<";
   if (failed(emitter.emitType(delayOp.getLoc(), delayOp.getType())))
     return failure();
-  os << ", " << delayOp.getDepth() << ">(" << getDelayBufferName(emitter, delayOp) << ", ";
-  // Self-initialized delays are a workaround. They should be generated as non-initialized delays.
-  if (isSelfInitializedDelay(delayOp)) {
-    SmallVector<Value> operands{delayOp.getOperands()};
-    operands.erase(std::remove(operands.begin(), operands.end(), delayOp.getInit()));
-    if (failed(interleaveCommaWithError(operands, os, [&](Value operand) { return emitter.emitOperand(operand); })))
-      return failure();
-  } else {
-    if (failed(emitter.emitOperands(*operation)))
-      return failure();
-  }
-  os << ")";
+  os << ", " << delayOp.getDepth() << ">(" << getDelayBufferName(emitter, delayOp) << ")";
   return success();
 }
 
@@ -596,7 +647,13 @@ LogicalResult printOperation(CppEmitter &emitter, spechls::PrintOp printOp) {
   if (printOp.getArgs().size() > 0)
     os << ", ";
   if (failed(interleaveCommaWithError(printOp.getArgs(), os, [&](Value operand) {
-        os << "(long)";
+        if (auto iType = dyn_cast<IntegerType>(operand.getType())) {
+          if (iType.isSigned()) {
+            os << (iType.getWidth() > 32 ? "(long long)" : "(int)");
+          } else {
+            os << (iType.getWidth() > 32 ? "(unsigned long long)" : "(unsigned int)");
+          }
+        }
         return emitter.emitOperand(operand);
       })))
     return failure();
@@ -698,17 +755,7 @@ LogicalResult printOperation(CppEmitter &emitter, spechls::FIFOOp fifoOp) {
 
   if (failed(emitter.emitAssignPrefix(*operation)))
     return failure();
-
-  os << "fifo<";
-  if (failed(emitter.emitType(fifoOp.getLoc(), fifoOp.getType())))
-    return failure();
-  os << ", ";
-  if (failed(emitter.emitType(fifoOp.getLoc(), fifoOp.getOperand().getType())))
-    return failure();
-  os << ", " << fifoOp.getDepth() << ">(";
-  if (failed(emitter.emitOperands(*operation)))
-    return failure();
-  os << ")";
+  os << getFifoBufferName(emitter, fifoOp) << ".data";
   return success();
 }
 
@@ -987,7 +1034,7 @@ LogicalResult CppEmitter::emitType(Location loc, Type type) {
     return success();
   }
   if (auto iType = dyn_cast<IntegerType>(type)) {
-    if (iType.getWidth() == 1 || shouldMapToUnsigned(iType.getSignedness()))
+    if (shouldMapToUnsigned(iType.getSignedness()))
       os << "ap_uint<" << iType.getWidth() << ">";
     else
       os << "ap_int<" << iType.getWidth() << ">";
@@ -1087,9 +1134,9 @@ LogicalResult CppEmitter::emitAttribute(Location loc, Attribute attr) {
 
 bool CppEmitter::shouldMapToUnsigned(IntegerType::SignednessSemantics semantics) {
   switch (semantics) {
-  case IntegerType::Signless:
   case IntegerType::Signed:
     return false;
+  case IntegerType::Signless:
   case IntegerType::Unsigned:
     return true;
   }
