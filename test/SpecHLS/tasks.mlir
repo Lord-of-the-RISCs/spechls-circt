@@ -9,8 +9,8 @@ spechls.hkernel @toplevel(%in1 : i32, %in2 : i1) -> i32 {
   %1 = spechls.launch @task2(%0) : (i32) -> i32
   // CHECK: %2:2 = spechls.launch @task3(%[[res]]) : (i32) -> (i32, i32)
   %2, %3 = spechls.launch @task3(%0) : (i32) -> (i32, i32)
-  // CHECK: spechls.exit if %[[arg2]] with %[[val]] : i32
-  spechls.exit if %in2 with %1 : i32
+  // CHECK: spechls.exit if %[[arg2]]
+  spechls.exit if %in2
 }
 
 // CHECK: spechls.htask @task1
