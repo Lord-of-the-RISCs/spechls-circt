@@ -44,7 +44,7 @@ class SpecHLSType<string name, string typeMnemonic, list<Trait> traits = []>
 //===--------------------------------------------------------------------------------------------------------------===//
 
 def SpecHLS_ArrayType : SpecHLSType<"Array", "array"> {
-    let summary = "Array type.";
+    let summary = "array type";
 
     let parameters = (ins "unsigned":$size, "::mlir::Type":$element_type);
 
@@ -54,7 +54,7 @@ def SpecHLS_ArrayType : SpecHLSType<"Array", "array"> {
 }
 
 def SpecHLS_StructType : SpecHLSType<"Struct", "struct"> {
-    let summary = "Structure type.";
+    let summary = "structure type";
 
     let parameters = (ins
         StringRefParameter<"struct name", [{""}]>:$name,
@@ -107,9 +107,42 @@ class SpecHLS_TaskLikeOp<string mnemonic, list<Trait> traits = []> :
     }];
 }
 
-def SpecHLS_HKernelOp : SpecHLS_TaskLikeOp<"hkernel"> {}
+def SpecHLS_KernelOp : SpecHLSOp<"kernel",
+        [AutomaticAllocationScope, IsolatedFromAbove, FunctionOpInterface, SingleBlock, RegionKindInterface]> {
+    let arguments = (ins StrAttr:$sym_name,
+                         TypeAttrOf<FunctionType>:$function_type,
+                         OptionalAttr<DictArrayAttr>:$arg_attrs,
+                         OptionalAttr<DictArrayAttr>:$res_attrs);
+    let regions = (region SizedRegion<1>:$body);
 
-def SpecHLS_ExitOp : SpecHLSOp<"exit", [HasParent<"HKernelOp">, Terminator, ReturnLike]> {
+    let hasCustomAssemblyFormat = 1;
+    let hasVerifier = 1;
+
+    let extraClassDeclaration = [{
+        //===------------------------------------------------------------------===//
+        // FunctionOpInterface Methods
+        //===------------------------------------------------------------------===//
+
+        /// Returns the argument types of this function.
+        ::mlir::ArrayRef<::mlir::Type> getArgumentTypes() { return getFunctionType().getInputs(); }
+
+        /// Returns the result types of this function.
+        ::mlir::ArrayRef<::mlir::Type> getResultTypes() { return getFunctionType().getResults(); }
+
+        // CallableOpInterface
+        ::mlir::Region *getCallableRegion() { return &getBody(); }
+
+        //===------------------------------------------------------------------===//
+        // RegionKindInterface Methods
+        //===------------------------------------------------------------------===//
+
+        static ::mlir::RegionKind getRegionKind(unsigned) {
+            return ::mlir::RegionKind::Graph;
+        }
+    }];
+}
+
+def SpecHLS_ExitOp : SpecHLSOp<"exit", [HasParent<"KernelOp">, Terminator, ReturnLike]> {
     let arguments = (ins I1:$guard);
 
     let hasCustomAssemblyFormat = 1;

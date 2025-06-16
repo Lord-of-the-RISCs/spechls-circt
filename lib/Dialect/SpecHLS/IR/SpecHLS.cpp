@@ -148,13 +148,13 @@ LogicalResult spechls::StructType::verify(function_ref<InFlightDiagnostic()> emi
   return success();
 }
 
-ParseResult spechls::HKernelOp::parse(OpAsmParser &parser, OperationState &result) {
-  return parseTaskLikeOp<HKernelOp>(parser, result);
+ParseResult spechls::KernelOp::parse(OpAsmParser &parser, OperationState &result) {
+  return parseTaskLikeOp<KernelOp>(parser, result);
 }
 
-void spechls::HKernelOp::print(OpAsmPrinter &printer) { printTaskLikeOp(*this, printer); }
+void spechls::KernelOp::print(OpAsmPrinter &printer) { printTaskLikeOp(*this, printer); }
 
-LogicalResult spechls::HKernelOp::verify() { return verifyTaskLikeOp(*this); }
+LogicalResult spechls::KernelOp::verify() { return verifyTaskLikeOp(*this); }
 
 ParseResult spechls::HTaskOp::parse(OpAsmParser &parser, OperationState &result) {
   return parseTaskLikeOp<HTaskOp>(parser, result);
@@ -428,16 +428,12 @@ void spechls::DelayOp::print(OpAsmPrinter &printer) {
 }
 
 LogicalResult spechls::FIFOOp::verify() {
-  Type inType = getInput().getType();
-  if (!isa<StructType>(inType))
-    return emitOpError("FIFO input type expected to be a structure, but got ") << inType;
-
-  StructType structType = cast<StructType>(inType);
+  StructType structType = getInput().getType();
   auto fields = structType.getFieldTypes();
   if (fields.size() != 2 || !fields.front().isInteger(1)) {
     return emitOpError(
                "FIFO input type expected to be a structure of the form !spechls.struct<i1, output-type>, but got ")
-           << inType;
+           << structType;
   }
 
   if (fields.back() != getType())

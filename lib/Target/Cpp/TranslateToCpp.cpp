@@ -356,9 +356,9 @@ LogicalResult printOperation(CppEmitter &emitter, ModuleOp moduleOp) {
   }
 
   for (auto &&op : moduleOp) {
-    if (auto hkernelOp = dyn_cast<spechls::HKernelOp>(op)) {
-      if (failed(printFunctionSignature(emitter, hkernelOp.getOperation(), hkernelOp.getName(),
-                                        hkernelOp.getFunctionType().getResults(), hkernelOp.getArguments(), false,
+    if (auto kernelOp = dyn_cast<spechls::KernelOp>(op)) {
+      if (failed(printFunctionSignature(emitter, kernelOp.getOperation(), kernelOp.getName(),
+                                        kernelOp.getFunctionType().getResults(), kernelOp.getArguments(), false,
                                         true))) {
         return failure();
       }
@@ -380,13 +380,13 @@ LogicalResult printOperation(CppEmitter &emitter, ModuleOp moduleOp) {
   return success();
 }
 
-LogicalResult printOperation(CppEmitter &emitter, spechls::HKernelOp hkernelOp) {
+LogicalResult printOperation(CppEmitter &emitter, spechls::KernelOp kernelOp) {
   CppEmitter::Scope scope(emitter);
   raw_indented_ostream &os = emitter.ostream();
-  Operation *op = hkernelOp.getOperation();
+  Operation *op = kernelOp.getOperation();
 
-  if (failed(printFunctionPrototype(emitter, op, hkernelOp.getName(), hkernelOp.getFunctionType().getResults(),
-                                    hkernelOp.getArguments(), false, true))) {
+  if (failed(printFunctionPrototype(emitter, op, kernelOp.getName(), kernelOp.getFunctionType().getResults(),
+                                    kernelOp.getArguments(), false, true))) {
     return failure();
   }
   os << " {\n#pragma HLS inline recursive\n";
@@ -395,11 +395,11 @@ LogicalResult printOperation(CppEmitter &emitter, spechls::HKernelOp hkernelOp) 
   if (failed(printAllVariables(emitter, op)))
     return failure();
 
-  if (failed(printDelayInitialization(emitter, hkernelOp.getBody().getBlocks())))
+  if (failed(printDelayInitialization(emitter, kernelOp.getBody().getBlocks())))
     return failure();
 
   // Generate the exit variable.
-  auto exit = cast<spechls::ExitOp>(hkernelOp.getBody().front().getTerminator());
+  auto exit = cast<spechls::ExitOp>(kernelOp.getBody().front().getTerminator());
   if (failed(emitter.emitVariableDeclaration(exit.getLoc(), exit.getGuard().getType(), emitter.getExitVariableName(),
                                              false))) {
     return failure();
@@ -407,7 +407,7 @@ LogicalResult printOperation(CppEmitter &emitter, spechls::HKernelOp hkernelOp) 
   os << " = false;\n";
 
   // Generate the init variable.
-  if (failed(emitter.emitVariableDeclaration(hkernelOp.getLoc(), IntegerType::get(hkernelOp.getContext(), 1),
+  if (failed(emitter.emitVariableDeclaration(kernelOp.getLoc(), IntegerType::get(kernelOp.getContext(), 1),
                                              emitter.getInitVariableName(), false))) {
     return failure();
   }
@@ -416,7 +416,7 @@ LogicalResult printOperation(CppEmitter &emitter, spechls::HKernelOp hkernelOp) 
   os << "while (!" << emitter.getExitVariableName() << ") {\n";
   os.indent();
 
-  for (auto &&op : hkernelOp.getBody().front()) {
+  for (auto &&op : kernelOp.getBody().front()) {
     if (failed(emitter.emitOperation(op, true)))
       return failure();
   }
@@ -989,7 +989,7 @@ LogicalResult CppEmitter::emitOperation(Operation &op, bool trailingSemicolon) {
               [&](auto op) { return printOperation(*this, op); })
           // SpecHLS ops.
           .Case<spechls::AlphaOp, spechls::CallOp, spechls::CommitOp, spechls::DelayOp, spechls::ExitOp,
-                spechls::FIFOOp, spechls::FSMCommandOp, spechls::FSMOp, spechls::GammaOp, spechls::HKernelOp,
+                spechls::FIFOOp, spechls::FSMCommandOp, spechls::FSMOp, spechls::GammaOp, spechls::KernelOp,
                 spechls::HTaskOp, spechls::LaunchOp, spechls::LoadOp, spechls::LUTOp, spechls::MuOp, spechls::PackOp,
                 spechls::PrintOp, spechls::RewindOp, spechls::RollbackOp, spechls::UnpackOp>(
               [&](auto op) { return printOperation(*this, op); })
