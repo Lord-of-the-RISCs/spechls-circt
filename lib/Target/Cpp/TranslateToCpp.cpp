@@ -363,9 +363,9 @@ LogicalResult printOperation(CppEmitter &emitter, ModuleOp moduleOp) {
         return failure();
       }
       os << ";\n";
-    } else if (auto htaskOp = dyn_cast<spechls::HTaskOp>(op)) {
-      if (failed(printFunctionSignature(emitter, htaskOp.getOperation(), htaskOp.getName(),
-                                        htaskOp.getFunctionType().getResults(), htaskOp.getArguments(), true))) {
+    } else if (auto taskOp = dyn_cast<spechls::TaskOp>(op)) {
+      if (failed(printFunctionSignature(emitter, taskOp.getOperation(), taskOp.getName(),
+                                        taskOp.getFunctionType().getResults(), taskOp.getArguments(), true))) {
         return failure();
       }
       os << ";\n";
@@ -430,13 +430,13 @@ LogicalResult printOperation(CppEmitter &emitter, spechls::KernelOp kernelOp) {
   return success();
 }
 
-LogicalResult printOperation(CppEmitter &emitter, spechls::HTaskOp htaskOp) {
+LogicalResult printOperation(CppEmitter &emitter, spechls::TaskOp taskOp) {
   CppEmitter::Scope scope(emitter);
   raw_indented_ostream &os = emitter.ostream();
-  Operation *op = htaskOp.getOperation();
+  Operation *op = taskOp.getOperation();
 
-  if (failed(printFunctionPrototype(emitter, op, htaskOp.getName(), htaskOp.getFunctionType().getResults(),
-                                    htaskOp.getArguments(), true))) {
+  if (failed(printFunctionPrototype(emitter, op, taskOp.getName(), taskOp.getFunctionType().getResults(),
+                                    taskOp.getArguments(), true))) {
     return failure();
   }
   os << " {\n";
@@ -446,11 +446,11 @@ LogicalResult printOperation(CppEmitter &emitter, spechls::HTaskOp htaskOp) {
     return failure();
   os << "\n";
 
-  if (failed(printDelayInitialization(emitter, htaskOp.getBody().getBlocks())))
+  if (failed(printDelayInitialization(emitter, taskOp.getBody().getBlocks())))
     return failure();
 
   SmallVector<spechls::DelayOp> delays;
-  for (auto &&op : htaskOp.getBody().front()) {
+  for (auto &&op : taskOp.getBody().front()) {
     if (isa<spechls::CommitOp>(op)) {
       // Print delay push operations just before the end of the task.
       for (auto &&delay : delays) {
@@ -990,7 +990,7 @@ LogicalResult CppEmitter::emitOperation(Operation &op, bool trailingSemicolon) {
           // SpecHLS ops.
           .Case<spechls::AlphaOp, spechls::CallOp, spechls::CommitOp, spechls::DelayOp, spechls::ExitOp,
                 spechls::FIFOOp, spechls::FSMCommandOp, spechls::FSMOp, spechls::GammaOp, spechls::KernelOp,
-                spechls::HTaskOp, spechls::LaunchOp, spechls::LoadOp, spechls::LUTOp, spechls::MuOp, spechls::PackOp,
+                spechls::TaskOp, spechls::LaunchOp, spechls::LoadOp, spechls::LUTOp, spechls::MuOp, spechls::PackOp,
                 spechls::PrintOp, spechls::RewindOp, spechls::RollbackOp, spechls::UnpackOp>(
               [&](auto op) { return printOperation(*this, op); })
           // Inlined operations.

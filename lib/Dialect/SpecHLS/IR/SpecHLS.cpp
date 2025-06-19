@@ -156,21 +156,21 @@ void spechls::KernelOp::print(OpAsmPrinter &printer) { printTaskLikeOp(*this, pr
 
 LogicalResult spechls::KernelOp::verify() { return verifyTaskLikeOp(*this); }
 
-ParseResult spechls::HTaskOp::parse(OpAsmParser &parser, OperationState &result) {
-  return parseTaskLikeOp<HTaskOp>(parser, result);
+ParseResult spechls::TaskOp::parse(OpAsmParser &parser, OperationState &result) {
+  return parseTaskLikeOp<TaskOp>(parser, result);
 }
 
-void spechls::HTaskOp::print(OpAsmPrinter &printer) { printTaskLikeOp(*this, printer); }
+void spechls::TaskOp::print(OpAsmPrinter &printer) { printTaskLikeOp(*this, printer); }
 
-LogicalResult spechls::HTaskOp::verify() { return verifyTaskLikeOp(*this); }
+LogicalResult spechls::TaskOp::verify() { return verifyTaskLikeOp(*this); }
 
 LogicalResult spechls::CommitOp::verify() {
-  auto task = cast<HTaskOp>((*this)->getParentOp());
+  auto task = cast<TaskOp>((*this)->getParentOp());
 
   auto const &result = task.getResultTypes().front();
   if (getValue().getType() != result) {
     return emitError() << "type of commit operand (" << getValue().getType() << ") doesn't match result type ("
-                       << result << ") in htask @" << task.getName();
+                       << result << ") in task @" << task.getName();
   }
 
   return success();

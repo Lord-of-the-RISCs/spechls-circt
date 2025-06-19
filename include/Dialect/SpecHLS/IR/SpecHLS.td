@@ -148,9 +148,9 @@ def SpecHLS_ExitOp : SpecHLSOp<"exit", [HasParent<"KernelOp">, Terminator, Retur
     let hasCustomAssemblyFormat = 1;
 }
 
-def SpecHLS_HTaskOp : SpecHLS_TaskLikeOp<"htask"> {}
+def SpecHLS_TaskOp : SpecHLS_TaskLikeOp<"task"> {}
 
-def SpecHLS_CommitOp : SpecHLSOp<"commit", [HasParent<"HTaskOp">, Terminator, ReturnLike]> {
+def SpecHLS_CommitOp : SpecHLSOp<"commit", [HasParent<"TaskOp">, Terminator, ReturnLike]> {
     let arguments = (ins
         I1:$enable,
         Optional<AnyType>:$value
