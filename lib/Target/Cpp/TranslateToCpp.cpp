@@ -574,6 +574,8 @@ LogicalResult printOperation(CppEmitter &emitter, spechls::ExitOp exitOp) {
 }
 
 LogicalResult printOperation(CppEmitter &emitter, spechls::MuOp muOp) {
+  static int id = 0;
+
   Operation *operation = muOp.getOperation();
   raw_ostream &os = emitter.ostream();
 
@@ -583,7 +585,7 @@ LogicalResult printOperation(CppEmitter &emitter, spechls::MuOp muOp) {
   os << "mu<";
   if (failed(emitter.emitType(muOp.getLoc(), muOp.getType())))
     return failure();
-  os << ">(" << emitter.getInitVariableName() << ", ";
+  os << ", " << id++ << ">(";
   if (failed(emitter.emitOperands(*operation)))
     return failure();
   os << ")";
