@@ -13,9 +13,9 @@ spechls.kernel @toplevel(%in1 : i32, %in2 : i1) -> i32 {
   spechls.exit if %in2
 }
 
-// CHECK: spechls.htask @task1
+// CHECK: spechls.task @task1
 // CHECK-SAME: %[[arg:[a-zA-Z0-9]+]]
-spechls.htask @task1(%in1 : i32) -> i32 {
+spechls.task @task1(%in1 : i32) -> i32 {
   %true = hw.constant 1 : i1
   // CHECK: spechls.commit %true, %[[arg]] : i32
   spechls.commit %true, %in1 : i32

@@ -1,7 +1,7 @@
 // RUN: spechls-opt %s | spechls-opt | FileCheck %s
 
-// CHECK: spechls.htask @task
-spechls.htask @task(%in1 : i32, %in2 : i1) -> i32 {
+// CHECK: spechls.task @task
+spechls.task @task(%in1 : i32, %in2 : i1) -> i32 {
   %true = hw.constant 1 : i1
   // CHECK: spechls.delay %arg0 by 1 : i32
   // CHECK: spechls.delay %0 by 2 if %arg1 : i32

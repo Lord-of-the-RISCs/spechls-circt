@@ -1,7 +1,7 @@
 // RUN: spechls-opt %s | spechls-opt | FileCheck %s
 
 // CHECK-LABEL: @task
-spechls.htask @task(%state : i32, %enable : i1, %arg : i32) -> i32 {
+spechls.task @task(%state : i32, %enable : i1, %arg : i32) -> i32 {
   %true = hw.constant 1 : i1
   // CHECK: %io_state = spechls.print %arg0, %arg1, "Hello, world!\0A"
   %new_state = spechls.print %state, %enable, "Hello, world!\n"
