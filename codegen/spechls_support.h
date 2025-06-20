@@ -12,24 +12,27 @@
 
 #include "ap_int.h"
 
-template <typename T>
-constexpr T mu(bool first, T init, T loop) {
-  return first ? init : loop;
+template <typename T, int ID>
+T mu(T init, T loop) {
+  static bool f = true;
+  T result = f ? init : loop;
+  f = false;
+  return result;
 }
 
 template <typename T, unsigned int N>
-constexpr void delay_init(T (&buffer)[N], T value) {
+void delay_init(T (&buffer)[N], T value) {
   for (int i = 0; i < N; ++i)
     buffer[i] = value;
 }
 
 template <typename T, unsigned int N>
-constexpr T delay_pop(T (&buffer)[N]) {
+T delay_pop(T (&buffer)[N]) {
   return buffer[0];
 }
 
 template <typename T, unsigned int N>
-constexpr void delay_push(T (&buffer)[N], T value, bool enable = true) {
+void delay_push(T (&buffer)[N], T value, bool enable = true) {
   if (enable) {
     for (int i = 0; i < N - 1; ++i)
       buffer[i] = buffer[i + 1];
@@ -38,12 +41,12 @@ constexpr void delay_push(T (&buffer)[N], T value, bool enable = true) {
 }
 
 template <typename T, int Min, int Max>
-constexpr ap_int<Max - Min> extract(T input) {
+ap_int<Max - Min> extract(T input) {
   return input.range(Min, Max);
 }
 
 template <int N, int M>
-constexpr ap_int<N * M> replicate(ap_int<M> input) {
+ap_int<N * M> replicate(ap_int<M> input) {
   ap_int<N * M> result = 0;
   for (int i = 0; i < N; ++i)
     result = result.concat(input);
@@ -51,7 +54,7 @@ constexpr ap_int<N * M> replicate(ap_int<M> input) {
 }
 
 template <int N, int M>
-constexpr ap_uint<N * M> replicate(ap_uint<M> input) {
+ap_uint<N * M> replicate(ap_uint<M> input) {
   ap_uint<N * M> result = 0;
   for (int i = 0; i < N; ++i)
     result = result.concat(input);
@@ -59,7 +62,7 @@ constexpr ap_uint<N * M> replicate(ap_uint<M> input) {
 }
 
 template <int N, int M>
-constexpr ap_int<N + M> concat(ap_int<N> lhs, ap_int<M> rhs) {
+ap_int<N + M> concat(ap_int<N> lhs, ap_int<M> rhs) {
   return lhs.concat(rhs);
 }
 
@@ -75,20 +78,22 @@ constexpr T resolve_offset(unsigned int offset, T *values, T default_value) {
 }
 
 template <typename T, unsigned int Offset, unsigned int... Depths>
-constexpr T rollback(T *buffer, T value, unsigned int offset, bool next_input) {
+T rollback(T *buffer, T value, unsigned int offset, bool next_input) {
   constexpr unsigned int max_depth = std::max({0u, Depths...}) + 1;
   unsigned int off = offset - Offset;
   if (next_input) {
-    for (int i = 0; i < max_depth - 1; ++i)
-      buffer[i] = buffer[i + 1];
+    for (unsigned int i = max_depth; i != 0; --i)
+      buffer[i] = buffer[i - 1];
   }
   T result = resolve_offset<T, Depths...>(off, buffer, value);
+  if (next_input)
+    buffer[0] = result;
 
   return result;
 }
 
 template <typename T, typename... Ts>
-constexpr T gamma(unsigned int select, Ts... values) {
+T gamma(unsigned int select, Ts... values) {
   T result = T{};
   unsigned int idx = 0;
   auto update = [&](T value) {
@@ -100,7 +105,7 @@ constexpr T gamma(unsigned int select, Ts... values) {
 }
 
 template <typename T>
-constexpr T *alpha(T *array, unsigned int index, T value, bool we) {
+T *alpha(T *array, unsigned int index, T value, bool we) {
   if (we) {
     array[index] = value;
   }
@@ -121,13 +126,13 @@ struct FifoInputType {
 };
 
 template <typename T>
-constexpr void fifo_read(FifoType<T> &fifo) {
+void fifo_read(FifoType<T> &fifo) {
   fifo.empty = true;
   fifo.full = false;
 }
 
 template <typename Arg, typename T>
-constexpr void fifo_write(FifoType<T> &fifo, const Arg &input) {
+void fifo_write(FifoType<T> &fifo, const Arg &input) {
   if (input.write) {
     fifo.empty = false;
     fifo.full = true;
