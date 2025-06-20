@@ -168,6 +168,7 @@ LogicalResult printAllVariables(CppEmitter &emitter, Operation *taskLikeOp) {
       return WalkResult::advance();
 
     for (OpResult result : op->getResults()) {
+      os << "static ";
       if (failed(emitter.emitVariableDeclaration(result, false)))
         return WalkResult(op->emitError("unable to declare result variable for op"));
       os << "{};\n";
