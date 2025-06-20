@@ -322,7 +322,8 @@ ParseResult spechls::AlphaOp::parse(OpAsmParser &parser, OperationState &result)
 
   if (parser.parseOperand(array) || parser.parseLSquare() || parser.parseOperand(index) ||
       parser.parseColonType(indexType) || parser.parseRSquare() || parser.parseComma() || parser.parseOperand(value) ||
-      parser.parseKeyword("if") || parser.parseOperand(we) || parser.parseColonType(arrayType))
+      parser.parseKeyword("if") || parser.parseOperand(we) || parser.parseOptionalAttrDict(result.attributes) ||
+      parser.parseColonType(arrayType))
     return failure();
 
   // Resolve operands and results.
@@ -338,7 +339,9 @@ ParseResult spechls::AlphaOp::parse(OpAsmParser &parser, OperationState &result)
 
 void spechls::AlphaOp::print(OpAsmPrinter &printer) {
   printer << ' ' << getArray() << '[' << getIndex() << ": " << getIndex().getType() << "], " << getValue() << " if "
-          << getWe() << " : " << getType();
+          << getWe();
+  printer.printOptionalAttrDict((*this)->getAttrs());
+  printer << " : " << getType();
 }
 
 LogicalResult spechls::AlphaOp::verify() {
