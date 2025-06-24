@@ -42,70 +42,6 @@ void spechls::SpecHLSDialect::initialize() {
 // Operations
 //===--------------------------------------------------------------------------------------------------------------===//
 
-namespace {
-
-template <typename T>
-ParseResult parseTaskLikeOp(OpAsmParser &parser, OperationState &result) {
-  auto &builder = parser.getBuilder();
-
-  StringAttr nameAttr;
-  if (parser.parseSymbolName(nameAttr, T::getSymNameAttrName(result.name), result.attributes))
-    return failure();
-
-  // Parse the signature.
-  SmallVector<OpAsmParser::Argument> entryArgs;
-  SmallVector<DictionaryAttr> resultAttrs;
-  SmallVector<Type> resultTypes;
-  bool isVariadic = false;
-  if (function_interface_impl::parseFunctionSignatureWithArguments(parser, false, entryArgs, isVariadic, resultTypes,
-                                                                   resultAttrs))
-    return failure();
-
-  SmallVector<Type> argTypes;
-  for (auto const &arg : entryArgs)
-    argTypes.push_back(arg.type);
-  result.addAttribute(T::getFunctionTypeAttrName(result.name),
-                      TypeAttr::get(builder.getFunctionType(argTypes, resultTypes)));
-
-  if (parser.parseOptionalAttrDictWithKeyword(result.attributes))
-    return failure();
-
-  // Add attributes to the arguments and results.
-  assert(resultAttrs.size() == resultTypes.size());
-  call_interface_impl::addArgAndResultAttrs(builder, result, entryArgs, resultAttrs,
-                                            T::getArgAttrsAttrName(result.name), T::getResAttrsAttrName(result.name));
-
-  // Parse the kernel body.
-  auto *body = result.addRegion();
-  return parser.parseRegion(*body, entryArgs);
-}
-
-template <typename T>
-void printTaskLikeOp(T &instance, OpAsmPrinter &printer) {
-  // Print the kernel signature and attributes.
-  printer << ' ';
-  printer.printSymbolName(instance.getName());
-  auto functionType = instance.getFunctionType();
-  function_interface_impl::printFunctionSignature(printer, instance, functionType.getInputs(), false,
-                                                  functionType.getResults());
-  function_interface_impl::printFunctionAttributes(
-      printer, instance,
-      {instance.getFunctionTypeAttrName(), instance.getArgAttrsAttrName(), instance.getResAttrsAttrName()});
-
-  // Print the kernel body.
-  printer << ' ';
-  printer.printRegion(instance.getBody(), false, true);
-}
-
-template <typename T>
-LogicalResult verifyTaskLikeOp(T &instance) {
-  if (instance.getResultTypes().size() > 1)
-    return instance.emitOpError("expected a single result");
-  return success();
-}
-
-} // namespace
-
 Type spechls::StructType::parse(AsmParser &parser) {
   Location loc = parser.getEncodedSourceLoc(parser.getCurrentLocation());
 
@@ -149,30 +85,58 @@ LogicalResult spechls::StructType::verify(function_ref<InFlightDiagnostic()> emi
 }
 
 ParseResult spechls::KernelOp::parse(OpAsmParser &parser, OperationState &result) {
-  return parseTaskLikeOp<KernelOp>(parser, result);
+  auto &builder = parser.getBuilder();
+
+  StringAttr nameAttr;
+  if (parser.parseSymbolName(nameAttr, getSymNameAttrName(result.name), result.attributes))
+    return failure();
+
+  // Parse the signature.
+  SmallVector<OpAsmParser::Argument> entryArgs;
+  SmallVector<DictionaryAttr> resultAttrs;
+  SmallVector<Type> resultTypes;
+  bool isVariadic = false;
+  if (function_interface_impl::parseFunctionSignatureWithArguments(parser, false, entryArgs, isVariadic, resultTypes,
+                                                                   resultAttrs))
+    return failure();
+
+  SmallVector<Type> argTypes;
+  for (auto const &arg : entryArgs)
+    argTypes.push_back(arg.type);
+  result.addAttribute(getFunctionTypeAttrName(result.name),
+                      TypeAttr::get(builder.getFunctionType(argTypes, resultTypes)));
+
+  if (parser.parseOptionalAttrDictWithKeyword(result.attributes))
+    return failure();
+
+  // Add attributes to the arguments and results.
+  assert(resultAttrs.size() == resultTypes.size());
+  call_interface_impl::addArgAndResultAttrs(builder, result, entryArgs, resultAttrs, getArgAttrsAttrName(result.name),
+                                            getResAttrsAttrName(result.name));
+
+  // Parse the kernel body.
+  auto *body = result.addRegion();
+  return parser.parseRegion(*body, entryArgs);
 }
 
-void spechls::KernelOp::print(OpAsmPrinter &printer) { printTaskLikeOp(*this, printer); }
+void spechls::KernelOp::print(OpAsmPrinter &printer) {
+  // Print the kernel signature and attributes.
+  printer << ' ';
+  printer.printSymbolName(getName());
+  auto functionType = getFunctionType();
+  function_interface_impl::printFunctionSignature(printer, *this, functionType.getInputs(), false,
+                                                  functionType.getResults());
+  function_interface_impl::printFunctionAttributes(
+      printer, *this, {getFunctionTypeAttrName(), getArgAttrsAttrName(), getResAttrsAttrName()});
 
-LogicalResult spechls::KernelOp::verify() { return verifyTaskLikeOp(*this); }
-
-ParseResult spechls::TaskOp::parse(OpAsmParser &parser, OperationState &result) {
-  return parseTaskLikeOp<TaskOp>(parser, result);
+  // Print the kernel body.
+  printer << ' ';
+  printer.printRegion(getBody(), false, true);
 }
 
-void spechls::TaskOp::print(OpAsmPrinter &printer) { printTaskLikeOp(*this, printer); }
-
-LogicalResult spechls::TaskOp::verify() { return verifyTaskLikeOp(*this); }
-
-LogicalResult spechls::CommitOp::verify() {
-  auto task = cast<TaskOp>((*this)->getParentOp());
-
-  auto const &result = task.getResultTypes().front();
-  if (getValue().getType() != result) {
-    return emitError() << "type of commit operand (" << getValue().getType() << ") doesn't match result type ("
-                       << result << ") in task @" << task.getName();
-  }
-
+LogicalResult spechls::KernelOp::verify() {
+  if (getResultTypes().size() > 1)
+    return emitOpError("expected a single result");
   return success();
 }
 
@@ -182,25 +146,58 @@ ParseResult spechls::ExitOp::parse(OpAsmParser &parser, OperationState &result) 
       parser.resolveOperand(guard, parser.getBuilder().getI1Type(), result.operands))
     return failure();
 
+  if (parser.parseOptionalKeyword("with").succeeded()) {
+    OpAsmParser::UnresolvedOperand value;
+    Type valueType;
+    if (parser.parseOperand(value) || parser.parseColonType(valueType) ||
+        parser.resolveOperand(value, valueType, result.operands))
+      return failure();
+  }
+
   if (parser.parseOptionalAttrDict(result.attributes))
     return failure();
 
   return success();
 }
 
-void spechls::ExitOp::print(OpAsmPrinter &printer) { printer << " if " << getGuard(); }
+void spechls::ExitOp::print(OpAsmPrinter &printer) {
+  printer << " if " << getGuard();
 
-CallInterfaceCallable spechls::LaunchOp::getCallableForCallee() {
-  return (*this)->getAttrOfType<SymbolRefAttr>(getCalleeAttrName());
+  if (getValue())
+    printer << " with " << getValue() << " : " << getValue().getType();
 }
 
-void spechls::LaunchOp::setCalleeFromCallable(CallInterfaceCallable callee) {
-  (*this)->setAttr(getCalleeAttrName(), cast<SymbolRefAttr>(callee));
+LogicalResult spechls::ExitOp::verify() {
+  ArrayRef<Type> results;
+  StringRef taskName;
+
+  auto kernel = cast<KernelOp>((*this)->getParentOp());
+  results = kernel.getResultTypes();
+  taskName = kernel.getName();
+
+  // The number of committed values must match the task signature.
+  if (getNumOperands() - 1 != results.size())
+    return emitOpError("has ") << getNumOperands() - 1 << " operands, but enclosing kernel (@" << taskName
+                               << ") returns " << results.size();
+
+  for (size_t i = 0, e = results.size(); i != e; ++i) {
+    if (getOperand(i + 1).getType() != results[i])
+      return emitError() << "type of exit operand " << i << " (" << getOperand(i + 1).getType()
+                         << ") doesn't match result type (" << results[i] << ") in kernel @" << taskName;
+  }
+
+  return success();
 }
 
-Operation::operand_range spechls::LaunchOp::getArgOperands() { return getArguments(); }
-
-MutableOperandRange spechls::LaunchOp::getArgOperandsMutable() { return getArgumentsMutable(); }
+LogicalResult spechls::CommitOp::verify() {
+  auto task = cast<TaskOp>((*this)->getParentOp());
+  auto const &result = task.getResult().getType();
+  if (getValue().getType() != result) {
+    return emitError() << "type of commit operand (" << getValue().getType() << ") doesn't match result type ("
+                       << result << ") in task \"" << task.getSymName() << "\"";
+  }
+  return success();
+}
 
 ParseResult spechls::GammaOp::parse(OpAsmParser &parser, OperationState &result) {
   // Parse the symbol name specifier.

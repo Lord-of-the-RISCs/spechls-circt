@@ -70,43 +70,6 @@ def SpecHLS_StructType : SpecHLSType<"Struct", "struct"> {
 // Operations
 //===--------------------------------------------------------------------------------------------------------------===//
 
-class SpecHLS_TaskLikeOp<string mnemonic, list<Trait> traits = []> :
-        SpecHLSOp<mnemonic,
-            !listconcat(traits, [AutomaticAllocationScope, IsolatedFromAbove, FunctionOpInterface, SingleBlock,
-                                 RegionKindInterface])> {
-    let arguments = (ins StrAttr:$sym_name,
-                         TypeAttrOf<FunctionType>:$function_type,
-                         OptionalAttr<DictArrayAttr>:$arg_attrs,
-                         OptionalAttr<DictArrayAttr>:$res_attrs);
-    let regions = (region SizedRegion<1>:$body);
-
-    let hasCustomAssemblyFormat = 1;
-    let hasVerifier = 1;
-
-    let extraClassDeclaration = [{
-        //===------------------------------------------------------------------===//
-        // FunctionOpInterface Methods
-        //===------------------------------------------------------------------===//
-
-        /// Returns the argument types of this function.
-        ::mlir::ArrayRef<::mlir::Type> getArgumentTypes() { return getFunctionType().getInputs(); }
-
-        /// Returns the result types of this function.
-        ::mlir::ArrayRef<::mlir::Type> getResultTypes() { return getFunctionType().getResults(); }
-
-        // CallableOpInterface
-        ::mlir::Region *getCallableRegion() { return &getBody(); }
-
-        //===------------------------------------------------------------------===//
-        // RegionKindInterface Methods
-        //===------------------------------------------------------------------===//
-
-        static ::mlir::RegionKind getRegionKind(unsigned) {
-            return ::mlir::RegionKind::Graph;
-        }
-    }];
-}
-
 def SpecHLS_KernelOp : SpecHLSOp<"kernel",
         [AutomaticAllocationScope, IsolatedFromAbove, FunctionOpInterface, SingleBlock, RegionKindInterface]> {
     let arguments = (ins StrAttr:$sym_name,
@@ -143,14 +106,33 @@ def SpecHLS_KernelOp : SpecHLSOp<"kernel",
 }
 
 def SpecHLS_ExitOp : SpecHLSOp<"exit", [HasParent<"KernelOp">, Terminator, ReturnLike]> {
-    let arguments = (ins I1:$guard);
+    let arguments = (ins I1:$guard, Optional<AnyType>:$value);
 
     let hasCustomAssemblyFormat = 1;
+    let hasVerifier = 1;
 }
 
-def SpecHLS_TaskOp : SpecHLS_TaskLikeOp<"task"> {}
+def SpecHLS_TaskOp : SpecHLSOp<"task", [AutomaticAllocationScope, SingleBlock, RegionKindInterface]> {
+    let arguments = (ins StrAttr:$sym_name);
+    let results = (outs AnyType:$result);
+    let regions = (region SizedRegion<1>:$body);
 
-def SpecHLS_CommitOp : SpecHLSOp<"commit", [HasParent<"TaskOp">, Terminator, ReturnLike]> {
+    let assemblyFormat = [{
+        $sym_name `->` type($result) attr-dict-with-keyword $body
+    }];
+
+    let extraClassDeclaration = [{
+        //===------------------------------------------------------------------===//
+        // RegionKindInterface Methods
+        //===------------------------------------------------------------------===//
+
+        static ::mlir::RegionKind getRegionKind(unsigned) {
+            return ::mlir::RegionKind::Graph;
+        }
+    }];
+}
+
+def SpecHLS_CommitOp : SpecHLSOp<"commit", [HasParent<"TaskOp">, Terminator]> {
     let arguments = (ins
         I1:$enable,
         Optional<AnyType>:$value
@@ -160,20 +142,6 @@ def SpecHLS_CommitOp : SpecHLSOp<"commit", [HasParent<"TaskOp">, Terminator, Ret
         $enable (`,` $value^ `:` type($value))? attr-dict
     }];
     let hasVerifier = 1;
-}
-
-def SpecHLS_LaunchOp : SpecHLSOp<"launch", [DeclareOpInterfaceMethods<CallOpInterface>]> {
-    let arguments = (ins
-        FlatSymbolRefAttr:$callee,
-        Variadic<AnyType>:$arguments,
-        OptionalAttr<DictArrayAttr>:$arg_attrs,
-        OptionalAttr<DictArrayAttr>:$res_attrs
-    );
-    let results = (outs Variadic<AnyType>:$results);
-
-    let assemblyFormat = [{
-        $callee `(` $arguments `)` attr-dict `:` functional-type($arguments, $results)
-    }];
 }
 
 def SpecHLS_GammaOp : SpecHLSOp<"gamma",
