@@ -114,15 +114,15 @@ T *alpha(T *array, unsigned int index, T value, bool we) {
 
 template <typename T>
 struct FifoType {
-  T data;
+  T data{};
   bool full = false;
   bool empty = true;
 };
 
 template <typename T>
 struct FifoInputType {
-  bool write;
-  T data;
+  bool write = false;
+  T data{};
 };
 
 template <typename T>
