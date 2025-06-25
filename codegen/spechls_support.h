@@ -82,7 +82,7 @@ T rollback(T *buffer, T value, unsigned int offset, bool next_input) {
   constexpr unsigned int max_depth = std::max({0u, Depths...}) + 1;
   unsigned int off = offset - Offset;
   if (next_input) {
-    for (unsigned int i = max_depth; i != 0; --i)
+    for (unsigned int i = max_depth - 1; i > 0; --i)
       buffer[i] = buffer[i - 1];
   }
   T result = resolve_offset<T, Depths...>(off, buffer, value);
