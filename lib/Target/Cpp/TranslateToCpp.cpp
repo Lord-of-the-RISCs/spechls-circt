@@ -159,35 +159,44 @@ LogicalResult printFunctionArgTypes(CppEmitter &emitter, Operation *taskLikeOp, 
   });
 }
 
-LogicalResult printAllVariables(CppEmitter &emitter, Operation *taskLikeOp) {
+LogicalResult printAllVariables(CppEmitter &emitter, spechls::KernelOp &kernelOp) {
   raw_ostream &os = emitter.ostream();
 
-  WalkResult result = taskLikeOp->walk<WalkOrder::PreOrder>([&](Operation *op) -> WalkResult {
+  WalkResult result = kernelOp->walk<WalkOrder::PreOrder>([&](Operation *op) -> WalkResult {
     // Skip inlined operations.
     if (isa<circt::hw::ConstantOp>(op) || isa<spechls::FieldOp>(op))
       return WalkResult::advance();
 
     for (OpResult result : op->getResults()) {
-      os << "static ";
       if (failed(emitter.emitVariableDeclaration(result, false)))
         return WalkResult(op->emitError("unable to declare result variable for op"));
       os << "{};\n";
     }
 
+    if (op != kernelOp.getOperation()) {
+      for (auto &&region : op->getRegions()) {
+        for (auto &&arg : region.getArguments()) {
+          if (failed(
+                  emitter.emitVariableDeclaration(op->getLoc(), arg.getType(), emitter.getOrCreateName(arg), false))) {
+            return WalkResult(op->emitError("unable to declare region argument variable for op"));
+          }
+          os << "{};\n";
+        }
+      }
+    }
+
     // Declare static buffers.
     if (auto delayOp = dyn_cast<spechls::DelayOp>(op)) {
-      os << "static ";
       if (failed(emitter.emitType(op->getLoc(), delayOp.getType())))
         return failure();
       os << " " << getDelayBufferName(emitter, delayOp) << "[" << delayOp.getDepth() << "];\n";
     } else if (auto rollbackOp = dyn_cast<spechls::RollbackOp>(op)) {
-      os << "static ";
       if (failed(emitter.emitType(op->getLoc(), rollbackOp.getType())))
         return failure();
       os << " " << getRollbackBufferName(emitter, rollbackOp) << "["
          << *std::max_element(rollbackOp.getDepths().begin(), rollbackOp.getDepths().end()) + 1 << "];\n";
     } else if (auto fifoOp = dyn_cast<spechls::FIFOOp>(op)) {
-      os << "static FifoType<";
+      os << "FifoType<";
       if (failed(emitter.emitType(op->getLoc(), fifoOp.getType())))
         return failure();
       os << "> " << getFifoBufferName(emitter, fifoOp) << ";\n";
@@ -301,42 +310,6 @@ LogicalResult printDelayInitialization(CppEmitter &emitter, Region::BlockListTyp
   return success();
 }
 
-LogicalResult printFunctionSignature(CppEmitter &emitter, Operation *op, StringRef funcName, ArrayRef<Type> resultTypes,
-                                     Block::BlockArgListType arguments, bool addInit = false,
-                                     bool useReferences = false) {
-  raw_indented_ostream &os = emitter.ostream();
-  if (failed(emitter.emitTypes(op->getLoc(), resultTypes)))
-    return failure();
-  os << ' ' << funcName << "(";
-  if (addInit) {
-    os << "bool";
-    if (arguments.size() > 0)
-      os << ", ";
-  }
-  if (failed(printFunctionArgTypes(emitter, op, arguments, useReferences)))
-    return failure();
-  os << ")";
-  return success();
-}
-
-LogicalResult printFunctionPrototype(CppEmitter &emitter, Operation *op, StringRef funcName, ArrayRef<Type> resultTypes,
-                                     Block::BlockArgListType arguments, bool addInit = false,
-                                     bool useReferences = false) {
-  raw_indented_ostream &os = emitter.ostream();
-  if (failed(emitter.emitTypes(op->getLoc(), resultTypes)))
-    return failure();
-  os << ' ' << funcName << "(";
-  if (addInit) {
-    os << "bool " << emitter.getInitVariableName();
-    if (arguments.size() > 0)
-      os << ", ";
-  }
-  if (failed(printFunctionArgs(emitter, op, arguments, useReferences)))
-    return failure();
-  os << ")";
-  return success();
-}
-
 LogicalResult printOperation(CppEmitter &emitter, ModuleOp moduleOp) {
   raw_indented_ostream &os = emitter.ostream();
   os << "#include <ap_int.h>\n";
@@ -358,18 +331,10 @@ LogicalResult printOperation(CppEmitter &emitter, ModuleOp moduleOp) {
 
   for (auto &&op : moduleOp) {
     if (auto kernelOp = dyn_cast<spechls::KernelOp>(op)) {
-      if (failed(printFunctionSignature(emitter, kernelOp.getOperation(), kernelOp.getName(),
-                                        kernelOp.getFunctionType().getResults(), kernelOp.getArguments(), false,
-                                        true))) {
+      os << "void " << kernelOp.getName() << "(";
+      if (failed(printFunctionArgTypes(emitter, kernelOp.getOperation(), kernelOp.getArguments(), true)))
         return failure();
-      }
-      os << ";\n";
-    } else if (auto taskOp = dyn_cast<spechls::TaskOp>(op)) {
-      if (failed(printFunctionSignature(emitter, taskOp.getOperation(), taskOp.getName(),
-                                        taskOp.getFunctionType().getResults(), taskOp.getArguments(), true))) {
-        return failure();
-      }
-      os << ";\n";
+      os << ");\n";
     }
   }
   os << "\n";
@@ -386,14 +351,13 @@ LogicalResult printOperation(CppEmitter &emitter, spechls::KernelOp kernelOp) {
   raw_indented_ostream &os = emitter.ostream();
   Operation *op = kernelOp.getOperation();
 
-  if (failed(printFunctionPrototype(emitter, op, kernelOp.getName(), kernelOp.getFunctionType().getResults(),
-                                    kernelOp.getArguments(), false, true))) {
+  os << "void " << kernelOp.getName() << "(";
+  if (failed(printFunctionArgs(emitter, op, kernelOp.getArguments(), true)))
     return failure();
-  }
-  os << " {\n#pragma HLS inline recursive\n";
+  os << ") {\n#pragma HLS inline recursive\n";
   os.indent();
 
-  if (failed(printAllVariables(emitter, op)))
+  if (failed(printAllVariables(emitter, kernelOp)))
     return failure();
 
   if (failed(printDelayInitialization(emitter, kernelOp.getBody().getBlocks())))
@@ -434,18 +398,48 @@ LogicalResult printOperation(CppEmitter &emitter, spechls::KernelOp kernelOp) {
 LogicalResult printOperation(CppEmitter &emitter, spechls::TaskOp taskOp) {
   CppEmitter::Scope scope(emitter);
   raw_indented_ostream &os = emitter.ostream();
-  Operation *op = taskOp.getOperation();
 
-  if (failed(printFunctionPrototype(emitter, op, taskOp.getName(), taskOp.getFunctionType().getResults(),
-                                    taskOp.getArguments(), true))) {
-    return failure();
+  SmallVector<spechls::FIFOOp> fifoInputs;
+  SmallVector<std::pair<Value, spechls::FIFOOp>> fifoOutputs;
+  for (auto &&op : taskOp.getArgs()) {
+    if (auto fifoOp = dyn_cast_if_present<spechls::FIFOOp>(op.getDefiningOp())) {
+      fifoInputs.push_back(fifoOp);
+    }
   }
-  os << " {\n";
-  os.indent();
+  for (auto &&res : taskOp.getResults()) {
+    for (auto &&user : res.getUsers()) {
+      if (auto fifoOp = dyn_cast_if_present<spechls::FIFOOp>(user)) {
+        fifoOutputs.push_back({res, fifoOp});
+      }
+    }
+  }
 
-  if (failed(printAllVariables(emitter, op)))
-    return failure();
-  os << "\n";
+  if (!fifoInputs.empty() || !fifoOutputs.empty()) {
+    os << "if (";
+    llvm::interleave(
+        fifoInputs.begin(), fifoInputs.end(),
+        [&](auto &fifo) { os << "!" << getFifoBufferName(emitter, fifo) << ".empty"; }, [&]() { os << " && "; });
+    if (!fifoInputs.empty() && !fifoOutputs.empty())
+      os << " && ";
+    llvm::interleave(
+        fifoOutputs.begin(), fifoOutputs.end(),
+        [&](auto &fifo) { os << "!" << getFifoBufferName(emitter, fifo.second) << ".full"; }, [&]() { os << " && "; });
+    os << ") {\n";
+    os.indent();
+    for (auto &&in : fifoInputs) {
+      os << "fifo_read(" << getFifoBufferName(emitter, in) << ");\n";
+    }
+  }
+
+  // Copy variables to the local scope.
+  for (auto arg : llvm::zip_equal(taskOp.getBody().getArguments(), taskOp.getArgs())) {
+    if (failed(emitter.emitOperand(std::get<0>(arg))))
+      return failure();
+    os << " = ";
+    if (failed(emitter.emitOperand(std::get<1>(arg))))
+      return failure();
+    os << ";\n";
+  }
 
   if (failed(printDelayInitialization(emitter, taskOp.getBody().getBlocks())))
     return failure();
@@ -476,8 +470,14 @@ LogicalResult printOperation(CppEmitter &emitter, spechls::TaskOp taskOp) {
     }
   }
 
-  os.unindent();
-  os << "}";
+  if (!fifoInputs.empty() || !fifoOutputs.empty()) {
+    for (auto &&out : fifoOutputs) {
+      os << "fifo_write(" << getFifoBufferName(emitter, out.second) << ", " << emitter.getOrCreateName(out.first)
+         << ");\n";
+    }
+    os.unindent();
+    os << "}";
+  }
   return success();
 }
 
@@ -490,64 +490,6 @@ LogicalResult printCallOp(CppEmitter &emitter, Operation *operation, StringRef c
   if (failed(emitter.emitOperands(*operation)))
     return failure();
   os << ")";
-  return success();
-}
-
-LogicalResult printOperation(CppEmitter &emitter, spechls::LaunchOp launchOp) {
-  Operation *operation = launchOp.getOperation();
-  raw_indented_ostream &os = emitter.ostream();
-  StringRef callee = launchOp.getCallee();
-
-  SmallVector<spechls::FIFOOp> fifoInputs;
-  SmallVector<std::pair<Value, spechls::FIFOOp>> fifoOutputs;
-  for (auto &&op : launchOp.getOperands()) {
-    if (auto fifoOp = dyn_cast_if_present<spechls::FIFOOp>(op.getDefiningOp())) {
-      fifoInputs.push_back(fifoOp);
-    }
-  }
-  for (auto &&res : launchOp.getResults()) {
-    for (auto &&user : res.getUsers()) {
-      if (auto fifoOp = dyn_cast_if_present<spechls::FIFOOp>(user)) {
-        fifoOutputs.push_back({res, fifoOp});
-      }
-    }
-  }
-
-  if (!fifoInputs.empty() || !fifoOutputs.empty()) {
-    os << "if (";
-    llvm::interleave(
-        fifoInputs.begin(), fifoInputs.end(),
-        [&](auto &fifo) { os << "!" << getFifoBufferName(emitter, fifo) << ".empty"; }, [&]() { os << " && "; });
-    if (!fifoInputs.empty() && !fifoOutputs.empty())
-      os << " && ";
-    llvm::interleave(
-        fifoOutputs.begin(), fifoOutputs.end(),
-        [&](auto &fifo) { os << "!" << getFifoBufferName(emitter, fifo.second) << ".full"; }, [&]() { os << " && "; });
-    os << ") {\n";
-    os.indent();
-    for (auto &&in : fifoInputs) {
-      os << "fifo_read(" << getFifoBufferName(emitter, in) << ");\n";
-    }
-  }
-
-  if (failed(emitter.emitAssignPrefix(*operation)))
-    return failure();
-
-  os << callee << "(" << emitter.getInitVariableName() << ", ";
-  if (failed(emitter.emitOperands(*operation)))
-    return failure();
-  os << ")";
-
-  if (!fifoInputs.empty() || !fifoOutputs.empty()) {
-    os << ";\n";
-    for (auto &&out : fifoOutputs) {
-      os << "fifo_write(" << getFifoBufferName(emitter, out.second) << ", " << emitter.getOrCreateName(out.first)
-         << ");\n";
-    }
-    os.unindent();
-    os << "}";
-  }
-
   return success();
 }
 
@@ -667,11 +609,13 @@ LogicalResult printOperation(CppEmitter &emitter, spechls::PrintOp printOp) {
 LogicalResult printOperation(CppEmitter &emitter, spechls::CommitOp commitOp) {
   raw_indented_ostream &os = emitter.ostream();
 
-  os << "return";
-  if (!commitOp.getValue()) {
+  if (!commitOp.getValue())
     return success();
-  }
-  os << " ";
+
+  spechls::TaskOp task = commitOp.getParentOp();
+  if (failed(emitter.emitOperand(task.getResult())))
+    return failure();
+  os << " = ";
 
   bool alwaysEnabled = false;
   Value enable = commitOp.getEnable();
@@ -971,6 +915,22 @@ LogicalResult printOperation(CppEmitter &emitter, circt::comb::ConcatOp concatOp
   os << ")";
   return success();
 }
+
+LogicalResult printOperation(CppEmitter &emitter, circt::hw::BitcastOp bitcastOp) {
+  Operation *operation = bitcastOp.getOperation();
+  raw_ostream &os = emitter.ostream();
+
+  // FIXME: This isn't a bitcast in most cases, but should cover our needs for now.
+  if (failed(emitter.emitAssignPrefix(*operation)))
+    return failure();
+  os << "(";
+  if (failed(emitter.emitType(bitcastOp.getLoc(), bitcastOp.getType())))
+    return failure();
+  os << ")";
+  if (failed(emitter.emitOperand(bitcastOp.getInput())))
+    return failure();
+  return success();
+}
 } // namespace
 
 CppEmitter::CppEmitter(raw_ostream &os, bool declareStructTypes, bool declareFunctions)
@@ -990,11 +950,13 @@ LogicalResult CppEmitter::emitOperation(Operation &op, bool trailingSemicolon) {
                 circt::comb::ExtractOp, circt::comb::ICmpOp, circt::comb::MulOp, circt::comb::MuxOp, circt::comb::OrOp,
                 circt::comb::SubOp, circt::comb::ReplicateOp, circt::comb::XorOp>(
               [&](auto op) { return printOperation(*this, op); })
+          // HW ops.
+          .Case<circt::hw::BitcastOp>([&](auto op) { return printOperation(*this, op); })
           // SpecHLS ops.
           .Case<spechls::AlphaOp, spechls::CallOp, spechls::CommitOp, spechls::DelayOp, spechls::ExitOp,
                 spechls::FIFOOp, spechls::FSMCommandOp, spechls::FSMOp, spechls::GammaOp, spechls::KernelOp,
-                spechls::TaskOp, spechls::LaunchOp, spechls::LoadOp, spechls::LUTOp, spechls::MuOp, spechls::PackOp,
-                spechls::PrintOp, spechls::RewindOp, spechls::RollbackOp, spechls::UnpackOp>(
+                spechls::TaskOp, spechls::LoadOp, spechls::LUTOp, spechls::MuOp, spechls::PackOp, spechls::PrintOp,
+                spechls::RewindOp, spechls::RollbackOp, spechls::UnpackOp>(
               [&](auto op) { return printOperation(*this, op); })
           // Inlined operations.
           .Case<circt::hw::ConstantOp, spechls::FieldOp>([&](auto op) {
@@ -1212,8 +1174,6 @@ std::string CppEmitter::getValueNamePrefix(Value value) {
     return ("fsm_" + fsmCommandOp.getName() + "_command").str();
   if (auto gammaOp = dyn_cast<spechls::GammaOp>(op))
     return gammaOp.getSymName().str();
-  if (auto launch = dyn_cast<spechls::LaunchOp>(op))
-    return launch.getCallee().str();
   if (isa<spechls::LoadOp>(op))
     return "load";
   if (isa<spechls::LUTOp>(op))
