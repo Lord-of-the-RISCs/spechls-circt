@@ -70,8 +70,7 @@ def SpecHLS_StructType : SpecHLSType<"Struct", "struct"> {
 // Operations
 //===--------------------------------------------------------------------------------------------------------------===//
 
-def SpecHLS_KernelOp : SpecHLSOp<"kernel",
-        [AutomaticAllocationScope, IsolatedFromAbove, FunctionOpInterface, SingleBlock, RegionKindInterface]> {
+def SpecHLS_KernelOp : SpecHLSOp<"kernel", [IsolatedFromAbove, FunctionOpInterface, SingleBlock, RegionKindInterface]> {
     let arguments = (ins StrAttr:$sym_name,
                          TypeAttrOf<FunctionType>:$function_type,
                          OptionalAttr<DictArrayAttr>:$arg_attrs,
@@ -79,7 +78,6 @@ def SpecHLS_KernelOp : SpecHLSOp<"kernel",
     let regions = (region SizedRegion<1>:$body);
 
     let hasCustomAssemblyFormat = 1;
-    let hasVerifier = 1;
 
     let extraClassDeclaration = [{
         //===------------------------------------------------------------------===//
@@ -106,20 +104,18 @@ def SpecHLS_KernelOp : SpecHLSOp<"kernel",
 }
 
 def SpecHLS_ExitOp : SpecHLSOp<"exit", [HasParent<"KernelOp">, Terminator, ReturnLike]> {
-    let arguments = (ins I1:$guard, Optional<AnyType>:$value);
+    let arguments = (ins I1:$guard, Variadic<AnyType>:$values);
 
     let hasCustomAssemblyFormat = 1;
     let hasVerifier = 1;
 }
 
-def SpecHLS_TaskOp : SpecHLSOp<"task", [AutomaticAllocationScope, SingleBlock, RegionKindInterface]> {
-    let arguments = (ins StrAttr:$sym_name);
-    let results = (outs AnyType:$result);
+def SpecHLS_TaskOp : SpecHLSOp<"task", [SingleBlock, RegionKindInterface, IsolatedFromAbove]> {
+    let arguments = (ins StrAttr:$sym_name, Variadic<AnyType>:$args);
+    let results = (outs Optional<AnyType>:$result);
     let regions = (region SizedRegion<1>:$body);
 
-    let assemblyFormat = [{
-        $sym_name `->` type($result) attr-dict-with-keyword $body
-    }];
+    let hasCustomAssemblyFormat = 1;
 
     let extraClassDeclaration = [{
         //===------------------------------------------------------------------===//

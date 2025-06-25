@@ -7,6 +7,7 @@
 
 #include "Dialect/SpecHLS/IR/SpecHLSOps.h"
 
+#include <llvm/ADT/STLExtras.h>
 #include <llvm/ADT/TypeSwitch.h>
 #include <mlir/IR/BuiltinAttributes.h>
 #include <mlir/IR/DialectImplementation.h>
@@ -19,7 +20,6 @@
 
 #include "Dialect/SpecHLS/IR/SpecHLSDialect.cpp.inc"
 #include "Dialect/SpecHLS/IR/SpecHLSTypes.h"
-#include "llvm/ADT/STLExtras.h"
 
 using namespace mlir;
 
@@ -134,12 +134,6 @@ void spechls::KernelOp::print(OpAsmPrinter &printer) {
   printer.printRegion(getBody(), false, true);
 }
 
-LogicalResult spechls::KernelOp::verify() {
-  if (getResultTypes().size() > 1)
-    return emitOpError("expected a single result");
-  return success();
-}
-
 ParseResult spechls::ExitOp::parse(OpAsmParser &parser, OperationState &result) {
   OpAsmParser::UnresolvedOperand guard;
   if (parser.parseKeyword("if") || parser.parseOperand(guard) ||
@@ -147,10 +141,11 @@ ParseResult spechls::ExitOp::parse(OpAsmParser &parser, OperationState &result) 
     return failure();
 
   if (parser.parseOptionalKeyword("with").succeeded()) {
-    OpAsmParser::UnresolvedOperand value;
-    Type valueType;
-    if (parser.parseOperand(value) || parser.parseColonType(valueType) ||
-        parser.resolveOperand(value, valueType, result.operands))
+    SmallVector<OpAsmParser::UnresolvedOperand> values;
+    SmallVector<Type> valueTypes;
+    SMLoc valueLoc = parser.getCurrentLocation();
+    if (parser.parseOperandList(values) || parser.parseColonTypeList(valueTypes) ||
+        parser.resolveOperands(values, valueTypes, valueLoc, result.operands))
       return failure();
   }
 
@@ -163,8 +158,8 @@ ParseResult spechls::ExitOp::parse(OpAsmParser &parser, OperationState &result) 
 void spechls::ExitOp::print(OpAsmPrinter &printer) {
   printer << " if " << getGuard();
 
-  if (getValue())
-    printer << " with " << getValue() << " : " << getValue().getType();
+  if (getValues().size() > 0)
+    printer << " with " << getValues() << " : " << getValues().getTypes();
 }
 
 LogicalResult spechls::ExitOp::verify() {
@@ -187,6 +182,48 @@ LogicalResult spechls::ExitOp::verify() {
   }
 
   return success();
+}
+
+ParseResult spechls::TaskOp::parse(OpAsmParser &parser, OperationState &result) {
+  StringAttr nameAttr;
+
+  SmallVector<OpAsmParser::Argument, 4> regionArgs;
+  SmallVector<OpAsmParser::UnresolvedOperand, 4> operands;
+
+  FunctionType funcType;
+  if (parser.parseAttribute(nameAttr, getSymNameAttrName(result.name), result.attributes) ||
+      parser.parseAssignmentList(regionArgs, operands) || parser.parseColonType(funcType) ||
+      parser.parseOptionalAttrDictWithKeyword(result.attributes))
+    return failure();
+  result.addTypes(funcType.getResults());
+
+  if (regionArgs.size() != funcType.getInputs().size())
+    return parser.emitError(parser.getNameLoc(), "missing types for task arguments");
+
+  for (auto [arg, type] : llvm::zip_equal(regionArgs, funcType.getInputs()))
+    arg.type = type;
+
+  auto *body = result.addRegion();
+  if (parser.parseRegion(*body, regionArgs))
+    return failure();
+
+  for (auto [operand, type] : llvm::zip_equal(operands, funcType.getInputs())) {
+    if (parser.resolveOperand(operand, type, result.operands))
+      return failure();
+  }
+
+  return success();
+}
+
+void spechls::TaskOp::print(OpAsmPrinter &printer) {
+  printer << " \"" << getSymName() << "\"(";
+  llvm::interleaveComma(llvm::zip(getRegion().getArguments(), getArgs()), printer,
+                        [&](auto it) { printer << std::get<0>(it) << " = " << std::get<1>(it); });
+  printer << ") : (";
+  llvm::interleaveComma(getArgs(), printer, [&](auto it) { printer.printType(it.getType()); });
+  printer << ") -> " << getResult().getType() << " ";
+  printer.printOptionalAttrDictWithKeyword((*this)->getAttrs(), {getSymNameAttrName()});
+  printer.printRegion(getBody(), false);
 }
 
 LogicalResult spechls::CommitOp::verify() {
