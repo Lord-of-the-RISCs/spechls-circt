@@ -120,6 +120,10 @@ std::string getDelayBufferName(CppEmitter &emitter, spechls::DelayOp delayOp) {
   return emitter.getOrCreateName(delayOp).str() + "_buffer";
 }
 
+std::string getRewindBufferName(CppEmitter &emitter, spechls::RewindOp rewindOp) {
+  return emitter.getOrCreateName(rewindOp).str() + "_buffer";
+}
+
 std::string getRollbackBufferName(CppEmitter &emitter, spechls::RollbackOp rollbackOp) {
   return emitter.getOrCreateName(rollbackOp).str() + "_buffer";
 }
@@ -185,21 +189,27 @@ LogicalResult printAllVariables(CppEmitter &emitter, spechls::KernelOp &kernelOp
       }
     }
 
-    // Declare static buffers.
+    // Declare buffers.
     if (auto delayOp = dyn_cast<spechls::DelayOp>(op)) {
       if (failed(emitter.emitType(op->getLoc(), delayOp.getType())))
         return failure();
-      os << " " << getDelayBufferName(emitter, delayOp) << "[" << delayOp.getDepth() << "];\n";
+      os << " " << getDelayBufferName(emitter, delayOp) << "[" << delayOp.getDepth() << "]{};\n";
+    } else if (auto rewindOp = dyn_cast<spechls::RewindOp>(op)) {
+      os << "RewindType<";
+      if (failed(emitter.emitType(op->getLoc(), rewindOp.getType())))
+        return failure();
+      os << ", " << llvm::NextPowerOf2(*std::max_element(rewindOp.getDepths().begin(), rewindOp.getDepths().end()) + 1)
+         << "> " << getRewindBufferName(emitter, rewindOp) << "{};\n";
     } else if (auto rollbackOp = dyn_cast<spechls::RollbackOp>(op)) {
       if (failed(emitter.emitType(op->getLoc(), rollbackOp.getType())))
         return failure();
       os << " " << getRollbackBufferName(emitter, rollbackOp) << "["
-         << *std::max_element(rollbackOp.getDepths().begin(), rollbackOp.getDepths().end()) + 1 << "];\n";
+         << *std::max_element(rollbackOp.getDepths().begin(), rollbackOp.getDepths().end()) + 1 << "]{};\n";
     } else if (auto fifoOp = dyn_cast<spechls::FIFOOp>(op)) {
       os << "FifoType<";
       if (failed(emitter.emitType(op->getLoc(), fifoOp.getType())))
         return failure();
-      os << "> " << getFifoBufferName(emitter, fifoOp) << ";\n";
+      os << "> " << getFifoBufferName(emitter, fifoOp) << "{};\n";
     }
     return WalkResult::advance();
   });
@@ -666,7 +676,7 @@ LogicalResult printOperation(CppEmitter &emitter, spechls::RewindOp rewindOp) {
   if (failed(emitter.emitType(rewindOp.getLoc(), rewindOp.getType())))
     return failure();
   os << ", " << llvm::NextPowerOf2(*std::max_element(rewindOp.getDepths().begin(), rewindOp.getDepths().end()) + 1);
-  os << ">(";
+  os << ">(" << getRewindBufferName(emitter, rewindOp) << ", ";
   if (failed(emitter.emitOperands(*operation)))
     return failure();
   os << ")";

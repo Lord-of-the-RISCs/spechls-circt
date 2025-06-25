@@ -92,6 +92,25 @@ T rollback(T *buffer, T value, unsigned int offset, bool next_input) {
   return result;
 }
 
+template <typename T, unsigned int Depth>
+struct RewindType {
+  unsigned int wr_idx{};
+  unsigned int spare{};
+  T data[Depth]{};
+};
+
+template <typename T, unsigned int Depth>
+T rewind(RewindType<T, Depth> &buffer, T value, unsigned int offset, bool next_input) {
+  T result;
+  if (next_input) {
+    buffer.wr_idx = (buffer.wr_idx + 1) & (Depth - 1);
+    buffer.data[buffer.wr_idx] = value;
+  }
+  buffer.spare = buffer.spare + offset + (next_input ? 0 : -1);
+  result = buffer.data[(buffer.wr_idx - buffer.spare) & (Depth - 1)];
+  return result;
+}
+
 template <typename T, typename... Ts>
 T gamma(unsigned int select, Ts... values) {
   T result = T{};
