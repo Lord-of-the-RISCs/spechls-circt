@@ -14,14 +14,11 @@ def UnrollInstrPass : Pass<"unroll-instr", "mlir::ModuleOp"> {
     let summary = "Unroll the HW module with the instructions";
     let description = [{ TODO }];
 
-    //let constructor = "wcet::createUnrollInstrPass()";
     let dependentDialects = [
       "circt::hw::HWDialect",
-      "SpecHLS::SpecHLSDialect",
-      "SpecHLS::WcetDialect",
-      "mlir::arith::ArithDialect"
+      "spechls::SpecHLSDialect",
+      "wcet::WcetDialect",
     ];
-
     let options = [
       ListOption<"instrs", "instrs", "uint32_t", "The basic block instructions">
     ];
@@ -31,11 +28,10 @@ def LongestPathPass : Pass<"longest-path", "mlir::ModuleOp"> {
     let summary = "Find the longest path";
     let description = [{ TODO }];
 
-    //let constructor = "wcet::createLongestPathPass()";
     let dependentDialects = [
       "circt::hw::HWDialect",
-      "SpecHLS::SpecHLSDialect",
-      "SpecHLS::WcetDialect"
+      "spechls::SpecHLSDialect",
+      "wcet::WcetDialect"
       ];
   }
 

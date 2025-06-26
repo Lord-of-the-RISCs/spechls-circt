@@ -33,27 +33,26 @@
 using namespace mlir;
 using namespace circt;
 using namespace spechls;
-using namespace wcet;
 
 namespace wcet {
-#define GEN_PASS_DEF_WCETPASS
+#define GEN_PASS_DEF_LONGESTPATHPASS
 #include "Dialect/Wcet/Transforms/Passes.h.inc"
 } // namespace wcet
 
 namespace {
   
-  class LongestPathPass : public wcet::impl::LongestPathPassBase<LongestPathPass> {
+  /*class LongestPathPass : public wcet::impl::LongestPathPassBase<LongestPathPass> {
     public:
       using LongestPathPassBase::LongestPathPassBase;
       void runOnOperation() override;
-  };
+  };*/
 
 }
 
 void topologicalSort(Operation *op, std::stack<Value> &stack,
                      DenseMap<Operation *, bool> &visited);
 
-void longestPath(DummyOp starting_point, PatternRewriter &rewriter,
+void longestPath(wcet::DummyOp starting_point, PatternRewriter &rewriter,
                  StringAttr dist_name);
 
 void visitedOps(Operation *op, SmallVector<Operation *> &visited);
@@ -84,7 +83,7 @@ struct LongestPathPattern : OpRewritePattern<hw::HWModuleOp> {
     if (init_values.size() == 0) {
       return failure();
     }
-    DummyOp starting_point = builder.create<DummyOp>(init_types, init_values);
+    wcet::DummyOp starting_point = builder.create<wcet::DummyOp>(init_types, init_values);
 
     auto dummy_results = starting_point.getResults();
     for (size_t i = 0; i < init_values.size(); i++) {
@@ -117,7 +116,7 @@ struct LongestPathPattern : OpRewritePattern<hw::HWModuleOp> {
         del_val.push_back(vec[j].getResult());
         del_types.push_back(vec[j].getType());
       }
-      DummyOp inter_instr = builder.create<DummyOp>(del_types, del_val);
+      wcet::DummyOp inter_instr = builder.create<wcet::DummyOp>(del_types, del_val);
       auto results = inter_instr.getResults();
       for (size_t j = 0; j < del_val.size(); j++) {
         Value oldResult = del_val[j];
@@ -150,9 +149,9 @@ public:
   }
 };
 
-std::unique_ptr<OperationPass<ModuleOp>> createLongestPathPass() {
+/*std::unique_ptr<OperationPass<ModuleOp>> createLongestPathPass() {
   return std::make_unique<LongestPathPass>();
-}
+}*/
 
 } // namespace SpecHLS
 
@@ -170,7 +169,7 @@ void topologicalSort(Operation *op, std::stack<Value> &stack,
   }
 }
 
-void longestPath(DummyOp starting_point, PatternRewriter &rewriter,
+void longestPath(wcet::DummyOp starting_point, PatternRewriter &rewriter,
                  StringAttr dist_name) {
   DenseMap<Operation *, int> dists;
   DenseMap<Operation *, bool> visited;
