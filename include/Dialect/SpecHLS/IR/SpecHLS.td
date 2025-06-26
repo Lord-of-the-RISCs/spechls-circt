@@ -170,8 +170,8 @@ def SpecHLS_MuOp : SpecHLSOp<"mu",
 }
 
 def SpecHLS_PrintOp : SpecHLSOp<"print", [DeclareOpInterfaceMethods<OpAsmOpInterface, ["getAsmResultNames"]>]> {
-    let arguments = (ins I32:$state, I1:$enable, StrAttr:$format, Variadic<AnyType>:$args);
-    let results = (outs I32:$new_state);
+    let arguments = (ins SI32:$state, I1:$enable, StrAttr:$format, Variadic<AnyType>:$args);
+    let results = (outs SI32:$new_state);
 
     let assemblyFormat = [{
         $state `,` $enable `,` $format (`,` $args^ `:` type($args))? attr-dict
