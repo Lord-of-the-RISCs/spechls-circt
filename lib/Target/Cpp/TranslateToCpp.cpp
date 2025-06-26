@@ -195,11 +195,10 @@ LogicalResult printAllVariables(CppEmitter &emitter, spechls::KernelOp &kernelOp
         return failure();
       os << " " << getDelayBufferName(emitter, delayOp) << "[" << delayOp.getDepth() << "]{};\n";
     } else if (auto rewindOp = dyn_cast<spechls::RewindOp>(op)) {
-      os << "RewindType<";
       if (failed(emitter.emitType(op->getLoc(), rewindOp.getType())))
         return failure();
-      os << ", " << llvm::NextPowerOf2(*std::max_element(rewindOp.getDepths().begin(), rewindOp.getDepths().end()) + 1)
-         << "> " << getRewindBufferName(emitter, rewindOp) << "{};\n";
+      os << " " << getRewindBufferName(emitter, rewindOp) << "["
+         << *std::max_element(rewindOp.getDepths().begin(), rewindOp.getDepths().end()) + 1 << "]{};\n";
     } else if (auto rollbackOp = dyn_cast<spechls::RollbackOp>(op)) {
       if (failed(emitter.emitType(op->getLoc(), rollbackOp.getType())))
         return failure();
@@ -675,7 +674,13 @@ LogicalResult printOperation(CppEmitter &emitter, spechls::RewindOp rewindOp) {
   os << "rewind<";
   if (failed(emitter.emitType(rewindOp.getLoc(), rewindOp.getType())))
     return failure();
-  os << ", " << llvm::NextPowerOf2(*std::max_element(rewindOp.getDepths().begin(), rewindOp.getDepths().end()) + 1);
+  os << ", ";
+  if (failed(interleaveCommaWithError(rewindOp.getDepths(), os, [&](uint64_t depth) {
+        os << depth;
+        return success();
+      }))) {
+    return failure();
+  }
   os << ">(" << getRewindBufferName(emitter, rewindOp) << ", ";
   if (failed(emitter.emitOperands(*operation)))
     return failure();
@@ -697,8 +702,9 @@ LogicalResult printOperation(CppEmitter &emitter, spechls::RollbackOp rollbackOp
   if (failed(interleaveCommaWithError(rollbackOp.getDepths(), os, [&](uint64_t depth) {
         os << depth;
         return success();
-      })))
+      }))) {
     return failure();
+  }
   os << ">(" << getRollbackBufferName(emitter, rollbackOp) << ", ";
   if (failed(emitter.emitOperands(*operation)))
     return failure();
