@@ -435,9 +435,6 @@ LogicalResult printOperation(CppEmitter &emitter, spechls::TaskOp taskOp) {
         [&](auto &fifo) { os << "!" << getFifoBufferName(emitter, fifo.second) << ".full"; }, [&]() { os << " && "; });
     os << ") {\n";
     os.indent();
-    for (auto &&in : fifoInputs) {
-      os << "fifo_read(" << getFifoBufferName(emitter, in) << ");\n";
-    }
   }
 
   // Copy variables to the local scope.
@@ -454,6 +451,7 @@ LogicalResult printOperation(CppEmitter &emitter, spechls::TaskOp taskOp) {
     return failure();
 
   SmallVector<spechls::DelayOp> delays;
+  Value nextInputCmd{};
   for (auto &&op : taskOp.getBody().front()) {
     if (isa<spechls::CommitOp>(op)) {
       // Print delay push operations just before the end of the task.
@@ -473,6 +471,11 @@ LogicalResult printOperation(CppEmitter &emitter, spechls::TaskOp taskOp) {
       }
     } else if (auto delayOp = dyn_cast<spechls::DelayOp>(op)) {
       delays.push_back(delayOp);
+    } else if (auto fieldOp = dyn_cast<spechls::FieldOp>(op)) {
+      // Retrieve the nextInput FSM command signal. This is a hack that is mirrored from the Java implementation.
+      if (fieldOp.getName() == "nextInput") {
+        nextInputCmd = fieldOp;
+      }
     }
     if (failed(emitter.emitOperation(op, true))) {
       return failure();
@@ -483,6 +486,20 @@ LogicalResult printOperation(CppEmitter &emitter, spechls::TaskOp taskOp) {
     for (auto &&out : fifoOutputs) {
       os << "fifo_write(" << getFifoBufferName(emitter, out.second) << ", " << emitter.getOrCreateName(out.first)
          << ");\n";
+    }
+    if (nextInputCmd && !fifoInputs.empty()) {
+      os << "if (";
+      if (failed(emitter.emitOperand(nextInputCmd)))
+        return failure();
+      os << ") {\n";
+      os.indent();
+    }
+    for (auto &&in : fifoInputs) {
+      os << "fifo_read(" << getFifoBufferName(emitter, in) << ");\n";
+    }
+    if (nextInputCmd && !fifoInputs.empty()) {
+      os.unindent();
+      os << "}";
     }
     os.unindent();
     os << "}";
@@ -601,14 +618,11 @@ LogicalResult printOperation(CppEmitter &emitter, spechls::PrintOp printOp) {
   if (printOp.getArgs().size() > 0)
     os << ", ";
   if (failed(interleaveCommaWithError(printOp.getArgs(), os, [&](Value operand) {
-        if (auto iType = dyn_cast<IntegerType>(operand.getType())) {
-          if (iType.isSigned()) {
-            os << (iType.getWidth() > 32 ? "(long long)" : "(int)");
-          } else {
-            os << (iType.getWidth() > 32 ? "(unsigned long long)" : "(unsigned int)");
-          }
-        }
-        return emitter.emitOperand(operand);
+        if (failed(emitter.emitOperand(operand)))
+          return failure();
+        if (isa<IntegerType>(operand.getType()))
+          os << ".to_int()";
+        return success();
       })))
     return failure();
   os << ")";
