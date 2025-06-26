@@ -995,7 +995,7 @@ LogicalResult CppEmitter::emitOperation(Operation &op, bool trailingSemicolon) {
                 spechls::RewindOp, spechls::RollbackOp, spechls::UnpackOp>(
               [&](auto op) { return printOperation(*this, op); })
           // Inlined operations.
-          .Case<circt::hw::ConstantOp, spechls::FieldOp>([&](auto op) {
+          .Case<circt::hw::ConstantOp, spechls::FieldOp, spechls::SyncOp>([&](auto op) {
             skipLineEnding = true;
             return success();
           })
@@ -1019,6 +1019,9 @@ LogicalResult CppEmitter::emitOperand(Value value) {
         return failure();
       os << "." << fieldOp.getName();
       return success();
+    }
+    if (auto syncOp = dyn_cast<spechls::SyncOp>(op)) {
+      return emitOperand(syncOp.getOperand(0));
     }
   }
   os << getOrCreateName(value);
