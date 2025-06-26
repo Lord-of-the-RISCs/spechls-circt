@@ -329,14 +329,6 @@ void spechls::MuOp::print(OpAsmPrinter &printer) {
           << ") : " << getInitValue().getType();
 }
 
-LogicalResult spechls::MuOp::verify() {
-  auto init = getInitValue();
-  if (!isa<BlockArgument>(init))
-    return emitOpError("init value must be a task argument");
-
-  return success();
-}
-
 CallInterfaceCallable spechls::CallOp::getCallableForCallee() {
   return (*this)->getAttrOfType<SymbolRefAttr>(getCalleeAttrName());
 }

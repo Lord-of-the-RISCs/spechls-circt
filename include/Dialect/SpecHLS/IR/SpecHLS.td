@@ -161,7 +161,6 @@ def SpecHLS_MuOp : SpecHLSOp<"mu",
     let results = (outs AnyType:$result);
 
     let hasCustomAssemblyFormat = 1;
-    let hasVerifier = 1;
 
     let extraClassDefinition = [{
         void $cppClass::getAsmResultNames(llvm::function_ref<void(mlir::Value, llvm::StringRef)> setNameFn) {
