@@ -92,23 +92,16 @@ T rollback(T *buffer, T value, unsigned int offset, bool next_input) {
   return result;
 }
 
-template <typename T, unsigned int Depth>
-struct RewindType {
-  unsigned int wr_idx{};
-  unsigned int spare{};
-  T data[Depth]{};
-};
-
-template <typename T, unsigned int Depth>
-T rewind(RewindType<T, Depth> &buffer, T value, unsigned int offset, bool next_input) {
-  T result;
+template <typename T, unsigned int... Depths>
+T rewind(T *buffer, T value, unsigned int offset, bool next_input) {
+  constexpr unsigned int max_depth = std::max({0u, Depths...}) + 1;
   if (next_input) {
-    buffer.wr_idx = (buffer.wr_idx + 1) & (Depth - 1);
-    buffer.data[buffer.wr_idx] = value;
+    for (unsigned int i = max_depth - 1; i > 0; --i) {
+      buffer[i] = buffer[i - 1];
+    }
+    buffer[0] = value;
   }
-  buffer.spare = buffer.spare + offset + (next_input ? 0 : -1);
-  result = buffer.data[(buffer.wr_idx - buffer.spare) & (Depth - 1)];
-  return result;
+  return buffer[offset > 0 ? offset - 1 : 0];
 }
 
 template <typename T, typename... Ts>
