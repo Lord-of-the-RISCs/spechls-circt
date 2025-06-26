@@ -35,21 +35,21 @@ namespace wcet {
 
 bool hasPragmaContaining(Operation *op, llvm::StringRef keyword) {
 
-  /*auto attr = op->getAttr(StringRef("#pragma"));
+  auto attr = op->getAttr(StringRef("#pragma"));
   if (attr != NULL) {
-    if (auto strAttr = attr.dyn_cast<mlir::StringAttr>()) {
+    if (auto strAttr = dyn_cast<mlir::StringAttr>(attr)) {
       // Compare the attribute value with an existing string
       if (strAttr.getValue().contains(keyword)) {
         return true;
       }
     }
-  }*/
+  }
   return false;
 }
 
 void setPragmaAttr(Operation * op, StringAttr value)
 {
-    //op->setAttr("#pragma", value);
+    op->setAttr("#pragma", value);
 }
 
 
@@ -57,7 +57,7 @@ void setPragmaAttr(Operation * op, StringAttr value)
 bool setupHWModule(hw::HWModuleOp op, PatternRewriter &rewriter,
                    SmallVector<wcet::InitOp> &inits) {
   // Check module validity
-  /*if (!hasPragmaContaining(op, "UNROLL_NODE")) {
+  if (!hasPragmaContaining(op, "UNROLL_NODE")) {
     return false;
   }
 
@@ -90,17 +90,17 @@ bool setupHWModule(hw::HWModuleOp op, PatternRewriter &rewriter,
     if (hasPragmaContaining(inst, "entry_point")) {
       rewriter.replaceOp(inst, arg.second);
       return;
-    }
+    }/*
     op.walk([&](DelayOp del) {
       auto input = del.getNext();
       input.getDefiningOp()->setAttr(
           "delay", rewriter.getI32IntegerAttr(del.getDepth()));
       rewriter.replaceOp(del, input);
-    });
+    });*/
   });
 
   // Update pragma
-  setPragmaAttr(op, rewriter.getStringAttr("INLINE"));*/
+  setPragmaAttr(op, rewriter.getStringAttr("INLINE"));
   return true;
 }
 
@@ -118,7 +118,7 @@ struct UnrollInstrPattern : OpRewritePattern<hw::HWModuleOp> {
 
   LogicalResult matchAndRewrite(hw::HWModuleOp top,
                                 PatternRewriter &rewriter) const override {
-    /*size_t num_init_outputs = top.getNumOutputPorts();
+    size_t num_init_outputs = top.getNumOutputPorts();
     SmallVector<wcet::InitOp> mu_inits = SmallVector<wcet::InitOp>();
     if (!setupHWModule(top, rewriter, mu_inits)) {
       return failure();
@@ -164,51 +164,28 @@ struct UnrollInstrPattern : OpRewritePattern<hw::HWModuleOp> {
     hw::InstanceOp inst =
         builder.create<hw::InstanceOp>(top, top.getName(), inputs);
 
-    SmallVector<DelayOp> deltas = SmallVector<DelayOp>();
-    for (size_t i = num_init_outputs; i < (inits.size() + num_init_outputs);
-         i++) {
-      DelayOp delta = builder.create<DelayOp>(
-          inst.getType(i), inst.getResult(i), enable, inst.getResult(i),
-          builder.getI32IntegerAttr(1));
-      delta->setAttr(rewriter.getStringAttr("instrs"),
-                     rewriter.getI32IntegerAttr(0));
-      deltas.push_back(delta);
-    }
     // Add the other instances
     for (size_t i = 1; i < cons.size(); i++) {
       inputs.clear();
-      for (size_t j = 0; j < deltas.size(); j++) {
-        inputs.push_back(deltas[j].getResult());
-      }
       inputs.push_back(cons[i]);
       inst = builder.create<hw::InstanceOp>(top, top.getName(), inputs);
-      deltas.clear();
-      for (size_t j = num_init_outputs; j < (inits.size() + num_init_outputs);
-           j++) {
-        DelayOp delta = builder.create<DelayOp>(
-            inst.getType(j), inst.getResult(j), enable, inst.getResult(j),
-            builder.getI32IntegerAttr(1));
-        delta->setAttr(rewriter.getStringAttr("instrs"),
-                       rewriter.getI32IntegerAttr(i));
-        deltas.push_back(delta);
-      }
     }
 
-    fprintf(stderr, "size deltas: %ld\n", deltas.size());
     // Plug the last delay into the output of the module
     for (size_t i = 0; i < inits.size(); i++) {
       StringAttr out_name = rewriter.getStringAttr("out_" + inits[i].getName());
-      unrolled_module.appendOutput(out_name, deltas[i].getResult());
+      unrolled_module.appendOutput(out_name, inst.getResult(0));
     }
     unrolled_module->setAttr(rewriter.getStringAttr("TOP"),
                              rewriter.getI32IntegerAttr(instrs.size()));
-*/ 
+
     return success();
   }
 };
 
 struct UnrollInstrPass : public impl::UnrollInstrPassBase<UnrollInstrPass> {
 
+  using UnrollInstrPassBase::UnrollInstrPassBase;
 public:
   void runOnOperation() override {
     auto *ctx = &getContext();

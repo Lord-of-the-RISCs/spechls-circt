@@ -20,13 +20,13 @@
 
 int main(int argc, char **argv) {
   mlir::DialectRegistry registry;
-  registry.insert<spechls::SpecHLSDialect, schedule::ScheduleDialect, circt::comb::CombDialect, circt::hw::HWDialect,
+  registry.insert<spechls::SpecHLSDialect, schedule::ScheduleDialect, wcet::WcetDialect, circt::comb::CombDialect, circt::hw::HWDialect,
                   circt::ssp::SSPDialect>();
 
   mlir::registerTransformsPasses();
   schedule::registerSchedulePasses();
-  //wcet::registerWcetPasses();
   schedule::registerScheduleToSSPPass();
+  wcet::registerWcetPasses();
 
   return mlir::asMainReturnCode(mlir::MlirOptMain(argc, argv, "SpecHLS optimizer driver", registry));
 }

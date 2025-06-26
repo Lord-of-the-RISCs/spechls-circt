@@ -19,16 +19,16 @@ using namespace mlir;
 // Wcet dialect
 //===--------------------------------------------------------------------------------------------------------------===//
 
-//void wcet::WcetDialect::initialize() {
-//  addOperations<
-//#define GET_OP_LIST
-//#include "Dialect/Wcet/IR/Wcet.cpp.inc"
-//      >();
-//  addTypes<
-//#define GET_TYPEDEF_LIST
-//#include "Dialect/Wcet/IR/WcetTypes.cpp.inc"
-//      >();
-//}
+void wcet::WcetDialect::initialize() {
+  addOperations<
+#define GET_OP_LIST
+#include "Dialect/Wcet/IR/Wcet.cpp.inc"
+      >();
+  addTypes<
+#define GET_TYPEDEF_LIST
+#include "Dialect/Wcet/IR/WcetTypes.cpp.inc"
+      >();
+}
 //
 //LogicalResult wcet::OperationOp::verify() {
 //  if (getNumOperands() != getDistances().size())
