@@ -7,15 +7,15 @@
 
 #include <circt/Dialect/Comb/CombDialect.h>
 #include <circt/Dialect/HW/HWDialect.h>
+#include <llvm/Support/raw_ostream.h>
+#include <mlir/IR/DialectRegistry.h>
+#include <mlir/IR/Operation.h>
 #include <mlir/Tools/mlir-translate/MlirTranslateMain.h>
 #include <mlir/Tools/mlir-translate/Translation.h>
 #include <mlir/Transforms/Passes.h>
 
 #include "Dialect/SpecHLS/IR/SpecHLS.h"
 #include "Target/Cpp/Export.h"
-#include "mlir/IR/DialectRegistry.h"
-#include "mlir/IR/Operation.h"
-#include "llvm/Support/raw_ostream.h"
 
 int main(int argc, char **argv) {
   static llvm::cl::opt<bool> declareStructTypes(
