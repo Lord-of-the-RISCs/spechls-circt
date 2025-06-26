@@ -8,10 +8,10 @@
 #include "Dialect/SpecHLS/IR/SpecHLSOps.h"
 #include "Dialect/SpecHLS/IR/SpecHLSTypes.h"
 #include "Target/Cpp/Export.h"
-#include "llvm/ADT/STLExtras.h"
 
 #include <circt/Dialect/Comb/CombOps.h>
 #include <circt/Dialect/HW/HWOps.h>
+#include <llvm/ADT/STLExtras.h>
 #include <llvm/ADT/ScopedHashTable.h>
 #include <llvm/ADT/Twine.h>
 #include <llvm/ADT/TypeSwitch.h>
@@ -21,6 +21,7 @@
 #include <mlir/IR/Attributes.h>
 #include <mlir/IR/Block.h>
 #include <mlir/IR/BuiltinOps.h>
+#include <mlir/IR/BuiltinTypes.h>
 #include <mlir/IR/Diagnostics.h>
 #include <mlir/IR/Location.h>
 #include <mlir/IR/Operation.h>
@@ -1042,6 +1043,14 @@ LogicalResult CppEmitter::emitType(Location loc, Type type) {
       os << "ap_uint<" << iType.getWidth() << ">";
     else
       os << "ap_int<" << iType.getWidth() << ">";
+    return success();
+  }
+  if (isa<Float32Type>(type)) {
+    os << "float";
+    return success();
+  }
+  if (isa<Float64Type>(type)) {
+    os << "double";
     return success();
   }
   if (auto sType = dyn_cast<spechls::StructType>(type)) {
