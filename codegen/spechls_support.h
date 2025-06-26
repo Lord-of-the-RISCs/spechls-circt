@@ -42,7 +42,7 @@ void delay_push(T (&buffer)[N], T value, bool enable = true) {
 
 template <typename T, int Min, int Max>
 ap_int<Max - Min> extract(T input) {
-  return input.range(Min, Max);
+  return input.range(Max - 1, Min);
 }
 
 template <int N, int M>
