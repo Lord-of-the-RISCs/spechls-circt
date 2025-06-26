@@ -770,6 +770,12 @@ LogicalResult printOperation(CppEmitter &emitter, spechls::LUTOp lutOp) {
     return failure();
 
   os << "lut<";
+  if (failed(emitter.emitType(lutOp.getLoc(), lutOp.getType())))
+    return failure();
+  os << ", ";
+  if (failed(emitter.emitType(lutOp.getLoc(), lutOp.getIndex().getType())))
+    return failure();
+  os << ", ";
   interleaveComma(lutOp.getContents(), os);
   os << ">(";
   if (failed(emitter.emitOperands(*operation)))

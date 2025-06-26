@@ -152,4 +152,16 @@ void fifo_write(FifoType<T> &fifo, const Arg &input) {
   }
 }
 
+template <typename OutType, typename InType, int... Values>
+OutType lut(InType index) {
+  OutType result{};
+  int idx = 0;
+  auto update = [&](int value) {
+    if (index == idx++)
+      result = value;
+  };
+  (update(Values), ...);
+  return result;
+}
+
 #endif // CODEGEN_INCLUDED_SPECHLS_SUPPORT_H
