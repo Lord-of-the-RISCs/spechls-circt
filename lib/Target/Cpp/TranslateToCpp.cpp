@@ -761,10 +761,7 @@ LogicalResult printOperation(CppEmitter &emitter, spechls::LoadOp loadOp) {
   os << " < " << loadOp.getArray().getType().getSize() << " ? ";
   if (failed(emitter.emitOperand(loadOp.getIndex())))
     return failure();
-  os << " : ";
-  if (failed(emitter.emitType(loadOp.getIndex().getLoc(), loadOp.getIndex().getType())))
-    return failure();
-  os << "{0}]";
+  os << ".to_int() : 0]";
 
   return success();
 }
