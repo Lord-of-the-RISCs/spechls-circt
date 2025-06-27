@@ -149,7 +149,7 @@ LogicalResult printFunctionArgs(CppEmitter &emitter, Operation *taskLikeOp, Regi
 
   return interleaveCommaWithError(arguments, os, [&](BlockArgument arg) -> LogicalResult {
     return emitter.emitVariableDeclaration(taskLikeOp->getLoc(), arg.getType(), emitter.getOrCreateName(arg), false,
-                                           useReferences);
+                                           useReferences && !isa<spechls::ArrayType>(arg.getType()));
   });
 }
 
