@@ -500,7 +500,7 @@ LogicalResult printOperation(CppEmitter &emitter, spechls::TaskOp taskOp) {
     }
     if (nextInputCmd && !fifoInputs.empty()) {
       os.unindent();
-      os << "}";
+      os << "}\n";
     }
     os.unindent();
     os << "}";
