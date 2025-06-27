@@ -797,14 +797,36 @@ LogicalResult printOperation(CppEmitter &emitter, spechls::AlphaOp alphaOp) {
   return printCallOp(emitter, operation, callee);
 }
 
-LogicalResult printBinaryOperation(CppEmitter &emitter, Operation *operation, StringRef binaryOperator) {
+Type makeSigned(Type t) {
+  if (auto iType = dyn_cast<IntegerType>(t)) {
+    if (iType.isSigned())
+      return t;
+    return IntegerType::get(t.getContext(), t.getIntOrFloatBitWidth(), mlir::IntegerType::Signed);
+  }
+  return t;
+}
+
+LogicalResult printBinaryOperation(CppEmitter &emitter, Operation *operation, StringRef binaryOperator,
+                                   bool isSigned = false) {
   raw_ostream &os = emitter.ostream();
 
   if (failed(emitter.emitAssignPrefix(*operation)))
     return failure();
+  if (isSigned) {
+    os << "(";
+    if (failed(emitter.emitType(operation->getLoc(), makeSigned(operation->getOperand(0).getType()))))
+      return failure();
+    os << ")";
+  }
   if (failed(emitter.emitOperand(operation->getOperand(0))))
     return failure();
   os << ' ' << binaryOperator << ' ';
+  if (isSigned) {
+    os << "(";
+    if (failed(emitter.emitType(operation->getLoc(), makeSigned(operation->getOperand(0).getType()))))
+      return failure();
+    os << ")";
+  }
   if (failed(emitter.emitOperand(operation->getOperand(1))))
     return failure();
   return success();
@@ -853,6 +875,7 @@ LogicalResult printOperation(CppEmitter &emitter, circt::comb::XorOp xorOp) {
 LogicalResult printOperation(CppEmitter &emitter, circt::comb::ICmpOp icmpOp) {
   Operation *operation = icmpOp.getOperation();
   StringRef comparisonOperator = "";
+  bool isSigned = false;
   switch (icmpOp.getPredicate()) {
   case circt::comb::ICmpPredicate::eq:
     comparisonOperator = "==";
@@ -861,18 +884,26 @@ LogicalResult printOperation(CppEmitter &emitter, circt::comb::ICmpOp icmpOp) {
     comparisonOperator = "!=";
     break;
   case circt::comb::ICmpPredicate::slt:
+    isSigned = true;
+    [[fallthrough]];
   case circt::comb::ICmpPredicate::ult:
     comparisonOperator = "<";
     break;
   case circt::comb::ICmpPredicate::sle:
+    isSigned = true;
+    [[fallthrough]];
   case circt::comb::ICmpPredicate::ule:
     comparisonOperator = "<=";
     break;
   case circt::comb::ICmpPredicate::sgt:
+    isSigned = true;
+    [[fallthrough]];
   case circt::comb::ICmpPredicate::ugt:
     comparisonOperator = ">";
     break;
   case circt::comb::ICmpPredicate::sge:
+    isSigned = true;
+    [[fallthrough]];
   case circt::comb::ICmpPredicate::uge:
     comparisonOperator = ">=";
     break;
@@ -880,7 +911,7 @@ LogicalResult printOperation(CppEmitter &emitter, circt::comb::ICmpOp icmpOp) {
     return operation->emitOpError("Unexpected icmp predicate ")
            << circt::comb::stringifyICmpPredicate(icmpOp.getPredicate());
   }
-  return printBinaryOperation(emitter, operation, comparisonOperator);
+  return printBinaryOperation(emitter, operation, comparisonOperator, isSigned);
 }
 
 LogicalResult printOperation(CppEmitter &emitter, circt::comb::ReplicateOp replicateOp) {
