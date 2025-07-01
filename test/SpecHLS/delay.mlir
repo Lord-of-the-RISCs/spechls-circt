@@ -13,5 +13,9 @@ spechls.kernel @kernel(%in1 : i32, %in2 : i1) -> i32 {
   %d2 = spechls.delay %d1 by 1 init %in1 : i32
   %d3 = spechls.delay %d2 by 4 if %in2 init %in1 : i32
   %d4 = spechls.delay %d2 by 4 if %in2 init %d4 : i32
+  // CHECK: %5 = spechls.rollbackable_delay<4>(%4 : i32, %arg1), %2 by 1 : i32
+  %d5 = spechls.rollbackable_delay<4>(%d4 : i32, %in2), %d2 by 1 : i32
+  // CHECK: %6 = spechls.cancellable_delay<4>(%4 : i32, %arg1), %2 by 1 : i32
+  %d6 = spechls.cancellable_delay<4>(%d4 : i32, %in2), %d2 by 1 : i32
   spechls.exit if %true with %d3 : i32
 }

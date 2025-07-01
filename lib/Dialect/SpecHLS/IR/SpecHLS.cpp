@@ -457,11 +457,21 @@ void spechls::DelayOp::print(OpAsmPrinter &printer) {
 }
 
 ParseResult spechls::RollbackableDelayOp::parse(OpAsmParser &parser, OperationState &result) {
-  // TODO
   auto &builder = parser.getBuilder();
-  OpAsmParser::UnresolvedOperand input, enable, init;
-  Type type;
+  OpAsmParser::UnresolvedOperand input, enable, init, rollback, writeCommand;
+  Type type, rollbackType;
   uint32_t delay;
+  int64_t offset;
+
+  if (parser.parseLess() || parser.parseInteger(offset) || parser.parseGreater() || parser.parseLParen() ||
+      parser.parseOperand(rollback) || parser.parseColonType(rollbackType) || parser.parseComma() ||
+      parser.parseOperand(writeCommand) || parser.parseRParen() || parser.parseComma())
+    return failure();
+  result.addAttribute(getOffsetAttrName(result.name), builder.getI64IntegerAttr(offset));
+
+  if (parser.resolveOperand(rollback, rollbackType, result.operands) ||
+      parser.resolveOperand(writeCommand, builder.getI1Type(), result.operands))
+    return failure();
 
   if (parser.parseOperand(input) || parser.parseKeyword("by") || parser.parseInteger(delay))
     return failure();
@@ -480,7 +490,7 @@ ParseResult spechls::RollbackableDelayOp::parse(OpAsmParser &parser, OperationSt
     hasInit = true;
   }
   result.addAttribute(getOperandSegmentSizesAttrName(result.name),
-                      builder.getDenseI32ArrayAttr({1, hasEnable, hasInit}));
+                      builder.getDenseI32ArrayAttr({1, 1, 1, hasEnable, hasInit}));
 
   if (parser.parseOptionalAttrDict(result.attributes) || parser.parseColonType(type) ||
       parser.resolveOperand(input, type, result.operands) || parser.addTypeToList(type, result.types))
@@ -494,8 +504,8 @@ ParseResult spechls::RollbackableDelayOp::parse(OpAsmParser &parser, OperationSt
 }
 
 void spechls::RollbackableDelayOp::print(OpAsmPrinter &printer) {
-  // TODO
-  printer << ' ' << getInput() << " by " << getDepth();
+  printer << "<" << getOffset() << ">(" << getRollback() << " : " << getRollback().getType() << ", "
+          << getWriteCommand() << "), " << getInput() << " by " << getDepth();
   if (getEnable())
     printer << " if " << getEnable();
   if (getInit())
@@ -504,11 +514,21 @@ void spechls::RollbackableDelayOp::print(OpAsmPrinter &printer) {
 }
 
 ParseResult spechls::CancellableDelayOp::parse(OpAsmParser &parser, OperationState &result) {
-  // TODO
   auto &builder = parser.getBuilder();
-  OpAsmParser::UnresolvedOperand input, enable, init;
-  Type type;
+  OpAsmParser::UnresolvedOperand input, enable, init, rollback, writeCommand;
+  Type type, rollbackType;
   uint32_t delay;
+  int64_t offset;
+
+  if (parser.parseLess() || parser.parseInteger(offset) || parser.parseGreater() || parser.parseLParen() ||
+      parser.parseOperand(rollback) || parser.parseColonType(rollbackType) || parser.parseComma() ||
+      parser.parseOperand(writeCommand) || parser.parseRParen() || parser.parseComma())
+    return failure();
+  result.addAttribute(getOffsetAttrName(result.name), builder.getI64IntegerAttr(offset));
+
+  if (parser.resolveOperand(rollback, rollbackType, result.operands) ||
+      parser.resolveOperand(writeCommand, builder.getI1Type(), result.operands))
+    return failure();
 
   if (parser.parseOperand(input) || parser.parseKeyword("by") || parser.parseInteger(delay))
     return failure();
@@ -527,7 +547,7 @@ ParseResult spechls::CancellableDelayOp::parse(OpAsmParser &parser, OperationSta
     hasInit = true;
   }
   result.addAttribute(getOperandSegmentSizesAttrName(result.name),
-                      builder.getDenseI32ArrayAttr({1, hasEnable, hasInit}));
+                      builder.getDenseI32ArrayAttr({1, 1, 1, hasEnable, hasInit}));
 
   if (parser.parseOptionalAttrDict(result.attributes) || parser.parseColonType(type) ||
       parser.resolveOperand(input, type, result.operands) || parser.addTypeToList(type, result.types))
@@ -541,8 +561,8 @@ ParseResult spechls::CancellableDelayOp::parse(OpAsmParser &parser, OperationSta
 }
 
 void spechls::CancellableDelayOp::print(OpAsmPrinter &printer) {
-  // TODO
-  printer << ' ' << getInput() << " by " << getDepth();
+  printer << "<" << getOffset() << ">(" << getRollback() << " : " << getRollback().getType() << ", "
+          << getWriteCommand() << "), " << getInput() << " by " << getDepth();
   if (getEnable())
     printer << " if " << getEnable();
   if (getInit())

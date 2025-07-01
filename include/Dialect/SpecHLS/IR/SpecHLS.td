@@ -274,13 +274,13 @@ def SpecHLS_RollbackableDelayOp : SpecHLSOp<"rollbackable_delay",
          OptionalTypesMatchWith<"Delay input and initialization value must have the same type",
                                 "input", "init", "$_self">]> {
     let arguments = (ins
+        I64Attr:$offset,
+        AnyInteger:$rollback,
+        I1:$writeCommand,
         AnyType:$input,
         UI32Attr:$depth,
         Optional<I1>:$enable,
-        Optional<AnyType>:$init,
-        I64Attr:$offset,
-        AnyInteger:$rollback,
-        I1:$writeCommand
+        Optional<AnyType>:$init
     );
     let results = (outs AnyType:$result);
 
@@ -293,13 +293,13 @@ def SpecHLS_CancellableDelayOp : SpecHLSOp<"cancellable_delay",
          OptionalTypesMatchWith<"Delay input and initialization value must have the same type",
                                 "input", "init", "$_self">]> {
     let arguments = (ins
+        I64Attr:$offset,
+        AnyInteger:$rollback,
+        I1:$writeCommand,
         AnyType:$input,
         UI32Attr:$depth,
         Optional<I1>:$enable,
-        Optional<AnyType>:$init,
-        I64Attr:$offset,
-        AnyInteger:$rollback,
-        I1:$writeCommand
+        Optional<AnyType>:$init
     );
     let results = (outs AnyType:$result);
 
