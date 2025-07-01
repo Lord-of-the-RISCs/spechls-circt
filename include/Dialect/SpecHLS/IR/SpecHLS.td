@@ -353,19 +353,17 @@ def SpecHLS_FSMCommandOp : SpecHLSOp<"fsm_command"> {
 }
 
 def SpecHLS_RewindOp : SpecHLSOp<"rewind",
-        [AttrSizedOperandSegments,
-         TypesMatchWith<"Data input and output types must match", "input", "result", "$_self">]> {
+        [TypesMatchWith<"Data input and output types must match", "input", "result", "$_self">]> {
     let arguments = (ins
         DenseI64ArrayAttr:$depths,
         AnyType:$input,
-        Optional<AnyInteger>:$rewind,
-        Optional<I1>:$writeCommand
+        AnyInteger:$rewind,
+        I1:$writeCommand
     );
     let results = (outs AnyType:$result);
 
     let assemblyFormat = [{
-        `<` $depths `>` $input `:` type($input)
-        (`,` $rewind^ `:` type($rewind) (`,` $writeCommand^ `:` type($writeCommand))?)? attr-dict
+        `<` $depths `>` $input `,` $rewind `,` $writeCommand attr-dict `:` type($input) `,` type($rewind)
     }];
 }
 
@@ -381,8 +379,7 @@ def SpecHLS_RollbackOp : SpecHLSOp<"rollback",
     let results = (outs AnyType:$result);
 
     let assemblyFormat = [{
-        `<` $depths `,` $offset `>` $input `:` type($input) `,` $rollback `:` type($rollback) `,`
-            $writeCommand `:` type($writeCommand) attr-dict
+        `<` $depths `,` $offset `>` $input `,` $rollback `,` $writeCommand attr-dict `:` type($input) `,` type($rollback)
     }];
 }
 
