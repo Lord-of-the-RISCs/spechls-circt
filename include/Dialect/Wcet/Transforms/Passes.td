@@ -10,8 +10,8 @@
 
 include "mlir/Pass/PassBase.td"
 
-def UnrollInstrPass : Pass<"unroll-instr", "mlir::ModuleOp"> {
-    let summary = "Unroll the HW module with the instructions";
+def UnrollInstrPass : Pass<"unroll-instr", "spechls::KernelOp"> {
+    let summary = "Unroll the spechls kernel with the given instructions";
     let description = [{ TODO }];
 
     let dependentDialects = [
@@ -24,14 +24,24 @@ def UnrollInstrPass : Pass<"unroll-instr", "mlir::ModuleOp"> {
     ];
   }
 
-def LongestPathPass : Pass<"longest-path", "mlir::ModuleOp"> {
-    let summary = "Find the longest path";
+def LongestPathPass : Pass<"longest-path", "spechls::KernelOp"> {
+    let summary = "Find the longest wcet path";
     let description = [{ TODO }];
 
     let dependentDialects = [
       "circt::hw::HWDialect",
       "spechls::SpecHLSDialect",
       "wcet::WcetDialect"
+      ];
+  }
+
+def MergeDelaysPass : Pass<"merge-delays", "spechls::KernelOp"> {
+    let summary = "Merge delays";
+    let description = [{ TODO }];
+
+    let dependentDialects = [
+      "circt::hw::HWDialect",
+      "spechls::SpecHLSDialect",
       ];
   }
 
