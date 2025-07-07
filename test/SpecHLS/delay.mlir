@@ -13,4 +13,5 @@ spechls.kernel @kernel(%in1 : i32, %in2 : i1) -> i32 {
   %d2 = spechls.delay %d1 by 1 init %in1 : i32
   %d3 = spechls.delay %d2 by 4 if %in2 init %in1 : i32
   %d4 = spechls.delay %d2 by 4 if %in2 init %d4 : i32
+  spechls.exit if %in2 with %d4 : i32
 }
