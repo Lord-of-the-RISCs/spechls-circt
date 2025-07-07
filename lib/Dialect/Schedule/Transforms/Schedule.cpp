@@ -50,6 +50,11 @@ void SchedulePass::runOnOperation() {
         return failure();
       })))
     return signalPassFailure();
+  if (failed(pass->initializeOptions("scheduler=lp", [](const Twine &msg) {
+        llvm::errs() << msg << '\n';
+        return failure();
+      })))
+    return signalPassFailure();
   dynamicPM.addPass(std::move(pass));
   if (failed(runPipeline(dynamicPM, moduleOp)))
     return signalPassFailure();
