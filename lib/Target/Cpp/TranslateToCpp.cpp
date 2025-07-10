@@ -18,6 +18,7 @@
 #include <llvm/Support/FormatVariadic.h>
 #include <llvm/Support/LogicalResult.h>
 #include <llvm/Support/raw_ostream.h>
+#include <mlir/Analysis/TopologicalSortUtils.h>
 #include <mlir/IR/Attributes.h>
 #include <mlir/IR/Block.h>
 #include <mlir/IR/BuiltinOps.h>
@@ -399,6 +400,7 @@ LogicalResult printOperation(CppEmitter &emitter, spechls::KernelOp kernelOp) {
   os << "while (!" << emitter.getExitVariableName() << ") {\n";
   os.indent();
 
+  mlir::sortTopologically(&kernelOp.getBody().front());
   for (auto &&op : kernelOp.getBody().front()) {
     if (failed(emitter.emitOperation(op, true)))
       return failure();
@@ -461,6 +463,7 @@ LogicalResult printOperation(CppEmitter &emitter, spechls::TaskOp taskOp) {
 
   SmallVector<spechls::DelayOp> delays;
   Value nextInputCmd{};
+  mlir::sortTopologically(&taskOp.getBody().front());
   for (auto &&op : taskOp.getBody().front()) {
     if (isa<spechls::CommitOp>(op)) {
       // Print delay push operations just before the end of the task.
