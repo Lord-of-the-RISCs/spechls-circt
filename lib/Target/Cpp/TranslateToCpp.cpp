@@ -898,6 +898,21 @@ LogicalResult printOperation(CppEmitter &emitter, circt::comb::OrOp orOp) {
   return printBinaryOperation(emitter, operation, "|");
 }
 
+LogicalResult printOperation(CppEmitter &emitter, circt::comb::ShlOp shlOp) {
+  Operation *operation = shlOp.getOperation();
+  return printBinaryOperation(emitter, operation, "<<");
+}
+
+LogicalResult printOperation(CppEmitter &emitter, circt::comb::ShrSOp shrsOp) {
+  Operation *operation = shrsOp.getOperation();
+  return printBinaryOperation(emitter, operation, ">>", true);
+}
+
+LogicalResult printOperation(CppEmitter &emitter, circt::comb::ShrUOp shruOp) {
+  Operation *operation = shruOp.getOperation();
+  return printBinaryOperation(emitter, operation, ">>", false);
+}
+
 LogicalResult printOperation(CppEmitter &emitter, circt::comb::SubOp subOp) {
   Operation *operation = subOp.getOperation();
   return printBinaryOperation(emitter, operation, "-");
@@ -1018,8 +1033,9 @@ LogicalResult printOperation(CppEmitter &emitter, circt::comb::ConcatOp concatOp
   if (failed(emitter.emitAssignPrefix(*operation)))
     return failure();
 
-  os << "concat<" << concatOp.getOperand(0).getType().getIntOrFloatBitWidth() << ", "
-     << concatOp.getOperand(1).getType().getIntOrFloatBitWidth() << ">(";
+  os << "concat<";
+  interleaveComma(concatOp.getOperands(), os, [&](Value operand) { os << operand.getType().getIntOrFloatBitWidth(); });
+  os << ">(";
   if (failed(emitter.emitOperands(*operation)))
     return failure();
   os << ")";
@@ -1058,8 +1074,8 @@ LogicalResult CppEmitter::emitOperation(Operation &op, bool trailingSemicolon) {
           // Comb ops.
           .Case<circt::comb::AddOp, circt::comb::AndOp, circt::comb::ConcatOp, circt::comb::DivSOp, circt::comb::DivUOp,
                 circt::comb::ExtractOp, circt::comb::ICmpOp, circt::comb::MulOp, circt::comb::MuxOp, circt::comb::OrOp,
-                circt::comb::SubOp, circt::comb::ReplicateOp, circt::comb::XorOp>(
-              [&](auto op) { return printOperation(*this, op); })
+                circt::comb::ShlOp, circt::comb::ShrSOp, circt::comb::ShrUOp, circt::comb::SubOp,
+                circt::comb::ReplicateOp, circt::comb::XorOp>([&](auto op) { return printOperation(*this, op); })
           // HW ops.
           .Case<circt::hw::BitcastOp>([&](auto op) { return printOperation(*this, op); })
           // SpecHLS ops.
