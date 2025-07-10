@@ -67,6 +67,21 @@ def Wcet_InitOp : WcetOp<"init", []> {
      }];
 }
 
+def Wcet_PenaltyOp : WcetOp<"penalty",
+        [AttrSizedOperandSegments,
+         TypesMatchWith<"Delay input and output types must match", "input", "result", "$_self">,
+         OptionalTypesMatchWith<"Delay input and initialization value must have the same type",
+                                "input", "init", "$_self">]> {
+    let arguments = (ins
+        AnyType:$input,
+        UI32Attr:$depth,
+        Optional<I1>:$enable,
+        Optional<AnyType>:$init
+    );
+    let results = (outs AnyType:$result);
+
+    let hasCustomAssemblyFormat = 1;
+}
 
 
 #endif // SPECHLS_INCLUDED_DIALECT_WCET_IR_WCET_TD

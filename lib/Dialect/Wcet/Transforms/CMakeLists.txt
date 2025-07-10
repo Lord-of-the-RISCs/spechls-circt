@@ -1,7 +1,9 @@
 add_circt_dialect_library(WcetTransforms
     UnrollInstr.cpp
     LongestPath.cpp
-    MergeDelays.cpp
+    SplitDelays.cpp
+    WcetAnalysis.cpp
+    InlineTasks.cpp
 
     DEPENDS
     WcetTransformsIncGen

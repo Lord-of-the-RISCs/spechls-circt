@@ -10,6 +10,17 @@
 
 include "mlir/Pass/PassBase.td"
 
+
+def SplitDelaysPass : Pass<"split-delays", "spechls::KernelOp"> {
+    let summary = "Split delays";
+    let description = [{ TODO }];
+
+    let dependentDialects = [
+      "circt::hw::HWDialect",
+      "spechls::SpecHLSDialect",
+      ];
+  }
+
 def UnrollInstrPass : Pass<"unroll-instr", "spechls::KernelOp"> {
     let summary = "Unroll the spechls kernel with the given instructions";
     let description = [{ TODO }];
@@ -24,6 +35,16 @@ def UnrollInstrPass : Pass<"unroll-instr", "spechls::KernelOp"> {
     ];
   }
 
+def InlineTasksPass : Pass<"inline-task", "spechls::KernelOp"> {
+    let summary = "Inline wcet::task";
+    let description = [{ TODO }];
+
+    let dependentDialects = [
+      "circt::hw::HWDialect",
+      "spechls::SpecHLSDialect",
+      ];
+  }
+
 def LongestPathPass : Pass<"longest-path", "spechls::KernelOp"> {
     let summary = "Find the longest wcet path";
     let description = [{ TODO }];
@@ -35,14 +56,17 @@ def LongestPathPass : Pass<"longest-path", "spechls::KernelOp"> {
       ];
   }
 
-def MergeDelaysPass : Pass<"merge-delays", "spechls::KernelOp"> {
-    let summary = "Merge delays";
+def WcetAnalysisPass : Pass<"wcet-analysis", "spechls::KernelOp"> {
+    let summary = "Make a wcet analysis";
     let description = [{ TODO }];
 
     let dependentDialects = [
       "circt::hw::HWDialect",
       "spechls::SpecHLSDialect",
+      "wcet::WcetDialect"
       ];
+    let options = [
+      ListOption<"instrs", "instrs", "uint32_t", "The basic block to analyse">
+    ];
   }
-
 #endif // SPECHLS_INCLUDED_DIALECT_WCET_TRANSFORMS_PASSES_TD

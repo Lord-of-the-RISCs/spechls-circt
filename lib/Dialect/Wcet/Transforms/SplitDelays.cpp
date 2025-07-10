@@ -1,4 +1,4 @@
-//===- MergeDelays.cpp - CIRCT Global Pass Registration ---------*- C++ -*-===//
+//===- SplitDelays.cpp - CIRCT Global Pass Registration ---------*- C++ -*-===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -26,6 +26,7 @@
 #include "circt/Dialect/HW/HWOps.h"
 #include "mlir/IR/PatternMatch.h"
 #include "mlir/IR/Verifier.h"
+#include "mlir/Interfaces/Utils/InferIntRangeCommon.h"
 #include "mlir/Pass/PassManager.h"
 #include "mlir/Support/LLVM.h"
 #include "mlir/Transforms/DialectConversion.h"
@@ -39,7 +40,7 @@ using namespace circt;
 using namespace spechls;
 
 namespace wcet {
-#define GEN_PASS_DEF_MERGEDELAYSPASS
+#define GEN_PASS_DEF_SPLITDELAYSPASS
 #include "Dialect/Wcet/Transforms/Passes.h.inc"
 } // namespace wcet
 
@@ -47,46 +48,33 @@ namespace {} // namespace
 
 namespace wcet {
 
-struct MergeDelaysPattern : OpRewritePattern<spechls::KernelOp> {
+struct SplitDelaysPattern : OpRewritePattern<spechls::DelayOp> {
 
-  MergeDelaysPattern(MLIRContext *ctx) : OpRewritePattern<spechls::KernelOp>(ctx) {}
+  SplitDelaysPattern(MLIRContext *ctx) : OpRewritePattern<spechls::DelayOp>(ctx) {}
 
-  LogicalResult matchAndRewrite(spechls::KernelOp top, PatternRewriter &rewriter) const override {
-    llvm::errs() << "start merge delays patterns \n";
-    llvm::SmallVector<DelayOp> delays = llvm::SmallVector<DelayOp>();
-
-    top->walk([&](DelayOp delay) {
-      auto *input = delay.getInput().getDefiningOp();
-      if (auto delayOp = dyn_cast_or_null<spechls::DelayOp>(input)) {
-        delays.push_back(delay);
-      }
-    });
-
-    llvm::errs() << delays.size() << "\n";
-
-    if (delays.size() == 0)
+  LogicalResult matchAndRewrite(spechls::DelayOp top, PatternRewriter &rewriter) const override {
+    if (top.getDepth() == 1)
       return failure();
-
-    for (DelayOp delay : delays) {
-      DelayOp pred = llvm::cast<DelayOp>(delay.getInput().getDefiningOp());
-      delay.setDepth(delay.getDepth() + pred.getDepth());
-      delay->setOperand(0, pred.getInput());
-      if (pred->getUses().empty())
-        rewriter.eraseOp(pred);
-    }
+    rewriter.setInsertionPointAfter(top);
+    DelayOp newDelay = rewriter.create<spechls::DelayOp>(
+        rewriter.getUnknownLoc(), top.getResult(), rewriter.getUI32IntegerAttr(1), top.getEnable(), top.getInit());
+    top.setDepth(top.getDepth() - 1);
+    rewriter.replaceAllUsesExcept(top, newDelay.getResult(), newDelay);
 
     return success();
   }
 };
 
-struct MergeDelaysPass : public impl::MergeDelaysPassBase<MergeDelaysPass> {
+struct SplitDelaysPass : public impl::SplitDelaysPassBase<SplitDelaysPass> {
+
+  using SplitDelaysPassBase::SplitDelaysPassBase;
 
 public:
   void runOnOperation() override {
     auto *ctx = &getContext();
 
     RewritePatternSet patterns(ctx);
-    patterns.add<MergeDelaysPattern>(ctx);
+    patterns.add<SplitDelaysPattern>(ctx);
     if (failed(applyPatternsGreedily(getOperation()->getParentOp(), std::move(patterns)))) {
       llvm::errs() << "failed\n";
       signalPassFailure();

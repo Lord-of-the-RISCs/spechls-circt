@@ -125,6 +125,7 @@ def SpecHLS_TaskOp : SpecHLSOp<"task", [SingleBlock, RegionKindInterface, Isolat
         static ::mlir::RegionKind getRegionKind(unsigned) {
             return ::mlir::RegionKind::Graph;
         }
+
     }];
 }
 
