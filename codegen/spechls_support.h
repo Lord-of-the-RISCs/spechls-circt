@@ -79,10 +79,10 @@ constexpr T resolve_offset(unsigned int offset, T *values, T default_value) {
 
 template <typename T, unsigned int Offset, unsigned int... Depths>
 T rollback(T *buffer, T value, unsigned int offset, bool next_input) {
-  constexpr unsigned int max_depth = std::max({0u, Depths...}) + 1;
+  constexpr unsigned int max_depth = std::max({0u, Depths...});
   unsigned int off = offset - Offset;
   if (next_input) {
-    for (unsigned int i = max_depth - 1; i > 0; --i)
+    for (unsigned int i = max_depth; i > 0; --i)
       buffer[i] = buffer[i - 1];
   }
   T result = resolve_offset<T, Depths...>(off, buffer, value);
