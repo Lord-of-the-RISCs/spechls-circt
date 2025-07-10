@@ -93,7 +93,7 @@ T rollback(T *buffer, T value, unsigned int offset, bool next_input) {
 }
 
 template <unsigned int Offset>
-ap_uint<1> cancel(ap_uint<1> *buffer, ap_uint<1> value, unsigned int offset, bool next_input) {
+bool cancel(bool *buffer, bool value, unsigned int offset, bool next_input) {
   if (next_input)
     *buffer = value;
   if (offset >= Offset)
