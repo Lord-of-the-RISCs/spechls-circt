@@ -581,8 +581,20 @@ LogicalResult printOperation(CppEmitter &emitter, spechls::PackOp packOp) {
   if (failed(emitter.emitType(packOp.getLoc(), packOp.getType())))
     return failure();
   os << "{";
-  if (failed(emitter.emitOperands(*operation)))
+  if (failed(interleaveCommaWithError(llvm::zip(packOp.getType().getFieldTypes(), packOp.getOperands()), os,
+                                      [&](auto pair) {
+                                        auto [type, value] = pair;
+                                        os << "static_cast<";
+                                        if (failed(emitter.emitType(packOp.getLoc(), type)))
+                                          return failure();
+                                        os << ">(";
+                                        if (failed(emitter.emitOperand(value)))
+                                          return failure();
+                                        os << ")";
+                                        return success();
+                                      }))) {
     return failure();
+  }
   os << "}";
 
   return success();
@@ -630,10 +642,10 @@ LogicalResult printOperation(CppEmitter &emitter, spechls::PrintOp printOp) {
   if (printOp.getArgs().size() > 0)
     os << ", ";
   if (failed(interleaveCommaWithError(printOp.getArgs(), os, [&](Value operand) {
+        if (isa<IntegerType>(operand.getType()))
+          os << "(int)";
         if (failed(emitter.emitOperand(operand)))
           return failure();
-        if (isa<IntegerType>(operand.getType()))
-          os << ".to_int()";
         return success();
       })))
     return failure();
@@ -785,10 +797,10 @@ LogicalResult printOperation(CppEmitter &emitter, spechls::LoadOp loadOp) {
   os << "[";
   if (failed(emitter.emitOperand(loadOp.getIndex())))
     return failure();
-  os << " < " << loadOp.getArray().getType().getSize() << " ? ";
+  os << " < " << loadOp.getArray().getType().getSize() << " ? (int)";
   if (failed(emitter.emitOperand(loadOp.getIndex())))
     return failure();
-  os << ".to_int() : 0]";
+  os << " : 0]";
 
   return success();
 }
@@ -1100,10 +1112,30 @@ LogicalResult CppEmitter::emitType(Location loc, Type type) {
     return success();
   }
   if (auto iType = dyn_cast<IntegerType>(type)) {
-    if (shouldMapToUnsigned(iType.getSignedness()))
-      os << "ap_uint<" << iType.getWidth() << ">";
-    else
-      os << "ap_int<" << iType.getWidth() << ">";
+    if (shouldMapToUnsigned(iType.getSignedness())) {
+      if (iType.getWidth() == 8)
+        os << "unsigned char";
+      else if (iType.getWidth() == 16)
+        os << "unsigned short";
+      else if (iType.getWidth() == 32)
+        os << "unsigned int";
+      else if (iType.getWidth() == 64)
+        os << "unsigned long long";
+      else
+        os << "ap_uint<" << iType.getWidth() << ">";
+    } else {
+      // Technically, char is not guaranteed to be a signed type, but it should not matter for our use case.
+      if (iType.getWidth() == 8)
+        os << "char";
+      else if (iType.getWidth() == 16)
+        os << "short";
+      else if (iType.getWidth() == 32)
+        os << "int";
+      else if (iType.getWidth() == 64)
+        os << "long long";
+      else
+        os << "ap_int<" << iType.getWidth() << ">";
+    }
     return success();
   }
   if (isa<Float32Type>(type)) {
