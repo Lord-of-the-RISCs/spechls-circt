@@ -41,29 +41,31 @@ void delay_push(T (&buffer)[N], T value, bool enable = true) {
 }
 
 template <typename T, int Min, int Max>
-ap_int<Max - Min> extract(T input) {
+T extract(T input) {
+  return (input >> Min) & ((1 << (Max - Min)) - 1);
+}
+
+template <unsigned int N, int Min, int Max>
+ap_int<Max - Min> extract(ap_int<N> input) {
   return input.range(Max - 1, Min);
 }
 
-template <int N, int M>
-ap_int<N * M> replicate(ap_int<M> input) {
-  ap_int<N * M> result = 0;
+template <int N>
+ap_uint<N> replicate(bool input) {
+  ap_uint<N> result = 0;
   for (int i = 0; i < N; ++i)
-    result = result.concat(input);
+    result = result.concat(ap_uint<1>(input));
   return result;
 }
 
-template <int N, int M>
-ap_uint<N * M> replicate(ap_uint<M> input) {
-  ap_uint<N * M> result = 0;
-  for (int i = 0; i < N; ++i)
-    result = result.concat(input);
-  return result;
+template <int N, int M, int... Ms>
+auto concat(ap_int<N> first, ap_int<M> second, ap_int<Ms>... others) {
+  return concat(ap_int<N + M>{first.concat(second)}, others...);
 }
 
-template <int N, int M>
-ap_int<N + M> concat(ap_int<N> lhs, ap_int<M> rhs) {
-  return lhs.concat(rhs);
+template <int N>
+ap_int<N> concat(ap_int<N> value) {
+  return value;
 }
 
 template <typename T, unsigned int... Depths>
