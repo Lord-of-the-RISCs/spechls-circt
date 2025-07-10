@@ -1113,7 +1113,9 @@ LogicalResult CppEmitter::emitType(Location loc, Type type) {
   }
   if (auto iType = dyn_cast<IntegerType>(type)) {
     if (shouldMapToUnsigned(iType.getSignedness())) {
-      if (iType.getWidth() == 8)
+      if (iType.getWidth() == 1)
+        os << "bool";
+      else if (iType.getWidth() == 8)
         os << "unsigned char";
       else if (iType.getWidth() == 16)
         os << "unsigned short";
@@ -1125,7 +1127,9 @@ LogicalResult CppEmitter::emitType(Location loc, Type type) {
         os << "ap_uint<" << iType.getWidth() << ">";
     } else {
       // Technically, char is not guaranteed to be a signed type, but it should not matter for our use case.
-      if (iType.getWidth() == 8)
+      if (iType.getWidth() == 1)
+        os << "bool";
+      else if (iType.getWidth() == 8)
         os << "char";
       else if (iType.getWidth() == 16)
         os << "short";
