@@ -129,6 +129,10 @@ std::string getRollbackBufferName(CppEmitter &emitter, spechls::RollbackOp rollb
   return emitter.getOrCreateName(rollbackOp).str() + "_buffer";
 }
 
+std::string getCancelBufferName(CppEmitter &emitter, spechls::CancelOp cancelOp) {
+  return emitter.getOrCreateName(cancelOp).str() + "_buffer";
+}
+
 std::string getFifoBufferName(CppEmitter &emitter, spechls::FIFOOp fifoOp) {
   return emitter.getOrCreateName(fifoOp).str() + "_buffer";
 }
@@ -205,6 +209,10 @@ LogicalResult printAllVariables(CppEmitter &emitter, spechls::KernelOp &kernelOp
         return failure();
       os << " " << getRollbackBufferName(emitter, rollbackOp) << "["
          << *std::max_element(rollbackOp.getDepths().begin(), rollbackOp.getDepths().end()) + 1 << "]{};\n";
+    } else if (auto cancelOp = dyn_cast<spechls::CancelOp>(op)) {
+      if (failed(emitter.emitType(op->getLoc(), cancelOp.getType())))
+        return failure();
+      os << " " << getCancelBufferName(emitter, cancelOp) << "[1]{};\n";
     } else if (auto fifoOp = dyn_cast<spechls::FIFOOp>(op)) {
       os << "FifoType<";
       if (failed(emitter.emitType(op->getLoc(), fifoOp.getType())))
@@ -727,6 +735,22 @@ LogicalResult printOperation(CppEmitter &emitter, spechls::RollbackOp rollbackOp
   return success();
 }
 
+LogicalResult printOperation(CppEmitter &emitter, spechls::CancelOp cancelOp) {
+  Operation *operation = cancelOp.getOperation();
+  raw_ostream &os = emitter.ostream();
+
+  if (failed(emitter.emitAssignPrefix(*operation)))
+    return failure();
+
+  os << "cancel<";
+  os << cancelOp.getOffset();
+  os << ">(" << getCancelBufferName(emitter, cancelOp) << ", ";
+  if (failed(emitter.emitOperands(*operation)))
+    return failure();
+  os << ")";
+  return success();
+}
+
 LogicalResult printOperation(CppEmitter &emitter, spechls::FIFOOp fifoOp) {
   Operation *operation = fifoOp.getOperation();
   raw_ostream &os = emitter.ostream();
@@ -1024,10 +1048,10 @@ LogicalResult CppEmitter::emitOperation(Operation &op, bool trailingSemicolon) {
           // HW ops.
           .Case<circt::hw::BitcastOp>([&](auto op) { return printOperation(*this, op); })
           // SpecHLS ops.
-          .Case<spechls::AlphaOp, spechls::CallOp, spechls::CommitOp, spechls::DelayOp, spechls::ExitOp,
-                spechls::FIFOOp, spechls::FSMCommandOp, spechls::FSMOp, spechls::GammaOp, spechls::KernelOp,
-                spechls::TaskOp, spechls::LoadOp, spechls::LUTOp, spechls::MuOp, spechls::PackOp, spechls::PrintOp,
-                spechls::RewindOp, spechls::RollbackOp, spechls::UnpackOp>(
+          .Case<spechls::AlphaOp, spechls::CallOp, spechls::CancelOp, spechls::CommitOp, spechls::DelayOp,
+                spechls::ExitOp, spechls::FIFOOp, spechls::FSMCommandOp, spechls::FSMOp, spechls::GammaOp,
+                spechls::KernelOp, spechls::TaskOp, spechls::LoadOp, spechls::LUTOp, spechls::MuOp, spechls::PackOp,
+                spechls::PrintOp, spechls::RewindOp, spechls::RollbackOp, spechls::UnpackOp>(
               [&](auto op) { return printOperation(*this, op); })
           // Inlined operations.
           .Case<circt::hw::ConstantOp, spechls::FieldOp, spechls::SyncOp>([&](auto op) {
@@ -1268,6 +1292,8 @@ std::string CppEmitter::getValueNamePrefix(Value value) {
     return "rewind";
   if (isa<spechls::RollbackOp>(op))
     return "rollback";
+  if (isa<spechls::CancelOp>(op))
+    return "cancel";
   return "v";
 }
 

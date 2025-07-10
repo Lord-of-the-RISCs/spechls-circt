@@ -383,4 +383,19 @@ def SpecHLS_RollbackOp : SpecHLSOp<"rollback",
     }];
 }
 
+def SpecHLS_CancelOp : SpecHLSOp<"cancel",
+        [TypesMatchWith<"Data input and output types must match", "input", "result", "$_self">]> {
+    let arguments = (ins
+        I64Attr:$offset,
+        I1:$input,
+        AnyInteger:$rollback,
+        I1:$writeCommand
+    );
+    let results = (outs I1:$result);
+
+    let assemblyFormat = [{
+        `<` $offset `>` $input `,` $rollback `,` $writeCommand attr-dict `:` type($rollback)
+    }];
+}
+
 #endif // SPECHLS_INCLUDED_DIALECT_SPECHLS_IR_SPECHLS_TD

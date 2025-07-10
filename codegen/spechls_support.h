@@ -92,11 +92,20 @@ T rollback(T *buffer, T value, unsigned int offset, bool next_input) {
   return result;
 }
 
+template <unsigned int Offset>
+ap_uint<1> cancel(ap_uint<1> *buffer, ap_uint<1> value, unsigned int offset, bool next_input) {
+  if (next_input)
+    *buffer = value;
+  if (offset >= Offset)
+    *buffer = false;
+  return *buffer;
+}
+
 template <typename T, unsigned int... Depths>
-T rewind(T *buffer, T value, unsigned int offset, bool next_input) {
-  constexpr unsigned int max_depth = std::max({0u, Depths...}) + 1;
+T rewind(T *buffer, T value, int offset, bool next_input) {
+  constexpr unsigned int max_depth = std::max({0u, Depths...});
   if (next_input) {
-    for (unsigned int i = max_depth - 1; i > 0; --i) {
+    for (unsigned int i = max_depth; i > 0; --i) {
       buffer[i] = buffer[i - 1];
     }
     buffer[0] = value;
