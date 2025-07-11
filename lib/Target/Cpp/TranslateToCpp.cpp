@@ -365,6 +365,8 @@ LogicalResult printOperation(CppEmitter &emitter, ModuleOp moduleOp) {
   return success();
 }
 
+bool topoSortCriteria(Value, Operation *op) { return isa<spechls::MuOp>(op) || isa<spechls::DelayOp>(op); }
+
 LogicalResult printOperation(CppEmitter &emitter, spechls::KernelOp kernelOp) {
   CppEmitter::Scope scope(emitter);
   raw_indented_ostream &os = emitter.ostream();
@@ -400,7 +402,7 @@ LogicalResult printOperation(CppEmitter &emitter, spechls::KernelOp kernelOp) {
   os << "while (!" << emitter.getExitVariableName() << ") {\n";
   os.indent();
 
-  mlir::sortTopologically(&kernelOp.getBody().front());
+  mlir::sortTopologically(&kernelOp.getBody().front(), topoSortCriteria);
   for (auto &&op : kernelOp.getBody().front()) {
     if (failed(emitter.emitOperation(op, true)))
       return failure();
@@ -463,7 +465,7 @@ LogicalResult printOperation(CppEmitter &emitter, spechls::TaskOp taskOp) {
 
   SmallVector<spechls::DelayOp> delays;
   Value nextInputCmd{};
-  mlir::sortTopologically(&taskOp.getBody().front());
+  mlir::sortTopologically(&taskOp.getBody().front(), topoSortCriteria);
   for (auto &&op : taskOp.getBody().front()) {
     if (isa<spechls::CommitOp>(op)) {
       // Print delay push operations just before the end of the task.
