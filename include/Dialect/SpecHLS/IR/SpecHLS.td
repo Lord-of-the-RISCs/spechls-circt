@@ -148,6 +148,7 @@ def SpecHLS_GammaOp : SpecHLSOp<"gamma",
 
     let hasCustomAssemblyFormat = 1;
     let hasVerifier = 1;
+    let hasFolder = 1;
 
     let extraClassDefinition = [{
         void $cppClass::getAsmResultNames(llvm::function_ref<void(mlir::Value, llvm::StringRef)> setNameFn) {
@@ -246,6 +247,7 @@ def SpecHLS_LUTOp : SpecHLSOp<"lut", [DeclareOpInterfaceMethods<OpAsmOpInterface
     }];
 
     let hasVerifier = 1;
+    //let hasFolder = 1;
 
     let extraClassDefinition = [{
         void $cppClass::getAsmResultNames(llvm::function_ref<void(mlir::Value, llvm::StringRef)> setNameFn) {

@@ -1,4 +1,4 @@
-//===- InlineTasks.cpp - CIRCT Global Pass Registration ---------*- C++ -*-===//
+//===- InsertDummy.cpp - CIRCT Global Pass Registration ---------*- C++ -*-===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -19,11 +19,11 @@
 #include "circt/Dialect/HW/HWOps.h"
 #include "circt/Support/LLVM.h"
 #include "mlir/IR/Builders.h"
-#include "mlir/IR/OpDefinition.h"
 #include "mlir/IR/Operation.h"
 #include "mlir/IR/PatternMatch.h"
 #include "mlir/IR/TypeRange.h"
 #include "mlir/IR/Value.h"
+#include "mlir/IR/ValueRange.h"
 #include "mlir/IR/Verifier.h"
 #include "mlir/Pass/PassManager.h"
 #include "mlir/Support/LLVM.h"
@@ -32,6 +32,7 @@
 #include "mlir/Transforms/Passes.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/SmallPtrSet.h"
+#include "llvm/BinaryFormat/MachO.h"
 #include "llvm/Support/Casting.h"
 #include "llvm/Support/LogicalResult.h"
 #include "llvm/Support/raw_ostream.h"
@@ -45,57 +46,51 @@ using namespace spechls;
 using namespace circt;
 
 namespace wcet {
-#define GEN_PASS_DEF_INLINETASKSPASS
+#define GEN_PASS_DEF_INSERTDUMMYPASS
 #include "Dialect/Wcet/Transforms/Passes.h.inc"
 } // namespace wcet
 
-namespace {} // namespace
-
 namespace wcet {
 
-struct InlineTasksPattern : OpRewritePattern<spechls::KernelOp> {
+struct InsertDummyPattern : OpRewritePattern<spechls::KernelOp> {
   using OpRewritePattern<spechls::KernelOp>::OpRewritePattern;
 
   // Constructor to save pass arguments
-  InlineTasksPattern(MLIRContext *ctx) : OpRewritePattern<spechls::KernelOp>(ctx) {}
+  InsertDummyPattern(MLIRContext *ctx, const llvm::ArrayRef<unsigned int> intrs)
+      : OpRewritePattern<spechls::KernelOp>(ctx) {}
 
-  LogicalResult matchAndRewrite(spechls::KernelOp kernel, PatternRewriter &rewriter) const override {
-    if (kernel.getOps<spechls::TaskOp>().empty())
-      return failure();
-    kernel->walk([&](spechls::TaskOp top) {
-      rewriter.setInsertionPointAfter(top);
-      top->walk([&](Operation *p) {
-        if (p->getName().getStringRef() != spechls::TaskOp::getOperationName() ||
-            llvm::dyn_cast<spechls::TaskOp>(p).getSymName() != top.getSymName()) {
-          auto *newOp = rewriter.clone(*p);
-          rewriter.replaceAllOpUsesWith(p, newOp);
-          if (p->getName().getStringRef() == spechls::CommitOp::getOperationName()) {
-            rewriter.replaceAllUsesWith(top.getResult(), dyn_cast_or_null<spechls::CommitOp>(newOp).getValue());
-            rewriter.eraseOp(newOp);
-          }
-        }
-      });
-
-      for (size_t i = 0; i < top->getOperands().size(); i++) {
-        rewriter.replaceAllUsesWith(top.getBody().getBlocks().front().getArgument(i), top->getOperand(i));
-      }
-      rewriter.eraseOp(top);
+  LogicalResult matchAndRewrite(spechls::KernelOp top, PatternRewriter &rewriter) const override {
+    SmallVector<spechls::UnpackOp> unpacks = SmallVector<spechls::UnpackOp>();
+    top->walk([&](spechls::UnpackOp unp) {
+      if (unp.getInput().getDefiningOp()->getName().getStringRef() == spechls::PackOp::getOperationName())
+        unpacks.push_back(unp);
     });
+
+    if (unpacks.empty())
+      return failure();
+
+    for (auto un : unpacks) {
+      rewriter.setInsertionPointAfter(un);
+      spechls::PackOp pack = dyn_cast_or_null<spechls::PackOp>(un.getInput().getDefiningOp());
+      rewriter.replaceOpWithNewOp<wcet::DummyOp>(un, pack.getInputs().getType(), pack.getInputs());
+      rewriter.eraseOp(pack);
+    }
+
     return success();
   }
 };
 
-struct InlineTasksPass : public impl::InlineTasksPassBase<InlineTasksPass> {
+struct InsertDummyPass : public impl::InsertDummyPassBase<InsertDummyPass> {
 
-  using InlineTasksPassBase::InlineTasksPassBase;
+  using InsertDummyPassBase::InsertDummyPassBase;
 
 public:
   void runOnOperation() override {
     auto *ctx = &getContext();
 
-    RewritePatternSet patterns(ctx);
-    patterns.add<InlineTasksPattern>(ctx);
-    if (failed(applyPatternsGreedily(getOperation()->getParentOp(), std::move(patterns)))) {
+    RewritePatternSet dummyPatterns(ctx);
+    dummyPatterns.add<InsertDummyPattern>(ctx);
+    if (failed(applyPatternsGreedily(getOperation()->getParentOp(), std::move(dummyPatterns)))) {
       llvm::errs() << "failed\n";
       signalPassFailure();
     }

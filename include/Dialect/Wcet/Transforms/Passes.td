@@ -45,6 +45,17 @@ def InlineTasksPass : Pass<"inline-task", "spechls::KernelOp"> {
       ];
   }
 
+def InsertDummyPass : Pass<"insert-dummy", "spechls::KernelOp"> {
+    let summary = "replace pack-unpack pair with dummy nodes";
+    let description = [{ TODO }];
+
+    let dependentDialects = [
+      "circt::hw::HWDialect",
+      "spechls::SpecHLSDialect",
+      "wcet::WcetDialect"
+      ];
+  }
+
 def LongestPathPass : Pass<"longest-path", "spechls::KernelOp"> {
     let summary = "Find the longest wcet path";
     let description = [{ TODO }];

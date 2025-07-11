@@ -15,8 +15,8 @@
 #include "Dialect/Wcet/IR/Wcet.h"      // IWYU pragma: export
 #include "Dialect/Wcet/IR/WcetTypes.h" // IWYU pragma: keep
 
+#include "mlir/IR/PatternMatch.h"
 #define GET_OP_CLASSES
 #include "Dialect/Wcet/IR/Wcet.h.inc"
-
 
 #endif // SPECHLS_INCLUDED_DIALECT_WCET_IR_WCET_OPS_H

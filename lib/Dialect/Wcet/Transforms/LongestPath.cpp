@@ -29,6 +29,7 @@
 #include "mlir/Transforms/DialectConversion.h"
 #include "mlir/Transforms/GreedyPatternRewriteDriver.h"
 #include "mlir/Transforms/Passes.h"
+#include "llvm/Support/Errc.h"
 #include "llvm/Support/LogicalResult.h"
 
 using namespace mlir;
@@ -50,13 +51,6 @@ void visitedOps(Operation *op, SmallVector<Operation *> &visited);
 } // namespace
 
 namespace wcet {
-
-struct LongestPathPattern : OpRewritePattern<spechls::KernelOp> {
-
-  LongestPathPattern(MLIRContext *ctx) : OpRewritePattern<spechls::KernelOp>(ctx) {}
-
-  LogicalResult matchAndRewrite(spechls::KernelOp top, PatternRewriter &rewriter) const override { return success(); }
-};
 
 struct LongestPathPass : public impl::LongestPathPassBase<LongestPathPass> {
 
@@ -125,8 +119,8 @@ void longestPath(wcet::DummyOp startingPoint, PatternRewriter &rewriter, StringA
       delay = delta.getDepth();
     } else {
       auto *unknown = v.getDefiningOp();
-      if (unknown->hasAttr("delay")) {
-        delay = cast<IntegerAttr>(unknown->getAttr("delay")).getInt();
+      if (unknown->hasAttr("wcet.delay")) {
+        delay = cast<IntegerAttr>(unknown->getAttr("wcet.delay")).getInt();
       }
     }
 
@@ -147,9 +141,13 @@ void longestPath(wcet::DummyOp startingPoint, PatternRewriter &rewriter, StringA
       }
     }
   }
+  int maxDist = 0;
   for (Operation *op : ops) {
+    if (dists[op] > maxDist)
+      maxDist = dists[op];
     op->setAttr(distName, rewriter.getI32IntegerAttr(dists[op]));
   }
+  llvm::errs() << "WCET: " << maxDist << "\n";
 }
 
 void visitedOps(Operation *op, SmallVector<Operation *> &visited) {

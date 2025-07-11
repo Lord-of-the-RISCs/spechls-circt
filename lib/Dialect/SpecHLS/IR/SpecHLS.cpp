@@ -7,6 +7,9 @@
 
 #include "Dialect/SpecHLS/IR/SpecHLSOps.h"
 
+#include "circt/Dialect/HW/HWOps.h"
+#include "mlir/IR/OpDefinition.h"
+#include "mlir/IR/PatternMatch.h"
 #include <llvm/ADT/STLExtras.h>
 #include <llvm/ADT/TypeSwitch.h>
 #include <mlir/IR/BuiltinAttributes.h>
@@ -17,9 +20,15 @@
 #include <mlir/Interfaces/CallInterfaces.h>
 #include <mlir/Interfaces/FunctionImplementation.h>
 #include <mlir/Support/LLVM.h>
+#include <string>
 
 #include "Dialect/SpecHLS/IR/SpecHLSDialect.cpp.inc"
 #include "Dialect/SpecHLS/IR/SpecHLSTypes.h"
+#include "mlir/IR/Matchers.h"
+#include "mlir/IR/OpDefinition.h"
+#include "mlir/IR/PatternMatch.h"
+#include "llvm/BinaryFormat/MsgPackReader.h"
+#include "llvm/Support/Casting.h"
 
 using namespace mlir;
 
@@ -293,6 +302,15 @@ LogicalResult spechls::GammaOp::verify() {
   return success();
 }
 
+OpFoldResult spechls::GammaOp::fold(FoldAdaptor adaptor) {
+  if (auto pred = dyn_cast_or_null<IntegerAttr>(adaptor.getSelect())) {
+    auto index = pred.getValue().getZExtValue();
+    return getInputs()[index];
+  }
+
+  return {};
+}
+
 ParseResult spechls::MuOp::parse(OpAsmParser &parser, OperationState &result) {
   // Parse the symbol name specifier.
   StringAttr symbolNameAttr;
@@ -418,6 +436,41 @@ LogicalResult spechls::LUTOp::verify() {
 
   return success();
 }
+
+// OpFoldResult spechls::LUTOp::fold(FoldAdaptor adaptor) {
+//   Builder builder(getContext());
+//   auto content = adaptor.getContents();
+//   auto first = content[0];
+//   auto different = false;
+//   for (u_int32_t k = 1; k < content.size(); k++) {
+//     if (content[k] != first) {
+//       different = true;
+//       break;
+//     }
+//   }
+//   if (!different) {
+//     return builder.getIntegerAttr(getType(), first);
+//   }
+//
+//   auto input = dyn_cast_or_null<circt::hw::ConstantOp>(getIndex().getDefiningOp());
+//   // Constant fold.
+//   if (input != nullptr) {
+//     auto index = input.getValue().getZExtValue();
+//     auto cellValue = adaptor.getContents()[index];
+//     auto arrayCellAttr = dyn_cast_or_null<mlir::IntegerAttr>(cellValue);
+//
+//     if (arrayCellAttr != nullptr) {
+//       auto type = getResult().getType();
+//       unsigned int bw = type.getWidth();
+//       if (bw > 32)
+//         getOperation()->emitError("Unsupported bitwidth in fold]n");
+//       int64_t res = 0;
+//       res = arrayCellAttr.getValue().getZExtValue();
+//       return builder.getIntegerAttr(builder.getIntegerType(bw), res);
+//     }
+//   }
+//   return {};
+// }
 
 ParseResult spechls::DelayOp::parse(OpAsmParser &parser, OperationState &result) {
   auto &builder = parser.getBuilder();

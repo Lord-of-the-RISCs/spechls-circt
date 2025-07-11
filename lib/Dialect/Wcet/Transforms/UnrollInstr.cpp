@@ -85,9 +85,16 @@ StructType setupTask(TaskOp top, PatternRewriter &rewriter) {
   SmallVector<Type> outputsType = SmallVector<Type>();
   SmallVector<std::string> outputsName = SmallVector<std::string>();
 
-  outputs.push_back(commit.getValue());
-  outputsType.push_back(commit.getValue().getType());
-  outputsName.push_back("originalOutput");
+  if (commit.getValue().getDefiningOp()->getName().getStringRef() == spechls::MuOp::getOperationName()) {
+    spechls::MuOp mu = llvm::dyn_cast<spechls::MuOp>(commit.getValue().getDefiningOp());
+    outputs.push_back(mu.getInitValue());
+    outputsType.push_back(mu.getType());
+    outputsName.push_back("originalOutput");
+  } else {
+    outputs.push_back(commit.getValue());
+    outputsType.push_back(commit.getValue().getType());
+    outputsName.push_back("originalOutput");
+  }
 
   top.getBody().getArgument(0).getUsers().begin()->getName();
 
@@ -122,6 +129,7 @@ StructType setupTask(TaskOp top, PatternRewriter &rewriter) {
   rewriter.replaceOpWithNewOp<CommitOp>(commit, commit.getEnable(), pack.getResult());
   top.getResult().setType(resultStruct);
   rewriter.restoreInsertionPoint(savedIP);
+  // top->getParentOfType<mlir::ModuleOp>()->dumpPretty();
   return resultStruct;
 }
 } // namespace
@@ -236,34 +244,6 @@ struct UnrollInstrPattern : OpRewritePattern<spechls::KernelOp> {
   }
 };
 
-struct InsertDummyPattern : OpRewritePattern<spechls::KernelOp> {
-  using OpRewritePattern<spechls::KernelOp>::OpRewritePattern;
-
-  // Constructor to save pass arguments
-  InsertDummyPattern(MLIRContext *ctx, const llvm::ArrayRef<unsigned int> intrs)
-      : OpRewritePattern<spechls::KernelOp>(ctx) {}
-
-  LogicalResult matchAndRewrite(spechls::KernelOp top, PatternRewriter &rewriter) const override {
-    SmallVector<spechls::UnpackOp> unpacks = SmallVector<spechls::UnpackOp>();
-    top->walk([&](spechls::UnpackOp unp) {
-      if (unp.getInput().getDefiningOp()->getName().getStringRef() == spechls::PackOp::getOperationName())
-        unpacks.push_back(unp);
-    });
-
-    if (unpacks.empty())
-      return failure();
-
-    for (auto un : unpacks) {
-      rewriter.setInsertionPointAfter(un);
-      spechls::PackOp pack = dyn_cast_or_null<spechls::PackOp>(un.getInput().getDefiningOp());
-      rewriter.replaceOpWithNewOp<wcet::DummyOp>(un, pack.getInputs().getType(), pack.getInputs());
-      rewriter.eraseOp(pack);
-    }
-
-    return success();
-  }
-};
-
 struct UnrollInstrPass : public impl::UnrollInstrPassBase<UnrollInstrPass> {
 
   using UnrollInstrPassBase::UnrollInstrPassBase;
@@ -282,21 +262,11 @@ public:
 
     OpPassManager dynamicPM(spechls::KernelOp::getOperationName());
     dynamicPM.addPass(wcet::createInlineTasksPass());
+    dynamicPM.addPass(wcet::createInsertDummyPass());
+    dynamicPM.addPass(mlir::createCanonicalizerPass());
     if (failed(runPipeline(dynamicPM, top))) {
       return signalPassFailure();
     }
-
-    RewritePatternSet dummyPatterns(ctx);
-    dummyPatterns.add<InsertDummyPattern>(ctx);
-    if (failed(applyPatternsGreedily(getOperation()->getParentOp(), std::move(dummyPatterns)))) {
-      llvm::errs() << "failed\n";
-      signalPassFailure();
-    }
-
-    //  dynamicPM.addPass(mlir::createCanonicalizerPass());
-    //  if (failed(runPipeline(dynamicPM, getOperation()))) {
-    //    return signalPassFailure();
-    //  }
   }
 };
 

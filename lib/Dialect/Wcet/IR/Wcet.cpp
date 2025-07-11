@@ -7,6 +7,10 @@
 
 #include "Dialect/Wcet/IR/WcetOps.h"
 
+#include "circt/Dialect/HW/HWOps.h"
+#include "mlir/Dialect/CommonFolders.h"
+#include "mlir/IR/OpDefinition.h"
+#include "mlir/IR/PatternMatch.h"
 #include <llvm/ADT/STLExtras.h>
 #include <llvm/ADT/TypeSwitch.h>
 #include <mlir/IR/BuiltinAttributes.h>
@@ -19,6 +23,9 @@
 #include <mlir/Support/LLVM.h>
 
 #include "Dialect/Wcet/IR/WcetDialect.cpp.inc"
+#include "llvm/Support/Errc.h"
+#include "llvm/Support/LogicalResult.h"
+#include "llvm/Support/raw_ostream.h"
 
 using namespace mlir;
 
@@ -37,11 +44,64 @@ void wcet::WcetDialect::initialize() {
       >();
 }
 //
-//LogicalResult wcet::OperationOp::verify() {
+// LogicalResult wcet::OperationOp::verify() {
 //  if (getNumOperands() != getDistances().size())
 //    return emitOpError("expects ") << getNumOperands() << " distances, but got " << getDistances().size();
 //  return success();
 //}
+
+//===--------------------------------------------------------------------------------------------------------------===//
+// DummyOp
+//===--------------------------------------------------------------------------------------------------------------===//
+
+LogicalResult wcet::DummyOp::canonicalize(wcet::DummyOp op, PatternRewriter &rewriter) {
+  // patterns and rewrites go here.
+  auto inputs = op.getInputs();
+  auto outputs = op.getOutputs();
+  SmallVector<Value> newIn = SmallVector<Value>();
+  SmallVector<Type> newInType = SmallVector<Type>();
+  bool change = false;
+  for (size_t i = 0; i < inputs.size(); i++) {
+    newIn.push_back(inputs[i]);
+    newInType.push_back(inputs[i].getType());
+    auto *in = inputs[i].getDefiningOp();
+    if (!in)
+      continue;
+    if (in->hasTrait<mlir::OpTrait::ConstantLike>()) {
+      rewriter.replaceAllUsesWith(outputs[i], inputs[i]);
+      newIn.pop_back();
+      newInType.pop_back();
+      change = true;
+    }
+  }
+  if (!change)
+    return failure();
+
+  op->setOperands(newIn);
+  return success();
+}
+// llvm::LogicalResult wcet::DummyOp::fold(FoldAdaptor adaptor, SmallVectorImpl<OpFoldResult> &results) {
+//   for (auto in : getInputs()) {
+//     results.push_back(in);
+//   }
+//   return success();
+// }
+
+//===--------------------------------------------------------------------------------------------------------------===//
+// PenaltyOp
+//===--------------------------------------------------------------------------------------------------------------===//
+
+LogicalResult wcet::PenaltyOp::canonicalize(wcet::PenaltyOp op, PatternRewriter &rewriter) {
+  if (!op.getInput().getDefiningOp()->hasTrait<mlir::OpTrait::ConstantLike>())
+    return failure();
+  for (auto *us : op.getInput().getUsers()) {
+    llvm::errs() << us->getName() << "\n";
+    us->setAttr("wcet.delay", rewriter.getI32IntegerAttr(op.getDepth()));
+  }
+  rewriter.replaceAllOpUsesWith(op, op.getInput());
+  rewriter.eraseOp(op);
+  return success();
+}
 
 //===--------------------------------------------------------------------------------------------------------------===//
 // TableGen'd types and op method definitions

@@ -52,6 +52,8 @@ def Wcet_DummyOp : WcetOp<"dummy", []>  {
   let assemblyFormat = [{
     $inputs `:` type($inputs) `->` qualified(type($outputs)) attr-dict
   }];
+
+  let hasCanonicalizeMethod = 1;
 }
 
 def Wcet_InitOp : WcetOp<"init", []> {
@@ -81,6 +83,8 @@ def Wcet_PenaltyOp : WcetOp<"penalty",
     let results = (outs AnyType:$result);
 
     let hasCustomAssemblyFormat = 1;
+
+    let hasCanonicalizeMethod = 1;
 }
 
 

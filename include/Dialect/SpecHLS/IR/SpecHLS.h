@@ -11,5 +11,6 @@
 #include <mlir/IR/Dialect.h>
 
 #include "Dialect/SpecHLS/IR/SpecHLSDialect.h.inc"
+#include "mlir/IR/PatternMatch.h"
 
 #endif // SPECHLS_INCLUDED_DIALECT_SPECHLS_IR_SPECHLS_H

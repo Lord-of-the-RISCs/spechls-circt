@@ -4,6 +4,7 @@ add_circt_dialect_library(WcetTransforms
     SplitDelays.cpp
     WcetAnalysis.cpp
     InlineTasks.cpp
+    InsertDummy.cpp
 
     DEPENDS
     WcetTransformsIncGen
