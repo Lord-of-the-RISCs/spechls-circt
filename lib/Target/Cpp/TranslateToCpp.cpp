@@ -403,7 +403,28 @@ LogicalResult printOperation(CppEmitter &emitter, spechls::KernelOp kernelOp) {
   os.indent();
 
   mlir::sortTopologically(&kernelOp.getBody().front(), topoSortCriteria);
+
+  SmallVector<spechls::DelayOp> delays;
   for (auto &&op : kernelOp.getBody().front()) {
+    if (isa<spechls::ExitOp>(op)) {
+      // Print delay push operations just before the end of the kernel.
+      for (auto &&delay : delays) {
+        os << "delay_push<";
+        if (failed(emitter.emitType(delay.getLoc(), delay.getType())))
+          return failure();
+        os << ", " << delay.getDepth() << ">(" << getDelayBufferName(emitter, delay) << ", ";
+        if (failed(emitter.emitOperand(delay.getInput())))
+          return failure();
+        if (delay.getEnable()) {
+          os << ", ";
+          if (failed(emitter.emitOperand(delay.getEnable())))
+            return failure();
+        }
+        os << ");\n";
+      }
+    } else if (auto delayOp = dyn_cast<spechls::DelayOp>(op)) {
+      delays.push_back(delayOp);
+    }
     if (failed(emitter.emitOperation(op, true)))
       return failure();
   }
@@ -463,9 +484,10 @@ LogicalResult printOperation(CppEmitter &emitter, spechls::TaskOp taskOp) {
   if (failed(printDelayInitialization(emitter, taskOp.getBody().getBlocks())))
     return failure();
 
+  mlir::sortTopologically(&taskOp.getBody().front(), topoSortCriteria);
+
   SmallVector<spechls::DelayOp> delays;
   Value nextInputCmd{};
-  mlir::sortTopologically(&taskOp.getBody().front(), topoSortCriteria);
   for (auto &&op : taskOp.getBody().front()) {
     if (isa<spechls::CommitOp>(op)) {
       // Print delay push operations just before the end of the task.
