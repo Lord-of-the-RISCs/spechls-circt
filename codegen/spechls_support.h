@@ -163,11 +163,11 @@ void fifo_write(FifoType<T> &fifo, const Arg &input) {
   }
 }
 
-template <typename OutType, typename InType, int... Values>
+template <typename OutType, typename InType, unsigned int... Values>
 OutType lut(InType index) {
   OutType result{};
-  int idx = 0;
-  auto update = [&](int value) {
+  unsigned int idx = 0;
+  auto update = [&](unsigned int value) {
     if (index == idx++)
       result = value;
   };
