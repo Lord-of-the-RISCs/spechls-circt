@@ -1005,16 +1005,16 @@ LogicalResult printOperation(CppEmitter &emitter, circt::comb::MuxOp muxOp) {
     return failure();
   if (failed(emitter.emitOperand(muxOp.getCond())))
     return failure();
-  os << " ? ";
+  os << " ? (";
   if (failed(emitter.emitType(muxOp.getLoc(), muxOp.getType())))
     return failure();
-  os << "{";
+  os << "){";
   if (failed(emitter.emitOperand(muxOp.getTrueValue())))
     return failure();
-  os << "} : ";
+  os << "} : (";
   if (failed(emitter.emitType(muxOp.getLoc(), muxOp.getType())))
     return failure();
-  os << "{";
+  os << "){";
   if (failed(emitter.emitOperand(muxOp.getFalseValue())))
     return failure();
   os << "}";
