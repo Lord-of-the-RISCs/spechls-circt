@@ -873,14 +873,35 @@ LogicalResult printBinaryOperation(CppEmitter &emitter, Operation *operation, St
   return success();
 }
 
+LogicalResult printNaryOperation(CppEmitter &emitter, Operation *operation, StringRef opcode, bool isSigned = false) {
+  raw_ostream &os = emitter.ostream();
+
+  if (failed(emitter.emitAssignPrefix(*operation)))
+    return failure();
+  unsigned int index = 0;
+  for (auto operand : operation->getOperands()) {
+    if (isSigned) {
+      os << "(";
+      if (failed(emitter.emitType(operation->getLoc(), makeSigned(operand.getType()))))
+        return failure();
+      os << ")";
+    }
+    if (failed(emitter.emitOperand(operand)))
+      return failure();
+    if (index++ != operation->getNumOperands() - 1)
+      os << " " << opcode << " ";
+  }
+  return success();
+}
+
 LogicalResult printOperation(CppEmitter &emitter, circt::comb::AddOp addOp) {
   Operation *operation = addOp.getOperation();
-  return printBinaryOperation(emitter, operation, "+");
+  return printNaryOperation(emitter, operation, "+");
 }
 
 LogicalResult printOperation(CppEmitter &emitter, circt::comb::AndOp andOp) {
   Operation *operation = andOp.getOperation();
-  return printBinaryOperation(emitter, operation, "&");
+  return printNaryOperation(emitter, operation, "&");
 }
 
 LogicalResult printOperation(CppEmitter &emitter, circt::comb::DivSOp divOp) {
@@ -905,12 +926,12 @@ LogicalResult printOperation(CppEmitter &emitter, circt::comb::ModUOp moduOp) {
 
 LogicalResult printOperation(CppEmitter &emitter, circt::comb::MulOp mulOp) {
   Operation *operation = mulOp.getOperation();
-  return printBinaryOperation(emitter, operation, "*");
+  return printNaryOperation(emitter, operation, "*");
 }
 
 LogicalResult printOperation(CppEmitter &emitter, circt::comb::OrOp orOp) {
   Operation *operation = orOp.getOperation();
-  return printBinaryOperation(emitter, operation, "|");
+  return printNaryOperation(emitter, operation, "|");
 }
 
 LogicalResult printOperation(CppEmitter &emitter, circt::comb::ShlOp shlOp) {
@@ -935,7 +956,7 @@ LogicalResult printOperation(CppEmitter &emitter, circt::comb::SubOp subOp) {
 
 LogicalResult printOperation(CppEmitter &emitter, circt::comb::XorOp xorOp) {
   Operation *operation = xorOp.getOperation();
-  return printBinaryOperation(emitter, operation, "^");
+  return printNaryOperation(emitter, operation, "^");
 }
 
 LogicalResult printOperation(CppEmitter &emitter, circt::comb::ICmpOp icmpOp) {
