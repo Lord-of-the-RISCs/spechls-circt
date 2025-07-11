@@ -890,6 +890,16 @@ LogicalResult printOperation(CppEmitter &emitter, circt::comb::DivUOp divOp) {
   return printBinaryOperation(emitter, operation, "/");
 }
 
+LogicalResult printOperation(CppEmitter &emitter, circt::comb::ModSOp modsOp) {
+  Operation *operation = modsOp.getOperation();
+  return printBinaryOperation(emitter, operation, "%", true);
+}
+
+LogicalResult printOperation(CppEmitter &emitter, circt::comb::ModUOp moduOp) {
+  Operation *operation = moduOp.getOperation();
+  return printBinaryOperation(emitter, operation, "%", false);
+}
+
 LogicalResult printOperation(CppEmitter &emitter, circt::comb::MulOp mulOp) {
   Operation *operation = mulOp.getOperation();
   return printBinaryOperation(emitter, operation, "*");
@@ -1075,9 +1085,10 @@ LogicalResult CppEmitter::emitOperation(Operation &op, bool trailingSemicolon) {
           .Case<ModuleOp>([&](auto op) { return printOperation(*this, op); })
           // Comb ops.
           .Case<circt::comb::AddOp, circt::comb::AndOp, circt::comb::ConcatOp, circt::comb::DivSOp, circt::comb::DivUOp,
-                circt::comb::ExtractOp, circt::comb::ICmpOp, circt::comb::MulOp, circt::comb::MuxOp, circt::comb::OrOp,
-                circt::comb::ShlOp, circt::comb::ShrSOp, circt::comb::ShrUOp, circt::comb::SubOp,
-                circt::comb::ReplicateOp, circt::comb::XorOp>([&](auto op) { return printOperation(*this, op); })
+                circt::comb::ExtractOp, circt::comb::ICmpOp, circt::comb::ModSOp, circt::comb::ModUOp,
+                circt::comb::MulOp, circt::comb::MuxOp, circt::comb::OrOp, circt::comb::ShlOp, circt::comb::ShrSOp,
+                circt::comb::ShrUOp, circt::comb::SubOp, circt::comb::ReplicateOp, circt::comb::XorOp>(
+              [&](auto op) { return printOperation(*this, op); })
           // HW ops.
           .Case<circt::hw::BitcastOp>([&](auto op) { return printOperation(*this, op); })
           // SpecHLS ops.
