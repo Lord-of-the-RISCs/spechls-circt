@@ -45,12 +45,7 @@ void SchedulePass::runOnOperation() {
 
   OpPassManager dynamicPM("builtin.module");
   auto pass = circt::ssp::createSchedulePass();
-  if (failed(pass->initializeOptions("options=cycle-time=" + std::to_string(period), [](const Twine &msg) {
-        llvm::errs() << msg << '\n';
-        return failure();
-      })))
-    return signalPassFailure();
-  if (failed(pass->initializeOptions("scheduler=simplex", [](const Twine &msg) {
+  if (failed(pass->initializeOptions("scheduler=lp options=cycle-time=" + std::to_string(period), [](const Twine &msg) {
         llvm::errs() << msg << '\n';
         return failure();
       })))
