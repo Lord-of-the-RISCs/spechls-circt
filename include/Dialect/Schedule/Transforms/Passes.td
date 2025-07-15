@@ -25,4 +25,9 @@ def ConfigurationExcluderPass : Pass<"config-excluder", "schedule::CircuitOp"> {
     let dependentDialects = ["::schedule::ScheduleDialect"];
 }
 
+def ExtractCriticalPathPass : Pass<"extract-critical-path", "ModuleOp"> {
+    let summary = "Extract a minimal critical path that constrains the II.";
+    let dependentDialects = ["::circt::ssp::SSPDialect"];
+}
+
 #endif // SPECHLS_INCLUDED_DIALECT_SCHEDULE_TRANSFORMS_PASSES_TD
