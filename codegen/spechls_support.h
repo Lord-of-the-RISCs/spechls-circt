@@ -9,8 +9,61 @@
 #define CODEGEN_INCLUDED_SPECHLS_SUPPORT_H
 
 #include <algorithm>
+#include <memory>
 
 #include "ap_int.h"
+
+template <typename T, int N, int MaxModification>
+class array_by_value {
+  static_assert(MaxModification > 0, "Expected a positive number of modifications");
+
+  struct modification {
+    modification(T value, int address, std::shared_ptr<modification> next, std::shared_ptr<modification> prev)
+        : value(value), address(address), next(next), prev(prev) {}
+
+    T value;
+    int address;
+    std::shared_ptr<modification> next;
+    std::shared_ptr<modification> prev;
+  };
+
+  T *base;
+  std::shared_ptr<modification> firstModification;
+  std::shared_ptr<modification> lastModification;
+  int nodeCount;
+
+public:
+  array_by_value(T *base = nullptr) : array_by_value(base, nullptr, nullptr, 0) {}
+
+  const T &operator[](int address) const {
+    std::shared_ptr<modification> current = lastModification;
+    while (current) {
+      if (current->address == address)
+        return current->value;
+      current = current->prev;
+    }
+    return base[address];
+  }
+
+  array_by_value<T, N, MaxModification> write(int address, T value) {
+    if (nodeCount == MaxModification) {
+      base[firstModification->address] = firstModification->value;
+      firstModification = firstModification->next;
+      firstModification->prev = nullptr;
+      --nodeCount;
+    }
+    auto newModification = std::make_shared<modification>(value, address, nullptr, lastModification);
+    if (lastModification)
+      lastModification->next = newModification;
+    return array_by_value<T, N, MaxModification>(base, nodeCount == 0 ? newModification : firstModification,
+                                                 newModification, nodeCount + 1);
+  }
+
+private:
+  array_by_value(T *base, std::shared_ptr<modification> firstModification,
+                 std::shared_ptr<modification> lastModification, int nodeCount)
+      : base(base), firstModification(firstModification), lastModification(lastModification), nodeCount(nodeCount) {}
+};
 
 template <typename T, int ID>
 T mu(T init, T loop) {
@@ -20,10 +73,14 @@ T mu(T init, T loop) {
   return result;
 }
 
-template <typename T, unsigned int N>
+template <typename T, unsigned int N, int ID>
 void delay_init(T (&buffer)[N], T value) {
-  for (int i = 0; i < N; ++i)
-    buffer[i] = value;
+  static bool done = false;
+  if (!done) {
+    for (int i = 0; i < N; ++i)
+      buffer[i] = value;
+  }
+  done = true;
 }
 
 template <typename T, unsigned int N>
@@ -133,6 +190,12 @@ T *alpha(T *array, unsigned int index, T value, bool we) {
     array[index] = value;
   }
   return array;
+}
+
+template <typename T, int N, int MaxModification>
+array_by_value<T, N, MaxModification> alpha(array_by_value<T, N, MaxModification> &array, unsigned int index, T value,
+                                            bool we) {
+  return we ? array.write(index, value) : array;
 }
 
 template <typename T>

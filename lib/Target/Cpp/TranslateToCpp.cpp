@@ -40,7 +40,7 @@ class CppEmitter {
   raw_indented_ostream os;
 
 public:
-  explicit CppEmitter(raw_ostream &os, bool declareStructTypes = false, bool declareFunctions = false);
+  explicit CppEmitter(raw_ostream &os, bool declareStructTypes, bool declareFunctions, bool lowerArraysAsValues);
 
   raw_indented_ostream &ostream() { return os; }
 
@@ -71,6 +71,7 @@ public:
 
   bool shouldDeclareStructTypes() { return declareStructTypes; }
   bool shouldDeclareFunctions() { return declareFunctions; }
+  bool shouldLowerArraysAsValues() { return lowerArraysAsValues; }
 
   class Scope {
     llvm::ScopedHashTableScope<Value, std::string> valueMapperScope;
@@ -96,7 +97,10 @@ private:
   std::stack<int64_t> valueInScopeCount;
   bool declareStructTypes;
   bool declareFunctions;
+  bool lowerArraysAsValues;
 };
+
+int64_t maxRollback = 0;
 
 template <typename ForwardIterator, typename UnaryFunctor, typename NullaryFunctor>
 inline LogicalResult interleaveWithError(ForwardIterator begin, ForwardIterator end, UnaryFunctor eachFn,
@@ -310,6 +314,7 @@ LogicalResult printAllFunctionPrototypes(CppEmitter &emitter, ModuleOp moduleOp)
 LogicalResult printDelayInitialization(CppEmitter &emitter, Region::BlockListType &blocks) {
   raw_ostream &os = emitter.ostream();
 
+  int id = 0;
   for (auto &&block : blocks) {
     for (auto &&op : block) {
       if (auto delayOp = dyn_cast<spechls::DelayOp>(op)) {
@@ -318,7 +323,7 @@ LogicalResult printDelayInitialization(CppEmitter &emitter, Region::BlockListTyp
         os << "delay_init<";
         if (failed(emitter.emitType(delayOp.getLoc(), delayOp.getType())))
           return failure();
-        os << ", " << delayOp.getDepth() << ">(" << getDelayBufferName(emitter, delayOp) << ", ";
+        os << ", " << delayOp.getDepth() << ", " << id++ << ">(" << getDelayBufferName(emitter, delayOp) << ", ";
         if (failed(emitter.emitOperand(delayOp.getInit())))
           return failure();
         os << ");\n";
@@ -335,6 +340,25 @@ LogicalResult printOperation(CppEmitter &emitter, ModuleOp moduleOp) {
   os << "#include <io_printf.h>\n";
   os << "#include <spechls_support.h>\n";
   os << "\n";
+
+  // FIXME: Change this ugliness.
+  for (auto &&mop : moduleOp.getBodyRegion().front()) {
+    if (auto kernelOp = dyn_cast<spechls::KernelOp>(mop)) {
+      for (auto &&op : kernelOp.getBody().front()) {
+        if (auto rollbackOp = dyn_cast<spechls::RollbackOp>(op)) {
+          maxRollback =
+              std::max(maxRollback, *std::max_element(rollbackOp.getDepths().begin(), rollbackOp.getDepths().end()));
+        } else if (auto taskOp = dyn_cast<spechls::TaskOp>(op)) {
+          for (auto &&op2 : taskOp.getBody().front()) {
+            if (auto rollbackOp2 = dyn_cast<spechls::RollbackOp>(op2)) {
+              maxRollback = std::max(maxRollback,
+                                     *std::max_element(rollbackOp2.getDepths().begin(), rollbackOp2.getDepths().end()));
+            }
+          }
+        }
+      }
+    }
+  }
 
   if (emitter.shouldDeclareStructTypes()) {
     if (failed(printAllStructTypes(emitter, moduleOp)))
@@ -1117,8 +1141,9 @@ LogicalResult printOperation(CppEmitter &emitter, circt::hw::BitcastOp bitcastOp
 }
 } // namespace
 
-CppEmitter::CppEmitter(raw_ostream &os, bool declareStructTypes, bool declareFunctions)
-    : os(os), declareStructTypes(declareStructTypes), declareFunctions(declareFunctions) {
+CppEmitter::CppEmitter(raw_ostream &os, bool declareStructTypes, bool declareFunctions, bool lowerArraysAsValues)
+    : os(os), declareStructTypes(declareStructTypes), declareFunctions(declareFunctions),
+      lowerArraysAsValues(lowerArraysAsValues) {
   valueInScopeCount.push(0);
 }
 
@@ -1230,9 +1255,16 @@ LogicalResult CppEmitter::emitType(Location loc, Type type) {
     return success();
   }
   if (auto aType = dyn_cast<spechls::ArrayType>(type)) {
-    if (failed(emitType(loc, aType.getElementType())))
-      return failure();
-    os << "*";
+    if (lowerArraysAsValues) {
+      os << "array_by_value<";
+      if (failed(emitType(loc, aType.getElementType())))
+        return failure();
+      os << ", " << aType.getSize() << ", " << (maxRollback + 1) << ">";
+    } else {
+      if (failed(emitType(loc, aType.getElementType())))
+        return failure();
+      os << "*";
+    }
     return success();
   }
   return emitError(loc, "cannot emit type ") << type;
@@ -1462,7 +1494,8 @@ StringRef CppEmitter::getOrCreateName(Value value) {
   return *valueMapper.begin(value);
 }
 
-LogicalResult spechls::translateToCpp(Operation *op, raw_ostream &os, bool declareStructTypes, bool declareFunctions) {
-  CppEmitter emitter(os, declareStructTypes, declareFunctions);
+LogicalResult spechls::translateToCpp(Operation *op, raw_ostream &os, bool declareStructTypes, bool declareFunctions,
+                                      bool lowerArraysAsValues) {
+  CppEmitter emitter(os, declareStructTypes, declareFunctions, lowerArraysAsValues);
   return emitter.emitOperation(*op, false);
 }
