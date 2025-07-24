@@ -11,6 +11,6 @@
 namespace spechls {
 
 llvm::LogicalResult translateToCpp(mlir::Operation *op, llvm::raw_ostream &os, bool declareStructTypes,
-                                   bool declareFunctions, bool lowerArraysAsValues);
+                                   bool declareFunctions, bool lowerArraysAsValues, bool generateCpi);
 
 } // namespace spechls

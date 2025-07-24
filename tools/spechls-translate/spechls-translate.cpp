@@ -26,11 +26,13 @@ int main(int argc, char **argv) {
       llvm::cl::init(false));
   static llvm::cl::opt<bool> lowerArraysAsValues(
       "arrays-as-values", llvm::cl::desc("Lower arrays with value semantics"), llvm::cl::init(false));
+  static llvm::cl::opt<bool> generateCpi("generate-cpi", llvm::cl::desc("Generate CPI extraction code"),
+                                         llvm::cl::init(false));
 
   mlir::TranslateFromMLIRRegistration registration(
       "spechls-to-cpp", "Translate SpecHLS to C++",
       [](mlir::Operation *op, llvm::raw_ostream &os) {
-        return spechls::translateToCpp(op, os, declareStructTypes, declareFunctions, lowerArraysAsValues);
+        return spechls::translateToCpp(op, os, declareStructTypes, declareFunctions, lowerArraysAsValues, generateCpi);
       },
       [](mlir::DialectRegistry &registry) {
         registry.insert<spechls::SpecHLSDialect, circt::comb::CombDialect, circt::hw::HWDialect>();

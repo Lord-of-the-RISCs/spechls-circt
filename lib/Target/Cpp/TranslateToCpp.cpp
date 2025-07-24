@@ -40,7 +40,8 @@ class CppEmitter {
   raw_indented_ostream os;
 
 public:
-  explicit CppEmitter(raw_ostream &os, bool declareStructTypes, bool declareFunctions, bool lowerArraysAsValues);
+  explicit CppEmitter(raw_ostream &os, bool declareStructTypes, bool declareFunctions, bool lowerArraysAsValues,
+                      bool generateCpi);
 
   raw_indented_ostream &ostream() { return os; }
 
@@ -72,6 +73,7 @@ public:
   bool shouldDeclareStructTypes() { return declareStructTypes; }
   bool shouldDeclareFunctions() { return declareFunctions; }
   bool shouldLowerArraysAsValues() { return lowerArraysAsValues; }
+  bool shouldGenerateCpi() { return generateCpi; }
 
   class Scope {
     llvm::ScopedHashTableScope<Value, std::string> valueMapperScope;
@@ -98,6 +100,7 @@ private:
   bool declareStructTypes;
   bool declareFunctions;
   bool lowerArraysAsValues;
+  bool generateCpi;
 };
 
 int64_t maxRollback = 0;
@@ -342,6 +345,7 @@ LogicalResult printOperation(CppEmitter &emitter, ModuleOp moduleOp) {
   os << "\n";
 
   // FIXME: Change this ugliness.
+  // Compute the maximum rollback depth.
   for (auto &&mop : moduleOp.getBodyRegion().front()) {
     if (auto kernelOp = dyn_cast<spechls::KernelOp>(mop)) {
       for (auto &&op : kernelOp.getBody().front()) {
@@ -370,6 +374,22 @@ LogicalResult printOperation(CppEmitter &emitter, ModuleOp moduleOp) {
     if (failed(printAllFunctionPrototypes(emitter, moduleOp)))
       return failure();
     os << "\n";
+  }
+
+  if (emitter.shouldGenerateCpi()) {
+    os << R"+(
+#include <cstdio>
+
+long long spechls__iterations = 0, spechls__cycles = 0;
+
+void dump_perf() {
+  FILE *f = fopen("perf.json", "w");
+  if(f)
+    fprintf(f, "{\n\t\"TripCount\":\"%ld\",\n\t\"ClockCycles\":\"%ld\",\n\t\"ClockPerIteration\":\"%f\"\n}",
+      spechls__iterations, spechls__cycles, spechls__cycles / (float)spechls__iterations);
+}
+
+)+";
   }
 
   for (auto &&op : moduleOp) {
@@ -455,8 +475,12 @@ LogicalResult printOperation(CppEmitter &emitter, spechls::KernelOp kernelOp) {
 
   os << emitter.getInitVariableName() << " = false;\n";
 
+  if (emitter.shouldGenerateCpi())
+    os << "++spechls__cycles;\n";
   os.unindent();
   os << "}\n";
+  if (emitter.shouldGenerateCpi())
+    os << "dump_perf();\n";
   os.unindent();
   os << "}";
   return success();
@@ -512,6 +536,7 @@ LogicalResult printOperation(CppEmitter &emitter, spechls::TaskOp taskOp) {
 
   SmallVector<spechls::DelayOp> delays;
   Value nextInputCmd{};
+  Value fsmCommand{};
   for (auto &&op : taskOp.getBody().front()) {
     if (isa<spechls::CommitOp>(op)) {
       // Print delay push operations just before the end of the task.
@@ -536,7 +561,10 @@ LogicalResult printOperation(CppEmitter &emitter, spechls::TaskOp taskOp) {
       if (fieldOp.getName() == "nextInput") {
         nextInputCmd = fieldOp;
       }
+    } else if (auto fsmCommandOp = dyn_cast<spechls::FSMCommandOp>(op)) {
+      fsmCommand = fsmCommandOp.getResult();
     }
+
     if (failed(emitter.emitOperation(op, true))) {
       return failure();
     }
@@ -560,6 +588,15 @@ LogicalResult printOperation(CppEmitter &emitter, spechls::TaskOp taskOp) {
     if (nextInputCmd && !fifoInputs.empty()) {
       os.unindent();
       os << "}\n";
+    }
+    if (fsmCommand && emitter.shouldGenerateCpi()) {
+      os << "if (";
+      if (failed(emitter.emitOperand(fsmCommand)))
+        return failure();
+      os << ".commit)\n";
+      os.indent();
+      os << "++spechls__iterations;\n";
+      os.unindent();
     }
     os.unindent();
     os << "}";
@@ -1141,9 +1178,10 @@ LogicalResult printOperation(CppEmitter &emitter, circt::hw::BitcastOp bitcastOp
 }
 } // namespace
 
-CppEmitter::CppEmitter(raw_ostream &os, bool declareStructTypes, bool declareFunctions, bool lowerArraysAsValues)
+CppEmitter::CppEmitter(raw_ostream &os, bool declareStructTypes, bool declareFunctions, bool lowerArraysAsValues,
+                       bool generateCpi)
     : os(os), declareStructTypes(declareStructTypes), declareFunctions(declareFunctions),
-      lowerArraysAsValues(lowerArraysAsValues) {
+      lowerArraysAsValues(lowerArraysAsValues), generateCpi(generateCpi) {
   valueInScopeCount.push(0);
 }
 
@@ -1495,7 +1533,7 @@ StringRef CppEmitter::getOrCreateName(Value value) {
 }
 
 LogicalResult spechls::translateToCpp(Operation *op, raw_ostream &os, bool declareStructTypes, bool declareFunctions,
-                                      bool lowerArraysAsValues) {
-  CppEmitter emitter(os, declareStructTypes, declareFunctions, lowerArraysAsValues);
+                                      bool lowerArraysAsValues, bool generateCpi) {
+  CppEmitter emitter(os, declareStructTypes, declareFunctions, lowerArraysAsValues, generateCpi);
   return emitter.emitOperation(*op, false);
 }
