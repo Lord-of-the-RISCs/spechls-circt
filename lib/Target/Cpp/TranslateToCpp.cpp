@@ -525,7 +525,6 @@ LogicalResult printOperation(CppEmitter &emitter, spechls::TaskOp taskOp) {
   mlir::sortTopologically(&taskOp.getBody().front(), topoSortCriteria);
 
   SmallVector<spechls::DelayOp> delays;
-  Value nextInputCmd{};
   Value fsmCommand{};
   for (auto &&op : taskOp.getBody().front()) {
     if (isa<spechls::CommitOp>(op)) {
@@ -546,11 +545,6 @@ LogicalResult printOperation(CppEmitter &emitter, spechls::TaskOp taskOp) {
       }
     } else if (auto delayOp = dyn_cast<spechls::DelayOp>(op)) {
       delays.push_back(delayOp);
-    } else if (auto fieldOp = dyn_cast<spechls::FieldOp>(op)) {
-      // Retrieve the nextInput FSM command signal. This is a hack that is mirrored from the Java implementation.
-      if (fieldOp.getName() == "nextInput") {
-        nextInputCmd = fieldOp;
-      }
     } else if (auto fsmCommandOp = dyn_cast<spechls::FSMCommandOp>(op)) {
       fsmCommand = fsmCommandOp.getResult();
     }
@@ -565,17 +559,17 @@ LogicalResult printOperation(CppEmitter &emitter, spechls::TaskOp taskOp) {
       os << "fifo_write(" << getFifoBufferName(emitter, out.second) << ", " << emitter.getOrCreateName(out.first)
          << ");\n";
     }
-    if (nextInputCmd && !fifoInputs.empty()) {
+    if (fsmCommand && !fifoInputs.empty()) {
       os << "if (";
-      if (failed(emitter.emitOperand(nextInputCmd)))
+      if (failed(emitter.emitOperand(fsmCommand)))
         return failure();
-      os << ") {\n";
+      os << ".nextInput) {\n";
       os.indent();
     }
     for (auto &&in : fifoInputs) {
       os << "fifo_read(" << getFifoBufferName(emitter, in) << ");\n";
     }
-    if (nextInputCmd && !fifoInputs.empty()) {
+    if (fsmCommand && !fifoInputs.empty()) {
       os.unindent();
       os << "}\n";
     }
