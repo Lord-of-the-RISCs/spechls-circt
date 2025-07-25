@@ -107,7 +107,7 @@ void delay_push(T (&buffer)[N], T value, bool enable = true) {
 
 template <typename T, int Min, int Max>
 T extract(T input) {
-  return (input >> Min) & ((1 << (Max - Min)) - 1);
+  return (input >> Min) & ((1ull << (Max - Min)) - 1);
 }
 
 template <unsigned int N, int Min, int Max>
