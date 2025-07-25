@@ -67,7 +67,6 @@ public:
   LogicalResult emitAssignPrefix(Operation &op);
 
   StringRef getOrCreateName(Value value);
-  StringRef getInitVariableName() { return "init_"; }
   StringRef getExitVariableName() { return "exit_"; }
 
   bool shouldDeclareStructTypes() { return declareStructTypes; }
@@ -436,13 +435,6 @@ LogicalResult printOperation(CppEmitter &emitter, spechls::KernelOp kernelOp) {
   }
   os << " = false;\n";
 
-  // Generate the init variable.
-  if (failed(emitter.emitVariableDeclaration(kernelOp.getLoc(), IntegerType::get(kernelOp.getContext(), 1),
-                                             emitter.getInitVariableName(), false))) {
-    return failure();
-  }
-  os << " = true;\n\n";
-
   os << "while (!" << emitter.getExitVariableName() << ") {\n";
   os.indent();
 
@@ -472,8 +464,6 @@ LogicalResult printOperation(CppEmitter &emitter, spechls::KernelOp kernelOp) {
     if (failed(emitter.emitOperation(op, true)))
       return failure();
   }
-
-  os << emitter.getInitVariableName() << " = false;\n";
 
   if (emitter.shouldGenerateCpi())
     os << "++spechls__cycles;\n";
