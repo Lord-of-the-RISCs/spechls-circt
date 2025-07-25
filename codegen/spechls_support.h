@@ -18,8 +18,7 @@ class array_by_value {
   static_assert(MaxModification > 0, "Expected a positive number of modifications");
 
   struct modification {
-    modification(T value, int address, std::shared_ptr<modification> next, std::shared_ptr<modification> prev)
-        : value(value), address(address), next(next), prev(prev) {}
+    modification(T value, int address) : value(value), address(address), next(nullptr), prev(nullptr) {}
 
     T value;
     int address;
@@ -28,15 +27,15 @@ class array_by_value {
   };
 
   T *base;
-  std::shared_ptr<modification> firstModification;
-  std::shared_ptr<modification> lastModification;
+  std::shared_ptr<modification> first;
+  std::shared_ptr<modification> last;
   int nodeCount;
 
 public:
   array_by_value(T *base = nullptr) : array_by_value(base, nullptr, nullptr, 0) {}
 
   const T &operator[](int address) const {
-    std::shared_ptr<modification> current = lastModification;
+    std::shared_ptr<modification> current = last;
     while (current) {
       if (current->address == address)
         return current->value;
@@ -46,23 +45,32 @@ public:
   }
 
   array_by_value<T, N, MaxModification> write(int address, T value) {
-    if (nodeCount == MaxModification) {
-      base[firstModification->address] = firstModification->value;
-      firstModification = firstModification->next;
-      firstModification->prev = nullptr;
-      --nodeCount;
+    auto result = *this;
+    if (result.nodeCount == MaxModification) {
+      result.base[result.first->address] = result.first->value;
+      result.first = result.first->next;
+      --result.nodeCount;
     }
-    auto newModification = std::make_shared<modification>(value, address, nullptr, lastModification);
-    if (lastModification)
-      lastModification->next = newModification;
-    return array_by_value<T, N, MaxModification>(base, nodeCount == 0 ? newModification : firstModification,
-                                                 newModification, nodeCount + 1);
+    auto newModification = std::make_shared<modification>(value, address);
+    if (!result.first) {
+      result.first = result.last = newModification;
+      newModification->next = nullptr;
+      newModification->prev = nullptr;
+    } else {
+      if (result.last->next)
+        result.last->next->prev = newModification;
+      newModification->next = result.last->next;
+      newModification->prev = result.last;
+      result.last->next = newModification;
+      result.last = newModification;
+    }
+    ++result.nodeCount;
+    return result;
   }
 
 private:
-  array_by_value(T *base, std::shared_ptr<modification> firstModification,
-                 std::shared_ptr<modification> lastModification, int nodeCount)
-      : base(base), firstModification(firstModification), lastModification(lastModification), nodeCount(nodeCount) {}
+  array_by_value(T *base, std::shared_ptr<modification> first, std::shared_ptr<modification> last, int nodeCount)
+      : base(base), first(first), last(last), nodeCount(nodeCount) {}
 };
 
 template <typename T, int ID>
