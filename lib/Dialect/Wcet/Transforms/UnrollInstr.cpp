@@ -18,6 +18,7 @@
 #include "circt/Dialect/HW/HWOpInterfaces.h"
 #include "circt/Dialect/HW/HWOps.h"
 #include "circt/Support/LLVM.h"
+#include "mlir/IR/Attributes.h"
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/Operation.h"
 #include "mlir/IR/PatternMatch.h"
@@ -30,9 +31,11 @@
 #include "mlir/Transforms/DialectConversion.h"
 #include "mlir/Transforms/GreedyPatternRewriteDriver.h"
 #include "mlir/Transforms/Passes.h"
+#include "llvm/ADT/MapVector.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/SmallPtrSet.h"
 #include "llvm/BinaryFormat/MachO.h"
+#include "llvm/IR/Intrinsics.h"
 #include "llvm/Support/Casting.h"
 #include "llvm/Support/LogicalResult.h"
 #include "llvm/Support/raw_ostream.h"
@@ -40,6 +43,7 @@
 #include <cstdio>
 #include <memory>
 #include <string>
+#include <unordered_map>
 
 using namespace mlir;
 using namespace spechls;
@@ -132,52 +136,45 @@ StructType setupTask(TaskOp top, PatternRewriter &rewriter) {
   // top->getParentOfType<mlir::ModuleOp>()->dumpPretty();
   return resultStruct;
 }
-} // namespace
 
-namespace wcet {
+LogicalResult superpapatern(spechls::KernelOp top, PatternRewriter &rewriter, llvm::ArrayRef<unsigned int> instrs) {
+  if (instrs.size() == 0)
+    return failure();
+  TaskOp mainTask = nullptr;
+  top->walk([&](TaskOp task) {
+    task.getBody().walk([&](Operation *op) {
+      if (hasPragmaContaining(op, "WCET fetch")) {
+        mainTask = task;
+        return;
+      }
+    });
+    if (mainTask)
+      return;
+  });
 
-struct UnrollInstrPattern : OpRewritePattern<spechls::KernelOp> {
-  llvm::ArrayRef<unsigned int> instrs;
-  using OpRewritePattern<spechls::KernelOp>::OpRewritePattern;
-
-  // Constructor to save pass arguments
-  UnrollInstrPattern(MLIRContext *ctx, const llvm::ArrayRef<unsigned int> intrs)
-      : OpRewritePattern<spechls::KernelOp>(ctx) {
-    this->instrs = intrs;
+  if (!mainTask) {
+    return failure();
   }
 
-  LogicalResult matchAndRewrite(spechls::KernelOp top, PatternRewriter &rewriter) const override {
-    if (instrs.size() == 0)
-      return failure();
-    TaskOp mainTask = nullptr;
-    top->walk([&](TaskOp task) {
-      task.getBody().walk([&](Operation *op) {
-        if (hasPragmaContaining(op, "WCET fetch")) {
-          mainTask = task;
-          return;
-        }
-      });
-    });
+  StructType resultStruct = setupTask(mainTask, rewriter);
+  if (!resultStruct)
+    return failure();
 
-    if (!mainTask) {
-      return failure();
-    }
+  rewriter.setInsertionPointAfter(mainTask);
+  spechls::UnpackOp lastUnpack = rewriter.create<spechls::UnpackOp>(rewriter.getUnknownLoc(), mainTask.getResult());
+  rewriter.replaceAllUsesExcept(mainTask.getResult(), lastUnpack->getResult(0), lastUnpack);
 
-    StructType resultStruct = setupTask(mainTask, rewriter);
-    if (!resultStruct)
-      return failure();
-
-    rewriter.setInsertionPointAfter(mainTask);
-    spechls::UnpackOp lastUnpack = rewriter.create<spechls::UnpackOp>(rewriter.getUnknownLoc(), mainTask.getResult());
-    rewriter.replaceAllUsesExcept(mainTask.getResult(), lastUnpack->getResult(0), lastUnpack);
-
-    size_t numArgsOri = mainTask->getNumOperands();
-    auto rTypes = resultStruct.getFieldTypes();
-    auto rNames = resultStruct.getFieldNames();
-    rewriter.setInsertionPointToStart(&top.getBody().getBlocks().front());
-    for (size_t i = numArgsOri + 1; i < rTypes.size(); i++) {
-      auto t = rTypes[i];
-      wcet::InitOp ini = rewriter.create<wcet::InitOp>(rewriter.getUnknownLoc(), t, rNames[i]);
+  size_t numArgsOri = mainTask->getNumOperands();
+  auto rTypes = resultStruct.getFieldTypes();
+  auto rNames = resultStruct.getFieldNames();
+  rewriter.setInsertionPointToStart(&top.getBody().getBlocks().front());
+  for (size_t i = numArgsOri + 1; i < rTypes.size(); i++) {
+    auto t = rTypes[i];
+    auto name = rNames[i];
+    if (!dyn_cast_or_null<spechls::ArrayType>(t)) {
+      spechls::ConstantOp ini =
+          rewriter.create<spechls::ConstantOp>(rewriter.getUnknownLoc(), t, rewriter.getIntegerAttr(t, 0));
+      ini->setAttr("wcet.scalar_const", rewriter.getUnitAttr());
       mainTask.getBody().addArgument(t, mainTask.getBody().getLoc());
       mainTask.getArgsMutable().append(ini.getResult());
       auto arg = mainTask.getBody().getArgument(i - 1);
@@ -185,7 +182,31 @@ struct UnrollInstrPattern : OpRewritePattern<spechls::KernelOp> {
         auto attr = delay->getAttr(rewriter.getStringAttr("wcet.pragma"));
         if (attr) {
           if (auto opName = dyn_cast_or_null<mlir::StringAttr>(attr)) {
-            if (opName == rNames[i]) {
+            if (opName == name) {
+              rewriter.replaceAllOpUsesWith(delay, arg);
+              rewriter.eraseOp(delay);
+              return;
+            }
+          }
+        }
+      });
+
+    } else {
+      //  circt::hw::ConstantOp cst = rewriter.create<circt::hw::ConstantOp>(rewriter.getUnknownLoc(),
+      //  rewriter.getI32Type(),
+      //                                                                     rewriter.getI32IntegerAttr(0));
+      //  circt::hw::BitcastOp ini = rewriter.create<circt::hw::BitcastOp>(rewriter.getUnknownLoc(), t,
+      //  cst.getResult());
+
+      wcet::InitOp ini = rewriter.create<wcet::InitOp>(rewriter.getUnknownLoc(), t, name);
+      mainTask.getBody().addArgument(t, mainTask.getBody().getLoc());
+      mainTask.getArgsMutable().append(ini.getResult());
+      auto arg = mainTask.getBody().getArgument(i - 1);
+      mainTask->walk([&](DelayOp delay) {
+        auto attr = delay->getAttr(rewriter.getStringAttr("wcet.pragma"));
+        if (attr) {
+          if (auto opName = dyn_cast_or_null<mlir::StringAttr>(attr)) {
+            if (opName == name) {
               rewriter.replaceAllOpUsesWith(delay, arg);
               rewriter.eraseOp(delay);
               return;
@@ -194,15 +215,39 @@ struct UnrollInstrPattern : OpRewritePattern<spechls::KernelOp> {
         }
       });
     }
+  }
 
-    wcet::DummyOp dummyEntry = rewriter.create<wcet::DummyOp>(
-        rewriter.getUnknownLoc(), mainTask->getOperands().getType(), mainTask->getOperands());
-    dummyEntry->setAttr("wcet.entry", rewriter.getUnitAttr());
-    for (size_t i = 0; i < dummyEntry.getInputs().size(); i++) {
-      rewriter.replaceAllUsesWith(dummyEntry.getInputs()[i], dummyEntry->getResult(i));
+  wcet::DummyOp dummyEntry = rewriter.create<wcet::DummyOp>(rewriter.getUnknownLoc(), mainTask->getOperands().getType(),
+                                                            mainTask->getOperands());
+  dummyEntry->setAttr("wcet.entry", rewriter.getUnitAttr());
+  for (size_t i = 0; i < dummyEntry.getInputs().size(); i++) {
+    rewriter.replaceAllUsesExcept(dummyEntry.getInputs()[i], dummyEntry->getResult(i), dummyEntry);
+  }
+
+  unsigned int inst = instrs.front();
+  mainTask->walk([&](hw::ConstantOp cons) {
+    auto attr = cons->getAttr(rewriter.getStringAttr("wcet.pragma"));
+    if (attr) {
+      if (auto opName = dyn_cast_or_null<mlir::StringAttr>(attr)) {
+        if (opName == "instruction") {
+          cons.setValueAttr(rewriter.getI32IntegerAttr(inst));
+          return;
+        }
+      }
     }
-
-    unsigned int inst = instrs.front();
+  });
+  spechls::UnpackOp unpack = nullptr;
+  for (size_t i = 1; i < instrs.size(); i++) {
+    inst = instrs[i];
+    rewriter.setInsertionPointAfter(mainTask);
+    unpack = rewriter.create<UnpackOp>(rewriter.getUnknownLoc(), mainTask.getResult());
+    auto newTask = dyn_cast_or_null<spechls::TaskOp>(rewriter.clone(*mainTask));
+    llvm::SmallVector<Value> operands = llvm::SmallVector<Value>();
+    for (size_t j = 1; j < unpack.getResults().size(); j++) {
+      operands.push_back(unpack.getResult(j));
+    }
+    newTask->setOperands(operands);
+    mainTask = newTask;
     mainTask->walk([&](hw::ConstantOp cons) {
       auto attr = cons->getAttr(rewriter.getStringAttr("wcet.pragma"));
       if (attr) {
@@ -214,35 +259,16 @@ struct UnrollInstrPattern : OpRewritePattern<spechls::KernelOp> {
         }
       }
     });
-    spechls::UnpackOp unpack = nullptr;
-    for (size_t i = 1; i < instrs.size(); i++) {
-      inst = instrs[i];
-      rewriter.setInsertionPointAfter(mainTask);
-      unpack = rewriter.create<UnpackOp>(rewriter.getUnknownLoc(), mainTask.getResult());
-      auto newTask = dyn_cast_or_null<spechls::TaskOp>(rewriter.clone(*mainTask));
-      llvm::SmallVector<Value> operands = llvm::SmallVector<Value>();
-      for (size_t j = 1; j < unpack.getResults().size(); j++) {
-        operands.push_back(unpack.getResult(j));
-      }
-      newTask->setOperands(operands);
-      mainTask = newTask;
-      mainTask->walk([&](hw::ConstantOp cons) {
-        auto attr = cons->getAttr(rewriter.getStringAttr("wcet.pragma"));
-        if (attr) {
-          if (auto opName = dyn_cast_or_null<mlir::StringAttr>(attr)) {
-            if (opName == "instruction") {
-              cons.setValueAttr(rewriter.getI32IntegerAttr(inst));
-              return;
-            }
-          }
-        }
-      });
-    }
-    lastUnpack.setOperand(mainTask.getResult());
-
-    return success();
   }
-};
+  lastUnpack.setOperand(mainTask.getResult());
+
+  top->dump();
+
+  return success();
+}
+} // namespace
+
+namespace wcet {
 
 struct UnrollInstrPass : public impl::UnrollInstrPassBase<UnrollInstrPass> {
 
@@ -253,20 +279,20 @@ public:
     auto top = getOperation();
     auto *ctx = &getContext();
 
-    RewritePatternSet unrollPattern(ctx);
-    unrollPattern.add<UnrollInstrPattern>(ctx, *instrs);
-    if (failed(applyPatternsGreedily(getOperation()->getParentOp(), std::move(unrollPattern)))) {
+    mlir::PatternRewriter paptern(ctx);
+
+    if (failed(superpapatern(top, paptern, *instrs))) {
       llvm::errs() << "failed\n";
       signalPassFailure();
     }
 
-    OpPassManager dynamicPM(spechls::KernelOp::getOperationName());
-    dynamicPM.addPass(wcet::createInlineTasksPass());
-    dynamicPM.addPass(wcet::createInsertDummyPass());
-    dynamicPM.addPass(mlir::createCanonicalizerPass());
-    if (failed(runPipeline(dynamicPM, top))) {
-      return signalPassFailure();
-    }
+    // OpPassManager dynamicPM(spechls::KernelOp::getOperationName());
+    // dynamicPM.addPass(wcet::createInlineTasksPass());
+    // dynamicPM.addPass(wcet::createInsertDummyPass());
+    // dynamicPM.addPass(mlir::createCanonicalizerPass());
+    // if (failed(runPipeline(dynamicPM, top))) {
+    //   return signalPassFailure();
+    // }
   }
 };
 

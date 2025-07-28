@@ -12,7 +12,6 @@ module {
             %rs1 = comb.extract %instr from 1 : (i8) -> i2
             %rs2 = comb.extract %instr from 3 : (i8) -> i2
             %rd = comb.extract %instr from 5 : (i8) -> i2
-            %rd0 = spechls.delay %rd by 1 : i2
             %operand1 = spechls.load %x0[%rs1 : i2] : !spechls.array<i32, 4>
             %operand2 = spechls.load %x0[%rs2 : i2] : !spechls.array<i32, 4>
             %addResult = comb.add %operand1, %operand2 : i32

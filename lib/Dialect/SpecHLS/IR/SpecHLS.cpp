@@ -8,6 +8,7 @@
 #include "Dialect/SpecHLS/IR/SpecHLSOps.h"
 
 #include "circt/Dialect/HW/HWOps.h"
+#include "circt/Support/LLVM.h"
 #include "mlir/IR/OpDefinition.h"
 #include "mlir/IR/PatternMatch.h"
 #include <llvm/ADT/STLExtras.h>
@@ -29,6 +30,7 @@
 #include "mlir/IR/PatternMatch.h"
 #include "llvm/BinaryFormat/MsgPackReader.h"
 #include "llvm/Support/Casting.h"
+#include "llvm/Support/raw_ostream.h"
 
 using namespace mlir;
 
@@ -47,6 +49,12 @@ void spechls::SpecHLSDialect::initialize() {
       >();
 }
 
+Operation *spechls::SpecHLSDialect::materializeConstant(mlir::OpBuilder &builder, mlir::Attribute value,
+                                                        mlir::Type type, mlir::Location loc) {
+  if (auto ival = dyn_cast<IntegerAttr>(value))
+    return builder.create<circt::hw::ConstantOp>(loc, type, ival.getValue().getZExtValue());
+  return nullptr;
+}
 //===--------------------------------------------------------------------------------------------------------------===//
 // Operations
 //===--------------------------------------------------------------------------------------------------------------===//
@@ -437,40 +445,27 @@ LogicalResult spechls::LUTOp::verify() {
   return success();
 }
 
-// OpFoldResult spechls::LUTOp::fold(FoldAdaptor adaptor) {
-//   Builder builder(getContext());
-//   auto content = adaptor.getContents();
-//   auto first = content[0];
-//   auto different = false;
-//   for (u_int32_t k = 1; k < content.size(); k++) {
-//     if (content[k] != first) {
-//       different = true;
-//       break;
-//     }
-//   }
-//   if (!different) {
-//     return builder.getIntegerAttr(getType(), first);
-//   }
-//
-//   auto input = dyn_cast_or_null<circt::hw::ConstantOp>(getIndex().getDefiningOp());
-//   // Constant fold.
-//   if (input != nullptr) {
-//     auto index = input.getValue().getZExtValue();
-//     auto cellValue = adaptor.getContents()[index];
-//     auto arrayCellAttr = dyn_cast_or_null<mlir::IntegerAttr>(cellValue);
-//
-//     if (arrayCellAttr != nullptr) {
-//       auto type = getResult().getType();
-//       unsigned int bw = type.getWidth();
-//       if (bw > 32)
-//         getOperation()->emitError("Unsupported bitwidth in fold]n");
-//       int64_t res = 0;
-//       res = arrayCellAttr.getValue().getZExtValue();
-//       return builder.getIntegerAttr(builder.getIntegerType(bw), res);
-//     }
-//   }
-//   return {};
-// }
+OpFoldResult spechls::LUTOp::fold(FoldAdaptor adaptor) {
+  if (auto input = dyn_cast_or_null<circt::hw::ConstantOp>(getIndex().getDefiningOp())) {
+    auto index = input.getValue().getZExtValue();
+    auto cellValue = adaptor.getContents()[index];
+    return IntegerAttr::get(getType(), cellValue);
+  }
+  return nullptr;
+}
+
+OpFoldResult spechls::FieldOp::fold(FoldAdaptor adaptor) {
+  if (auto input = dyn_cast_or_null<spechls::PackOp>(getInput().getDefiningOp())) {
+    for (size_t i = 0; i < input.getType().getFieldNames().size(); ++i) {
+      if (input.getType().getFieldNames()[i] == getName()) {
+        input->getOperand(i).dump();
+        input->getParentOfType<mlir::ModuleOp>()->dump();
+        return input->getOperand(i);
+      }
+    }
+  }
+  return nullptr;
+}
 
 ParseResult spechls::DelayOp::parse(OpAsmParser &parser, OperationState &result) {
   auto &builder = parser.getBuilder();
@@ -550,6 +545,36 @@ LogicalResult spechls::SyncOp::inferReturnTypes(MLIRContext *context, std::optio
   inferredReturnTypes.push_back(adaptor.getInputs().getTypes().front());
   return success();
 }
+
+OpFoldResult spechls::ConstantOp::fold(FoldAdaptor adaptor) {
+  assert(adaptor.getOperands().empty() && "constant has no operands");
+  return getValueAttr();
+}
+/// Build a ConstantOp from an APInt, infering the result type from the
+/// width of the APInt.
+// void spechls::ConstantOp::build(OpBuilder &builder, OperationState &result, const APInt &value) {
+//
+//   auto type = IntegerType::get(builder.getContext(), value.getBitWidth());
+//   auto attr = builder.getIntegerAttr(type, value);
+//   return build(builder, result, type, attr);
+// }
+//
+///// Build a ConstantOp from an APInt, infering the result type from the
+///// width of the APInt.
+// void spechls::ConstantOp::build(OpBuilder &builder, OperationState &result, IntegerAttr value) {
+//   return build(builder, result, value.getType(), value);
+// }
+//
+///// This builder allows construction of small signed integers like 0, 1, -1
+///// matching a specified MLIR IntegerType.  This shouldn't be used for general
+///// constant folding because it only works with values that can be expressed in
+///// an int64_t.  Use APInt's instead.
+// void spechls::ConstantOp::build(OpBuilder &builder, OperationState &result, Type type, int64_t value) {
+//   auto numBits = cast<IntegerType>(type).getWidth();
+//   build(builder, result,
+//         APInt(numBits, (uint64_t)value, /*isSigned=*/true,
+//               /*implicitTrunc=*/true));
+// }
 
 LogicalResult spechls::FieldOp::verify() {
   StringRef fieldName = getName();

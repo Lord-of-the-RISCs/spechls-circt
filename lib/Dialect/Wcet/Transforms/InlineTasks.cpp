@@ -29,6 +29,7 @@
 #include "mlir/Support/LLVM.h"
 #include "mlir/Transforms/DialectConversion.h"
 #include "mlir/Transforms/GreedyPatternRewriteDriver.h"
+#include "mlir/Transforms/InliningUtils.h"
 #include "mlir/Transforms/Passes.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/SmallPtrSet.h"
@@ -92,6 +93,14 @@ struct InlineTasksPass : public impl::InlineTasksPassBase<InlineTasksPass> {
 public:
   void runOnOperation() override {
     auto *ctx = &getContext();
+    auto top = getOperation();
+    // InlinerInterface interface(ctx);
+    // top->walk([&](TaskOp t) {
+    //   if (failed(mlir::inlineRegion(interface, &t.getBody(), t, t->getOperands(), t.getResults(), t->getLoc(),
+    //   true))) {
+    //     llvm::errs() << "Inlining fail\n";
+    //   }
+    // });
 
     RewritePatternSet patterns(ctx);
     patterns.add<InlineTasksPattern>(ctx);

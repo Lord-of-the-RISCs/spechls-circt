@@ -26,6 +26,7 @@ def SpecHLSDialect : Dialect {
 
     let cppNamespace = "spechls";
 
+    let hasConstantMaterializer = 1;
     let useDefaultTypePrinterParser = 1;
 }
 
@@ -69,6 +70,41 @@ def SpecHLS_StructType : SpecHLSType<"Struct", "struct"> {
 //===--------------------------------------------------------------------------------------------------------------===//
 // Operations
 //===--------------------------------------------------------------------------------------------------------------===//
+
+def ConstantOp
+ : SpecHLSOp<"constant", [Pure, ConstantLike,
+         ]> {
+  let summary = "Produce a constant value";
+  let description = [{
+    The constant operation produces a constant value of standard integer type
+    without a sign.
+    ```
+      %result = spechls.constant 42 : t1
+    ```
+    }];
+
+  let arguments = (ins APIntAttr:$value);
+  let results = (outs AnyType:$result);
+
+  let hasFolder = true;
+
+  let assemblyFormat = [{ 
+        $value `:` type($result) attr-dict}];
+  let builders = [
+    /// Build a ConstantOp from an APInt, infering the result type from the
+    /// width of the APInt.
+    //OpBuilder<(ins "const APInt &":$value)>,
+
+    ///// This builder allows construction of small signed integers like 0, 1, -1
+    ///// matching a specified MLIR IntegerType.  This shouldn't be used for
+    ///// general constant folding because it only works with values that can be
+    ///// expressed in an int64_t.  Use APInt's instead.
+    //OpBuilder<(ins "Type":$type, "int64_t":$value)>,
+
+    ///// Build a ConstantOp from a prebuilt attribute.
+    //OpBuilder<(ins "IntegerAttr":$value)>
+  ];
+}
 
 def SpecHLS_KernelOp : SpecHLSOp<"kernel", [IsolatedFromAbove, FunctionOpInterface, SingleBlock, RegionKindInterface]> {
     let arguments = (ins StrAttr:$sym_name,
@@ -247,7 +283,7 @@ def SpecHLS_LUTOp : SpecHLSOp<"lut", [DeclareOpInterfaceMethods<OpAsmOpInterface
     }];
 
     let hasVerifier = 1;
-    //let hasFolder = 1;
+    let hasFolder = 1;
 
     let extraClassDefinition = [{
         void $cppClass::getAsmResultNames(llvm::function_ref<void(mlir::Value, llvm::StringRef)> setNameFn) {
@@ -328,6 +364,7 @@ def SpecHLS_FieldOp : SpecHLSOp<"field", [DeclareOpInterfaceMethods<InferTypeOpI
     }];
 
     let hasVerifier = 1;
+    let hasFolder = 1;
 }
 
 def SpecHLS_FSMOp : SpecHLSOp<"fsm",

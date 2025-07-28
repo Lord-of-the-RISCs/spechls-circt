@@ -52,34 +52,6 @@ namespace wcet {
 
 namespace wcet {
 
-struct InsertDummyPattern : OpRewritePattern<spechls::KernelOp> {
-  using OpRewritePattern<spechls::KernelOp>::OpRewritePattern;
-
-  // Constructor to save pass arguments
-  InsertDummyPattern(MLIRContext *ctx, const llvm::ArrayRef<unsigned int> intrs)
-      : OpRewritePattern<spechls::KernelOp>(ctx) {}
-
-  LogicalResult matchAndRewrite(spechls::KernelOp top, PatternRewriter &rewriter) const override {
-    SmallVector<spechls::UnpackOp> unpacks = SmallVector<spechls::UnpackOp>();
-    top->walk([&](spechls::UnpackOp unp) {
-      if (unp.getInput().getDefiningOp()->getName().getStringRef() == spechls::PackOp::getOperationName())
-        unpacks.push_back(unp);
-    });
-
-    if (unpacks.empty())
-      return failure();
-
-    for (auto un : unpacks) {
-      rewriter.setInsertionPointAfter(un);
-      spechls::PackOp pack = dyn_cast_or_null<spechls::PackOp>(un.getInput().getDefiningOp());
-      rewriter.replaceOpWithNewOp<wcet::DummyOp>(un, pack.getInputs().getType(), pack.getInputs());
-      rewriter.eraseOp(pack);
-    }
-
-    return success();
-  }
-};
-
 struct InsertDummyPass : public impl::InsertDummyPassBase<InsertDummyPass> {
 
   using InsertDummyPassBase::InsertDummyPassBase;
@@ -87,12 +59,23 @@ struct InsertDummyPass : public impl::InsertDummyPassBase<InsertDummyPass> {
 public:
   void runOnOperation() override {
     auto *ctx = &getContext();
+    auto top = getOperation();
 
-    RewritePatternSet dummyPatterns(ctx);
-    dummyPatterns.add<InsertDummyPattern>(ctx);
-    if (failed(applyPatternsGreedily(getOperation()->getParentOp(), std::move(dummyPatterns)))) {
-      llvm::errs() << "failed\n";
-      signalPassFailure();
+    PatternRewriter rewriter(ctx);
+    SmallVector<spechls::UnpackOp> unpacks = SmallVector<spechls::UnpackOp>();
+    top->walk([&](spechls::UnpackOp unp) {
+      if (unp.getInput().getDefiningOp()->getName().getStringRef() == spechls::PackOp::getOperationName())
+        unpacks.push_back(unp);
+    });
+
+    if (unpacks.empty())
+      return;
+
+    for (auto un : unpacks) {
+      rewriter.setInsertionPointAfter(un);
+      spechls::PackOp pack = dyn_cast_or_null<spechls::PackOp>(un.getInput().getDefiningOp());
+      rewriter.replaceOpWithNewOp<wcet::DummyOp>(un, pack.getInputs().getType(), pack.getInputs());
+      rewriter.eraseOp(pack);
     }
   }
 };
