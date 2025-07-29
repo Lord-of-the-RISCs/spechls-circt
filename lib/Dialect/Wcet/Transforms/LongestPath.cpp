@@ -65,7 +65,7 @@ public:
       }
     });
     if (!entry) {
-      llvm::errs() << "failed\n";
+      llvm::errs() << "failed finding entry\n";
       signalPassFailure();
     }
 

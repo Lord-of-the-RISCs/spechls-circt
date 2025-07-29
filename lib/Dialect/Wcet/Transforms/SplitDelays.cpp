@@ -76,7 +76,7 @@ public:
     RewritePatternSet patterns(ctx);
     patterns.add<SplitDelaysPattern>(ctx);
     if (failed(applyPatternsGreedily(getOperation()->getParentOp(), std::move(patterns)))) {
-      llvm::errs() << "failed\n";
+      llvm::errs() << "failed delay splitting\n";
       signalPassFailure();
     }
   }

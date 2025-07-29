@@ -313,7 +313,9 @@ LogicalResult spechls::GammaOp::verify() {
 OpFoldResult spechls::GammaOp::fold(FoldAdaptor adaptor) {
   if (auto pred = dyn_cast_or_null<IntegerAttr>(adaptor.getSelect())) {
     auto index = pred.getValue().getZExtValue();
-    return getInputs()[index];
+    if (index < getInputs().size()){
+        return getInputs()[index];
+    }
   }
 
   return {};
@@ -458,8 +460,6 @@ OpFoldResult spechls::FieldOp::fold(FoldAdaptor adaptor) {
   if (auto input = dyn_cast_or_null<spechls::PackOp>(getInput().getDefiningOp())) {
     for (size_t i = 0; i < input.getType().getFieldNames().size(); ++i) {
       if (input.getType().getFieldNames()[i] == getName()) {
-        input->getOperand(i).dump();
-        input->getParentOfType<mlir::ModuleOp>()->dump();
         return input->getOperand(i);
       }
     }

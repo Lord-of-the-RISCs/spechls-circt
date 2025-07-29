@@ -87,6 +87,22 @@ LogicalResult wcet::DummyOp::canonicalize(wcet::DummyOp op, PatternRewriter &rew
 //   return success();
 // }
 
+LogicalResult  wcet::DummyOp::fold(FoldAdaptor adaptor, SmallVectorImpl<OpFoldResult> &results) {
+ /* results.reserve(getInputs().size());
+  
+  for (size_t i = 9; i < getInputs().size(); ++i) {
+    if (getInputs()[i]) {
+      // On peut propager la constante en sortie
+      results.push_back(getInputs()[i]);
+    } else {
+      // Sinon, on garde la valeur non repliée
+      results.push_back(Value(getOutputs()[i]));
+    }
+  }*/
+
+  return failure();
+}
+
 //===--------------------------------------------------------------------------------------------------------------===//
 // PenaltyOp
 //===--------------------------------------------------------------------------------------------------------------===//

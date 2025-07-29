@@ -75,7 +75,7 @@ StructType setupTask(TaskOp top, PatternRewriter &rewriter) {
   rewriter.setInsertionPointToStart(&top.getBody().getBlocks().front());
   top->walk([&](Operation *op) {
     if (hasPragmaContaining(op, "WCET fetch")) {
-      hw::ConstantOp inst = rewriter.replaceOpWithNewOp<hw::ConstantOp>(op, rewriter.getI32IntegerAttr(0));
+      hw::ConstantOp inst = rewriter.replaceOpWithNewOp<hw::ConstantOp>(op, op->getResult(0).getType(), rewriter.getI32IntegerAttr(0));
       inst->setAttr(rewriter.getStringAttr("wcet.pragma"), rewriter.getStringAttr("instruction"));
       return;
     }
@@ -153,12 +153,15 @@ LogicalResult superpapatern(spechls::KernelOp top, PatternRewriter &rewriter, ll
   });
 
   if (!mainTask) {
+    llvm::errs() << "Not main task\n";
     return failure();
   }
 
   StructType resultStruct = setupTask(mainTask, rewriter);
-  if (!resultStruct)
+  if (!resultStruct){
+    llvm::errs() << "not resultStruct\n";
     return failure();
+  }
 
   rewriter.setInsertionPointAfter(mainTask);
   spechls::UnpackOp lastUnpack = rewriter.create<spechls::UnpackOp>(rewriter.getUnknownLoc(), mainTask.getResult());
@@ -168,6 +171,7 @@ LogicalResult superpapatern(spechls::KernelOp top, PatternRewriter &rewriter, ll
   auto rTypes = resultStruct.getFieldTypes();
   auto rNames = resultStruct.getFieldNames();
   rewriter.setInsertionPointToStart(&top.getBody().getBlocks().front());
+
   for (size_t i = numArgsOri + 1; i < rTypes.size(); i++) {
     auto t = rTypes[i];
     auto name = rNames[i];
@@ -281,8 +285,9 @@ public:
 
     mlir::PatternRewriter paptern(ctx);
 
+
     if (failed(superpapatern(top, paptern, *instrs))) {
-      llvm::errs() << "failed\n";
+      llvm::errs() << "failed unrolling\n";
       signalPassFailure();
     }
 

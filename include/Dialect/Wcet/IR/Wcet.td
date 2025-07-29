@@ -9,6 +9,7 @@
 #define SPECHLS_INCLUDED_DIALECT_WCET_IR_WCET_TD
 
 include "mlir/IR/CommonAttrConstraints.td"
+include "mlir/Interfaces/SideEffectInterfaces.td"
 include "mlir/IR/DialectBase.td"
 include "mlir/IR/OpBase.td"
 include "mlir/IR/RegionKindInterface.td"
@@ -48,7 +49,7 @@ def Wcet_DummyOp : WcetOp<"dummy", []>  {
 
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
-
+  let hasFolder = 1;
   let assemblyFormat = [{
     $inputs `:` type($inputs) `->` qualified(type($outputs)) attr-dict
   }];
@@ -70,7 +71,7 @@ def Wcet_InitOp : WcetOp<"init", []> {
 }
 
 def Wcet_PenaltyOp : WcetOp<"penalty",
-        [AttrSizedOperandSegments,
+        [Pure, AttrSizedOperandSegments,
          TypesMatchWith<"Delay input and output types must match", "input", "result", "$_self">,
          OptionalTypesMatchWith<"Delay input and initialization value must have the same type",
                                 "input", "init", "$_self">]> {
