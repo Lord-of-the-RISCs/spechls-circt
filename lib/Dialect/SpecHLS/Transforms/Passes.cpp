@@ -7,6 +7,4 @@
 
 #include "Dialect/SpecHLS/Transforms/Passes.h"
 
-void spechls::registerSpecHLSPasses() {
-    registerSpecHLSPDLLPasses();
-}
+void spechls::registerSpecHLSPasses() { registerSpecHLSPDLLPasses(); }
