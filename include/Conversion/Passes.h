@@ -14,6 +14,6 @@ namespace schedule {
 #define GEN_PASS_DECL
 #define GEN_PASS_REGISTRATION
 #include "Conversion/Passes.h.inc"
-}; // namespace schedule
+} // namespace schedule
 
 #endif // SPECHLS_CONVERSION_PASSES_H

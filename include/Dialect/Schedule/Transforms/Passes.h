@@ -11,9 +11,11 @@
 #include <mlir/Pass/Pass.h>
 
 namespace schedule {
+
 #define GEN_PASS_DECL
 #define GEN_PASS_REGISTRATION
 #include "Dialect/Schedule/Transforms/Passes.h.inc"
+
 } // namespace schedule
 
 #endif // SPECHLS_INCLUDED_DIALECT_SCHEDULE_TRANSFORMS_PASSES_H

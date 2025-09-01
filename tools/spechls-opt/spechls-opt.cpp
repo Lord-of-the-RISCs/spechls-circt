@@ -15,6 +15,7 @@
 #include "Dialect/Schedule/IR/Schedule.h"
 #include "Dialect/Schedule/Transforms/Passes.h"
 #include "Dialect/SpecHLS/IR/SpecHLS.h"
+#include "Dialect/SpecHLS/Transforms/Passes.h"
 
 int main(int argc, char **argv) {
   mlir::DialectRegistry registry;
@@ -22,6 +23,7 @@ int main(int argc, char **argv) {
                   circt::ssp::SSPDialect>();
 
   mlir::registerTransformsPasses();
+  spechls::registerSpecHLSPasses();
   schedule::registerSchedulePasses();
   schedule::registerScheduleToSSPPass();
 
