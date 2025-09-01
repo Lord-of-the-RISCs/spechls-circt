@@ -6,8 +6,13 @@
 //
 
 #include <circt/Support/LLVM.h>
+#include <cstdint>
+#include <iterator>
 #include <mlir/Dialect/PDL/IR/PDL.h>
 #include <mlir/Dialect/PDLInterp/IR/PDLInterp.h>
+#include <mlir/IR/PatternMatch.h>
+#include <mlir/IR/Value.h>
+#include <mlir/IR/ValueRange.h>
 #include <mlir/Parser/Parser.h>
 #include <mlir/Pass/Pass.h>
 #include <mlir/Pass/PassManager.h>
@@ -17,7 +22,7 @@
 #include "Dialect/SpecHLS/IR/SpecHLS.h"
 #include "Dialect/SpecHLS/Transforms/Passes.h"
 
-#include "TestPDLLPatterns.h.inc"
+#include "SimplifyGammaNodes.h.inc"
 
 namespace {
 
@@ -33,16 +38,28 @@ struct SimplifyGammaNodesPass : public mlir::PassWrapper<SimplifyGammaNodesPass,
     registry.insert<mlir::pdl::PDLDialect, mlir::pdl_interp::PDLInterpDialect, spechls::SpecHLSDialect>();
   }
 
+  void registerNativeRewrite(mlir::RewritePatternSet &patterns) {
+    patterns.getPDLPatterns().registerRewriteFunction("GetSelectedInput", getSelectedInputImpl);
+  }
+
   mlir::LogicalResult initialize(mlir::MLIRContext *ctx) override {
     // Building the pattern set inside of the `initialize` method pre-compiles the patterns into bytecode. If we don't
     // provide this function, patterns would be recompiled for each `runOnOperation` invocation.
     mlir::RewritePatternSet patternList{ctx};
+    registerNativeRewrite(patternList);
     populateGeneratedPDLLPatterns(patternList);
     patterns = std::move(patternList);
     return mlir::success();
   }
 
   void runOnOperation() final { (void)mlir::applyPatternsGreedily(getOperation(), patterns); }
+
+private:
+  static mlir::Value getSelectedInputImpl(mlir::PatternRewriter &rewriter, mlir::Attribute attr,
+                                          mlir::ValueRange args) {
+    int64_t n = mlir::cast<mlir::IntegerAttr>(attr).getValue().getSExtValue();
+    return *std::next(args.begin(), n);
+  }
 };
 
 } // namespace

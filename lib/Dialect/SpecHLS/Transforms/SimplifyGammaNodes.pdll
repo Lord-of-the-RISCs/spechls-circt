@@ -5,7 +5,22 @@
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 
-Pattern MergeGammaNodes {
-    let root = op<spechls.gamma>(cond: Value, val: Value, val);
-    replace root with val;
+#include "circt/Dialect/HW/HW.td"
+#include "Dialect/SpecHLS/IR/SpecHLS.td"
+
+Constraint HasIdenticalInputs(args: ValueRange) [{
+    return mlir::success(llvm::all_of(args, [&](auto&& value) { return value == *args.begin(); }));
+}];
+
+Rewrite GetSelectedInput(n: Attr, args: ValueRange) -> Value;
+
+Pattern EliminateTrivialGammas {
+    let root = op<spechls.gamma>(_: Value, args: ValueRange);
+    HasIdenticalInputs(args);
+    replace root with GetSelectedInput(attr<"0 : i32">, args);
+}
+
+Pattern SelectConstantInputs {
+    let root = op<spechls.gamma>(op<hw.constant> {value = n: Attr}, args: ValueRange);
+    replace root with GetSelectedInput(n, args);
 }
