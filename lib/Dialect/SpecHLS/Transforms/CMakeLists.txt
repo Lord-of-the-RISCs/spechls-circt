@@ -4,10 +4,10 @@ add_mlir_pdll_library(SpecHLSPDLLPatternsIncGen
 )
 
 add_circt_dialect_library(SpecHLSTransforms
-    Passes.cpp
     SimplifyGammaNodes.cpp
 
     DEPENDS
+    SpecHLSTransformsIncGen
     SpecHLSPDLLPatternsIncGen
 )
 target_include_directories(SpecHLSTransforms

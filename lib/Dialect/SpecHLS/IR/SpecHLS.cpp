@@ -20,6 +20,7 @@
 
 #include "Dialect/SpecHLS/IR/SpecHLSDialect.cpp.inc"
 #include "Dialect/SpecHLS/IR/SpecHLSTypes.h"
+#include "Utils.h"
 
 using namespace mlir;
 
@@ -286,7 +287,7 @@ LogicalResult spechls::GammaOp::verify() {
     return emitOpError("expects at least two data inputs");
 
   unsigned int selectWidth = getSelect().getType().getWidth();
-  if ((1ull << selectWidth) + 1 <= inputs.size())
+  if (selectWidth < utils::getMinBitwidth(inputs.size() - 1))
     return emitOpError("has a select signal too narrow (")
            << selectWidth << " bit" << ((selectWidth > 1) ? "s" : "") << ") to select all of its inputs";
 
@@ -392,14 +393,14 @@ LogicalResult spechls::LoadOp::inferReturnTypes(MLIRContext *context, std::optio
 
 LogicalResult spechls::LUTOp::verify() {
   auto indexWidth = getIndex().getType().getWidth();
-  if ((1ull << indexWidth) + 1 <= getContents().size())
+  if (indexWidth < utils::getMinBitwidth(getContents().size() - 1))
     return emitOpError("has an index too narrow (")
            << indexWidth << " bit" << ((indexWidth > 1) ? "s" : "") << ") to select all of its inputs";
 
   // Make sure that the result type is wide enough to represent all of the LUT's possible values.
   unsigned requiredBits = 0;
   for (int64_t value : getContents()) {
-    unsigned neededBits = APInt::getBitsNeeded(std::to_string(value), 10);
+    unsigned neededBits = utils::getMinBitwidth(value);
     if (neededBits > requiredBits)
       requiredBits = neededBits;
   }

@@ -14,13 +14,27 @@ Constraint HasIdenticalInputs(args: ValueRange) [{
 
 Rewrite GetSelectedInput(n: Attr, args: ValueRange) -> Value;
 
-Pattern EliminateTrivialGammas {
+Pattern EliminateTrivialGammas with benefit(2) {
     let root = op<spechls.gamma>(_: Value, args: ValueRange);
     HasIdenticalInputs(args);
     replace root with GetSelectedInput(attr<"0 : i32">, args);
 }
 
-Pattern SelectConstantInputs {
+Pattern SelectConstantInputs with benefit(2) {
     let root = op<spechls.gamma>(op<hw.constant> {value = n: Attr}, args: ValueRange);
     replace root with GetSelectedInput(n, args);
+}
+
+Constraint HasGammaProducers(args: ValueRange) [{
+    return mlir::success(llvm::any_of(args, [&](auto&& value) {
+        return mlir::isa_and_nonnull<spechls::GammaOp>(value.getDefiningOp());
+    }));
+}];
+
+Rewrite MergeGammaNodes(root: Op) -> Op;
+
+Pattern MergeGammas {
+    let root = op<spechls.gamma>(_: Value, args: ValueRange);
+    HasGammaProducers(args);
+    replace root with MergeGammaNodes(root);
 }

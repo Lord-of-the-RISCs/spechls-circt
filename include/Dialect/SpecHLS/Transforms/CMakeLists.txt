@@ -1,0 +1,6 @@
+set(LLVM_TARGET_DEFINITIONS Passes.td)
+mlir_tablegen(Passes.h.inc -gen-pass-decls -name SpecHLS)
+mlir_tablegen(Passes.capi.h.inc -gen-pass-capi-header --prefix SpecHLS)
+mlir_tablegen(Passes.capi.cpp.inc -gen-pass-capi-impl --prefix SpecHLS)
+add_public_tablegen_target(SpecHLSTransformsIncGen)
+add_circt_doc(Passes SpecHLSPasses -gen-pass-doc)

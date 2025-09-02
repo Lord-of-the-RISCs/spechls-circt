@@ -12,8 +12,9 @@
 
 namespace spechls {
 
-void registerSpecHLSPDLLPasses();
-void registerSpecHLSPasses();
+#define GEN_PASS_DECL
+#define GEN_PASS_REGISTRATION
+#include "Dialect/SpecHLS/Transforms/Passes.h.inc"
 
 } // namespace spechls
 
