@@ -289,7 +289,8 @@ LogicalResult spechls::GammaOp::verify() {
   unsigned int selectWidth = getSelect().getType().getWidth();
   if (selectWidth < utils::getMinBitwidth(inputs.size() - 1))
     return emitOpError("has a select signal too narrow (")
-           << selectWidth << " bit" << ((selectWidth > 1) ? "s" : "") << ") to select all of its inputs";
+           << selectWidth << " bit" << ((selectWidth > 1) ? "s" : "") << ") to select all of its inputs (required "
+           << utils::getMinBitwidth(inputs.size() - 1) << ")";
 
   return success();
 }
