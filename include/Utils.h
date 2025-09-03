@@ -14,8 +14,9 @@
 namespace utils {
 
 static inline size_t getMinBitwidth(uint64_t maxValue) {
+#if __has_builtin(__builtin_clzll)
   return maxValue == 0 ? 0 : 64 - __builtin_clzll(maxValue);
-#if 0
+#else
   if (maxValue == 0)
     return 0;
 
