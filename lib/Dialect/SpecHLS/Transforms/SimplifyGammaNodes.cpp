@@ -87,28 +87,36 @@ private:
     size_t lutIndexWidth = rootControlWidth + gControlWidth;
 
     SmallVector<int64_t> lutContents(1 << lutIndexWidth);
+    int64_t maxValue = 0;
     for (size_t i = 0; i < root.getInputs().size(); ++i) {
       for (size_t j = 0; j < g.getInputs().size(); ++j) {
         APInt lutIndex(lutIndexWidth, i);
         lutIndex <<= gControlWidth;
         lutIndex |= j;
+
         size_t k = lutIndex.getZExtValue();
-        if (i < idx) {
-          lutContents[k] = i;
-        } else if (i == idx) {
-          lutContents[k] = idx + j;
-        } else {
-          lutContents[k] = i + g.getInputs().size() - 1;
+        int64_t value = i;
+        if (i == idx) {
+          value = idx + j;
+        } else if (i > idx) {
+          value = i + g.getInputs().size() - 1;
         }
+
+        if (value > maxValue)
+          maxValue = value;
+
+        lutContents[k] = value;
       }
     }
+
+    size_t lutOutputWidth = utils::getMinBitwidth(maxValue);
 
     Location loc = root.getLoc();
     auto lutIndex = rewriter.create<circt::comb::ConcatOp>(
         loc, rewriter.create<circt::comb::ExtractOp>(loc, root.getSelect(), 0, rootControlWidth),
         rewriter.create<circt::comb::ExtractOp>(loc, g.getSelect(), 0, gControlWidth));
-    auto lut =
-        rewriter.create<spechls::LUTOp>(loc, lutIndex.getType(), lutIndex, rewriter.getDenseI64ArrayAttr(lutContents));
+    auto lut = rewriter.create<spechls::LUTOp>(loc, rewriter.getIntegerType(lutOutputWidth), lutIndex,
+                                               rewriter.getDenseI64ArrayAttr(lutContents));
 
     auto result = rewriter.create<spechls::GammaOp>(loc, root.getType(), root.getSymName(), lut, inputs);
     return result;
