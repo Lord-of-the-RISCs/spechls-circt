@@ -40,6 +40,10 @@ spechls.kernel @merge_tree(%c1: i32, %c2: i32, %c3: i32, %c4: i32, %0: i32, %1: 
   %g1 = spechls.gamma<"x">(%c1, %2, %3) : i32, i32
   %g2 = spechls.gamma<"x">(%c2, %g1, %4, %5) : i32, i32
   %g3 = spechls.gamma<"x">(%c3, %0, %1) : i32, i32
+  // CHECK: %{{.*}} = spechls.lut %{{.*}} [0, 1, 2, 2] : (i2) -> i2
+  // CHECK: %{{.*}} = spechls.lut %{{.*}} [0, 0, 0, 0, 1, 1, 1, 0, 2, 3, 4, 0, 0, 0, 0, 0] : (i4) -> i3
+  // CHECK: %{{.*}} = spechls.lut %{{.*}} [0, 0, 1, 1, 2, 3, 4, 4, 5, 5, 0, 0, 0, 0, 0, 0] : (i4) -> i3
+  // CHECK: %{{.*}} = spechls.gamma<"x">(%{{.*}}, %arg4, %arg5, %arg6, %arg7, %arg8, %arg9) : i3, i32
   %result = spechls.gamma<"x">(%c4, %g3, %g2) : i32, i32
   spechls.exit if %true with %result : i32
 }
