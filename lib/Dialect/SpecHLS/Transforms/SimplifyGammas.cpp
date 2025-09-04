@@ -27,7 +27,7 @@
 using namespace mlir;
 
 namespace spechls {
-#define GEN_PASS_DEF_SIMPLIFYGAMMANODESPASS
+#define GEN_PASS_DEF_SIMPLIFYGAMMASPASS
 #include "Dialect/SpecHLS/Transforms/Passes.h.inc"
 } // namespace spechls
 
@@ -35,10 +35,10 @@ namespace spechls {
 
 namespace {
 
-struct SimplifyGammaNodesPass : public spechls::impl::SimplifyGammaNodesPassBase<SimplifyGammaNodesPass> {
+struct SimplifyGammasPass : public spechls::impl::SimplifyGammasPassBase<SimplifyGammasPass> {
   FrozenRewritePatternSet patterns;
 
-  using SimplifyGammaNodesPassBase::SimplifyGammaNodesPassBase;
+  using SimplifyGammasPassBase::SimplifyGammasPassBase;
 
   LogicalResult initialize(MLIRContext *ctx) override {
     // Building the pattern set inside of the `initialize` method pre-compiles the patterns into bytecode. If we don't

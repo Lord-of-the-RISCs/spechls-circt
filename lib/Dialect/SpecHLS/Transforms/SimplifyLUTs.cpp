@@ -22,13 +22,11 @@
 #include <mlir/Transforms/GreedyPatternRewriteDriver.h>
 
 #include "Dialect/SpecHLS/IR/SpecHLSOps.h"
-#include "Utils.h"
-#include "mlir/Support/LLVM.h"
 
 using namespace mlir;
 
 namespace spechls {
-#define GEN_PASS_DEF_MERGELUTSPASS
+#define GEN_PASS_DEF_SIMPLIFYLUTSPASS
 #include "Dialect/SpecHLS/Transforms/Passes.h.inc"
 } // namespace spechls
 
@@ -36,10 +34,10 @@ namespace spechls {
 
 namespace {
 
-struct MergeLUTsPass : public spechls::impl::MergeLUTsPassBase<MergeLUTsPass> {
+struct SimplifyLUTsPass : public spechls::impl::SimplifyLUTsPassBase<SimplifyLUTsPass> {
   FrozenRewritePatternSet patterns;
 
-  using MergeLUTsPassBase::MergeLUTsPassBase;
+  using SimplifyLUTsPassBase::SimplifyLUTsPassBase;
 
   LogicalResult initialize(MLIRContext *ctx) override {
     // Building the pattern set inside of the `initialize` method pre-compiles the patterns into bytecode. If we don't

@@ -1,4 +1,4 @@
-// RUN: spechls-opt -split-input-file --merge-luts %s | spechls-opt | FileCheck %s
+// RUN: spechls-opt -split-input-file --simplify-luts %s | spechls-opt | FileCheck %s
 
 // CHECK-LABEL: @constant
 spechls.kernel @constant() -> i32 {

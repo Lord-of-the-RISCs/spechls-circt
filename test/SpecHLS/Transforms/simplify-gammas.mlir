@@ -1,4 +1,4 @@
-// RUN: spechls-opt -split-input-file --simplify-gamma-nodes %s | spechls-opt | FileCheck %s
+// RUN: spechls-opt -split-input-file --simplify-gammas %s | spechls-opt | FileCheck %s
 
 // CHECK-LABEL: @trivial
 spechls.kernel @trivial(%cond: i1, %x: i32) -> i32 {

@@ -1,21 +1,21 @@
-add_mlir_pdll_library(SpecHLSSimplifyGammaNodesPatternsIncGen
-    SimplifyGammaNodes.pdll
-    SimplifyGammaNodes.h.inc
+add_mlir_pdll_library(SpecHLSSimplifyGammasPatternsIncGen
+    SimplifyGammas.pdll
+    SimplifyGammas.h.inc
 )
 
-add_mlir_pdll_library(SpecHLSMergeLUTsPatternsIncGen
-    MergeLUTs.pdll
-    MergeLUTs.h.inc
+add_mlir_pdll_library(SpecHLSSimplifyLUTsPatternsIncGen
+    SimplifyLUTs.pdll
+    SimplifyLUTs.h.inc
 )
 
 add_circt_dialect_library(SpecHLSTransforms
-    MergeLUTs.cpp
-    SimplifyGammaNodes.cpp
+    SimplifyLUTs.cpp
+    SimplifyGammas.cpp
 
     DEPENDS
     SpecHLSTransformsIncGen
-    SpecHLSMergeLUTsPatternsIncGen
-    SpecHLSSimplifyGammaNodesPatternsIncGen
+    SpecHLSSimplifyLUTsPatternsIncGen
+    SpecHLSSimplifyGammasPatternsIncGen
 )
 target_include_directories(SpecHLSTransforms
     PRIVATE
