@@ -20,3 +20,19 @@ spechls.kernel @consecutive(%x: i32) -> i3 {
   %1 = spechls.lut %0 [0, 2, 4, 6] : (i2) -> i3
   spechls.exit if %true with %1 : i3
 }
+
+//---
+
+// CHECK-LABEL: @merge_tree
+spechls.kernel @merge_tree(%arg0: i32, %arg1: i32) -> i2 {
+  %true = hw.constant true
+  %idx0 = comb.extract %arg0 from 0 : (i32) -> i1
+  %idx1 = comb.extract %arg1 from 0 : (i32) -> i1
+  %0 = spechls.lut %idx0 [0, 1] : (i1) -> i1
+  %1 = spechls.lut %idx1 [1, 0] : (i1) -> i1
+  %2 = comb.concat %0, %1 : i1, i1
+  // CHECK: %[[idx:.*]] = comb.concat %{{.*}}, %{{.*}} : i1, i1
+  // CHECK: %{{.*}} = spechls.lut %[[idx]] [2, 3, 0, 1] : (i2) -> i2
+  %3 = spechls.lut %2 [3, 2, 1, 0] : (i2) -> i2
+  spechls.exit if %true with %3 : i2
+}

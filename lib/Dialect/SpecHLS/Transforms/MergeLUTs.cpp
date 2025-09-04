@@ -54,6 +54,7 @@ struct MergeLUTsPass : public spechls::impl::MergeLUTsPassBase<MergeLUTsPass> {
   void registerNativeRewrite(RewritePatternSet &patterns) {
     patterns.getPDLPatterns().registerRewriteFunction("CollapseLUTs", collapseLUTsImpl);
     patterns.getPDLPatterns().registerRewriteFunction("GetLUTValue", getLUTValueImpl);
+    patterns.getPDLPatterns().registerRewriteFunction("Concat", concatImpl);
   }
 
   void runOnOperation() override { (void)applyPatternsGreedily(getOperation(), patterns); }
@@ -78,6 +79,64 @@ private:
     uint64_t index = cast<IntegerAttr>(n).getValue().getZExtValue();
     auto root = cast<spechls::LUTOp>(op);
     return rewriter.getIntegerAttr(root.getType(), root.getContents()[index]);
+  }
+
+  static Operation *concatImpl(PatternRewriter &rewriter, Operation *op) {
+    auto root = cast<circt::comb::ConcatOp>(op);
+
+    size_t lutIndex = 0;
+    spechls::LUTOp lut{};
+    size_t beforeWidth = 0, afterWidth = 0;
+    for (size_t i = 0; i < root.getNumOperands(); ++i) {
+      Value arg = root.getOperand(i);
+      if (!lut && (lut = dyn_cast<spechls::LUTOp>(arg.getDefiningOp()))) {
+        lutIndex = i;
+      } else if (!lut) {
+        beforeWidth += arg.getType().getIntOrFloatBitWidth();
+      } else {
+        afterWidth += arg.getType().getIntOrFloatBitWidth();
+      }
+    }
+
+    SmallVector<Value> concatOperands;
+    concatOperands.reserve(root.getNumOperands());
+    for (size_t i = 0; i < root.getNumOperands(); ++i) {
+      if (i == lutIndex) {
+        concatOperands.push_back(lut.getIndex());
+      } else {
+        concatOperands.push_back(root.getOperand(i));
+      }
+    }
+
+    // TODO: Verify that LUT contents is a power of two, and the index is of the minimal bitwidth.
+    auto concat = rewriter.create<circt::comb::ConcatOp>(root.getLoc(), concatOperands);
+    size_t concatIndexWidth = concat.getType().getIntOrFloatBitWidth();
+
+    ArrayRef<int64_t> oldLutContents = lut.getContents();
+    SmallVector<int64_t> newLutContents(1ull << concatIndexWidth);
+    for (size_t before = 0; before <= APInt::getMaxValue(beforeWidth).getZExtValue(); ++before) {
+      for (size_t after = 0; after <= APInt::getMaxValue(afterWidth).getZExtValue(); ++after) {
+        for (size_t middle = 0; middle < lut.getContents().size(); ++middle) {
+          // Build the concatenated index.
+          size_t k = before;
+          k <<= lut.getIndex().getType().getWidth();
+          k |= middle;
+          k <<= afterWidth;
+          k |= after;
+
+          // Build the concatenated value.
+          size_t value = before;
+          value <<= lut.getType().getWidth();
+          value |= oldLutContents[middle];
+          value <<= afterWidth;
+          value |= after;
+
+          newLutContents[k] = value;
+        }
+      }
+    }
+
+    return rewriter.create<spechls::LUTOp>(root.getLoc(), root.getType(), concat, newLutContents);
   }
 };
 

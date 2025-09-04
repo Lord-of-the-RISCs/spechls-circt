@@ -6,6 +6,7 @@
 //
 
 #include "circt/Dialect/HW/HW.td"
+#include "circt/Dialect/Comb/Comb.td"
 #include "Dialect/SpecHLS/IR/SpecHLS.td"
 
 Rewrite GetLUTValue(n: Attr, lut: Op) -> Attr;
@@ -20,4 +21,16 @@ Rewrite CollapseLUTs(root: Op) -> Op;
 Pattern MergeConsecutiveLUTs {
     let root = op<spechls.lut>(op<spechls.lut>(_: Value));
     replace root with CollapseLUTs(root);
+}
+
+Rewrite Concat(root: Op) -> Op;
+
+Constraint HasLUTInput(args: ValueRange) [{
+    return mlir::success(llvm::any_of(args, [&](auto&& value) { return isa<spechls::LUTOp>(value.getDefiningOp()); }));
+}];
+
+Pattern ConcatLUTs {
+    let root = op<comb.concat>(args: ValueRange);
+    HasLUTInput(args);
+    replace root with Concat(root);
 }
