@@ -232,7 +232,7 @@ def SpecHLS_LoadOp : SpecHLSOp<"load", [DeclareOpInterfaceMethods<InferTypeOpInt
     }];
 }
 
-def SpecHLS_LUTOp : SpecHLSOp<"lut", [DeclareOpInterfaceMethods<OpAsmOpInterface, ["getAsmResultNames"]>]> {
+def SpecHLS_LUTOp : SpecHLSOp<"lut", [Pure, DeclareOpInterfaceMethods<OpAsmOpInterface, ["getAsmResultNames"]>]> {
     let arguments = (ins
         AnyInteger:$index,
         DenseI64ArrayAttr:$contents
@@ -285,7 +285,7 @@ def SpecHLS_FIFOOp : SpecHLSOp<"fifo", [DeclareOpInterfaceMethods<OpAsmOpInterfa
     }];
 }
 
-def SpecHLS_PackOp : SpecHLSOp<"pack"> {
+def SpecHLS_PackOp : SpecHLSOp<"pack", [Pure]> {
     let arguments = (ins Variadic<AnyType>:$inputs);
     let results = (outs SpecHLS_StructType:$result);
 
@@ -294,7 +294,7 @@ def SpecHLS_PackOp : SpecHLSOp<"pack"> {
     }];
 }
 
-def SpecHLS_UnpackOp : SpecHLSOp<"unpack", [DeclareOpInterfaceMethods<InferTypeOpInterface>]> {
+def SpecHLS_UnpackOp : SpecHLSOp<"unpack", [Pure, DeclareOpInterfaceMethods<InferTypeOpInterface>]> {
     let arguments = (ins SpecHLS_StructType:$input);
     let results = (outs Variadic<AnyType>:$results);
 
@@ -303,7 +303,7 @@ def SpecHLS_UnpackOp : SpecHLSOp<"unpack", [DeclareOpInterfaceMethods<InferTypeO
     }];
 }
 
-def SpecHLS_SyncOp : SpecHLSOp<"sync", [DeclareOpInterfaceMethods<InferTypeOpInterface>]> {
+def SpecHLS_SyncOp : SpecHLSOp<"sync", [Pure, DeclareOpInterfaceMethods<InferTypeOpInterface>]> {
     let arguments = (ins Variadic<AnyType>:$inputs);
     let results = (outs AnyType:$result);
 
@@ -312,7 +312,7 @@ def SpecHLS_SyncOp : SpecHLSOp<"sync", [DeclareOpInterfaceMethods<InferTypeOpInt
     }];
 }
 
-def SpecHLS_FieldOp : SpecHLSOp<"field", [DeclareOpInterfaceMethods<InferTypeOpInterface>]> {
+def SpecHLS_FieldOp : SpecHLSOp<"field", [Pure, DeclareOpInterfaceMethods<InferTypeOpInterface>]> {
     let arguments = (ins
         StrAttr:$name,
         SpecHLS_StructType:$input
