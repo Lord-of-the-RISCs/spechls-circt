@@ -53,6 +53,7 @@ struct MergeLUTsPass : public spechls::impl::MergeLUTsPassBase<MergeLUTsPass> {
 
   void registerNativeRewrite(RewritePatternSet &patterns) {
     patterns.getPDLPatterns().registerRewriteFunction("CollapseLUTs", collapseLUTsImpl);
+    patterns.getPDLPatterns().registerRewriteFunction("GetLUTValue", getLUTValueImpl);
   }
 
   void runOnOperation() override { (void)applyPatternsGreedily(getOperation(), patterns); }
@@ -71,6 +72,12 @@ private:
     }
 
     return rewriter.create<spechls::LUTOp>(root.getLoc(), root.getType(), arg.getIndex(), collapsedContents);
+  }
+
+  static Attribute getLUTValueImpl(PatternRewriter &rewriter, Attribute n, Operation *op) {
+    uint64_t index = cast<IntegerAttr>(n).getValue().getZExtValue();
+    auto root = cast<spechls::LUTOp>(op);
+    return rewriter.getIntegerAttr(root.getType(), root.getContents()[index]);
   }
 };
 

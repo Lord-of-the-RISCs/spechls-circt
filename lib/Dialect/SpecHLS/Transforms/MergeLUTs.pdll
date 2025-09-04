@@ -8,6 +8,13 @@
 #include "circt/Dialect/HW/HW.td"
 #include "Dialect/SpecHLS/IR/SpecHLS.td"
 
+Rewrite GetLUTValue(n: Attr, lut: Op) -> Attr;
+
+Pattern EliminateConstantLUTs with benefit(2) {
+    let root = op<spechls.lut>(op<hw.constant> {value = n: Attr});
+    replace root with op<hw.constant> {value = GetLUTValue(n, root)};
+}
+
 Rewrite CollapseLUTs(root: Op) -> Op;
 
 Pattern MergeConsecutiveLUTs {

@@ -59,7 +59,7 @@ struct SimplifyGammaNodesPass : public spechls::impl::SimplifyGammaNodesPassBase
 
 private:
   static Value getSelectedInputImpl(PatternRewriter &rewriter, Attribute attr, ValueRange args) {
-    int64_t n = cast<IntegerAttr>(attr).getValue().getSExtValue();
+    uint64_t n = cast<IntegerAttr>(attr).getValue().getZExtValue();
     return *std::next(args.begin(), n);
   }
 
