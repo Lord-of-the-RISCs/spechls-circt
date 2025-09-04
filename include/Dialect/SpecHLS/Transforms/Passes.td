@@ -11,14 +11,17 @@
 include "mlir/Pass/PassBase.td"
 
 def SimplifyGammaNodesPass : Pass<"simplify-gamma-nodes", "ModuleOp"> {
-    let summary = "Simplify gamma node patterns.";
-    let dependentDialects = [
-        "::spechls::SpecHLSDialect",
-        "::circt::hw::HWDialect",
-        "::circt::comb::CombDialect",
-        "::mlir::pdl::PDLDialect",
-        "::mlir::pdl_interp::PDLInterpDialect",
-    ];
+  let summary = "Simplify gamma node patterns.";
+  let dependentDialects = ["::spechls::SpecHLSDialect", "::circt::hw::HWDialect", "::circt::comb::CombDialect",
+                           "::mlir::pdl::PDLDialect", "::mlir::pdl_interp::PDLInterpDialect",
+  ];
+}
+
+def MergeLUTsPass : Pass<"merge-luts", "ModuleOp"> {
+  let summary = "Merge LUT sequences.";
+  let dependentDialects = ["::spechls::SpecHLSDialect", "::circt::hw::HWDialect", "::circt::comb::CombDialect",
+                           "::mlir::pdl::PDLDialect", "::mlir::pdl_interp::PDLInterpDialect",
+  ];
 }
 
 #endif // SPECHLS_INCLUDED_DIALECT_SPECHLS_TRANSFORMS_PASSES_TD
