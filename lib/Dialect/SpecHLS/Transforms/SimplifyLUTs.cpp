@@ -106,7 +106,6 @@ private:
       }
     }
 
-    // TODO: Verify that LUT contents is a power of two, and the index is of the minimal bitwidth.
     auto concat = rewriter.create<circt::comb::ConcatOp>(root.getLoc(), concatOperands);
     size_t concatIndexWidth = concat.getType().getIntOrFloatBitWidth();
 

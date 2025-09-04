@@ -393,10 +393,17 @@ LogicalResult spechls::LoadOp::inferReturnTypes(MLIRContext *context, std::optio
 }
 
 LogicalResult spechls::LUTOp::verify() {
+  size_t contentSize = getContents().size();
+  if (!(contentSize > 0 && (contentSize & (contentSize - 1)) == 0)) {
+    return emitOpError("contents size sould be a power of two");
+  }
+
   auto indexWidth = getIndex().getType().getWidth();
-  if (indexWidth < utils::getMinBitwidth(getContents().size() - 1))
-    return emitOpError("has an index too narrow (")
-           << indexWidth << " bit" << ((indexWidth > 1) ? "s" : "") << ") to select all of its inputs";
+  size_t contentWidth = utils::getMinBitwidth(getContents().size() - 1);
+  if (indexWidth != contentWidth) {
+    return emitOpError("has an index too ") << ((indexWidth < contentWidth) ? "narrow" : "wide") << " (" << indexWidth
+                                            << " bit" << ((indexWidth > 1) ? "s" : "") << ")";
+  }
 
   // Make sure that the result type is wide enough to represent all of the LUT's possible values.
   unsigned requiredBits = 0;
@@ -406,9 +413,10 @@ LogicalResult spechls::LUTOp::verify() {
       requiredBits = neededBits;
   }
   auto resultWidth = getResult().getType().getWidth();
-  if (resultWidth < requiredBits)
+  if (resultWidth < requiredBits) {
     return emitOpError("has a result type too narrow to represent all possible values (required at least ")
            << requiredBits << " bits, but got " << resultWidth << ")";
+  }
 
   return success();
 }
