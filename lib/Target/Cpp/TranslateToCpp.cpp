@@ -7,6 +7,7 @@
 
 #include "Dialect/SpecHLS/IR/SpecHLSOps.h"
 #include "Dialect/SpecHLS/IR/SpecHLSTypes.h"
+#include "Dialect/SpecHLS/Transforms/TopologicalSort.h"
 #include "Target/Cpp/Export.h"
 
 #include <circt/Dialect/Comb/CombOps.h>
@@ -408,8 +409,6 @@ void dump_perf() {
   return success();
 }
 
-bool topoSortCriteria(Value, Operation *op) { return isa<spechls::MuOp>(op) || isa<spechls::DelayOp>(op); }
-
 LogicalResult printOperation(CppEmitter &emitter, spechls::KernelOp kernelOp) {
   CppEmitter::Scope scope(emitter);
   raw_indented_ostream &os = emitter.ostream();
@@ -438,7 +437,7 @@ LogicalResult printOperation(CppEmitter &emitter, spechls::KernelOp kernelOp) {
   os << "while (!" << emitter.getExitVariableName() << ") {\n";
   os.indent();
 
-  mlir::sortTopologically(&kernelOp.getBody().front(), topoSortCriteria);
+  mlir::sortTopologically(&kernelOp.getBody().front(), spechls::topologicalSortCriterion);
 
   SmallVector<spechls::DelayOp> delays;
   for (auto &&op : kernelOp.getBody().front()) {
@@ -522,7 +521,7 @@ LogicalResult printOperation(CppEmitter &emitter, spechls::TaskOp taskOp) {
   if (failed(printDelayInitialization(emitter, taskOp.getBody().getBlocks())))
     return failure();
 
-  mlir::sortTopologically(&taskOp.getBody().front(), topoSortCriteria);
+  mlir::sortTopologically(&taskOp.getBody().front(), spechls::topologicalSortCriterion);
 
   SmallVector<spechls::DelayOp> delays;
   Value fsmCommand{};
