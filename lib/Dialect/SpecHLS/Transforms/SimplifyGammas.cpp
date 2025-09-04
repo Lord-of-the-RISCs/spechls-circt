@@ -31,7 +31,7 @@ namespace spechls {
 #include "Dialect/SpecHLS/Transforms/Passes.h.inc"
 } // namespace spechls
 
-#include "SimplifyGammaNodes.h.inc"
+#include "SimplifyGammas.h.inc"
 
 namespace {
 

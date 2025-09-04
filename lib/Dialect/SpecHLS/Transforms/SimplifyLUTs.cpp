@@ -30,7 +30,7 @@ namespace spechls {
 #include "Dialect/SpecHLS/Transforms/Passes.h.inc"
 } // namespace spechls
 
-#include "MergeLUTs.h.inc"
+#include "SimplifyLUTs.h.inc"
 
 namespace {
 
