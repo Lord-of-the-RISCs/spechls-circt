@@ -23,8 +23,8 @@ spechls.kernel @consecutive(%x: i32) -> i3 {
 
 //---
 
-// CHECK-LABEL: @merge_tree
-spechls.kernel @merge_tree(%arg0: i32, %arg1: i32) -> i2 {
+// CHECK-LABEL: @concat
+spechls.kernel @concat(%arg0: i32, %arg1: i32) -> i2 {
   %true = hw.constant true
   %idx0 = comb.extract %arg0 from 0 : (i32) -> i1
   %idx1 = comb.extract %arg1 from 0 : (i32) -> i1
