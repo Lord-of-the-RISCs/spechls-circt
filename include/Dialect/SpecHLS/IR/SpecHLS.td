@@ -117,6 +117,21 @@ def SpecHLS_TaskOp : SpecHLSOp<"task", [SingleBlock, RegionKindInterface, Isolat
 
     let hasCustomAssemblyFormat = 1;
 
+    let skipDefaultBuilders = 1;
+    let builders = [
+        OpBuilder<(ins "::mlir::Type":$result, "::mlir::StringRef":$name, "::mlir::ValueRange":$inputs), [{
+            $_state.addOperands(inputs);
+            $_state.addAttribute("sym_name", $_builder.getStringAttr(name));
+            ::mlir::Region *body = $_state.addRegion();
+            body->emplaceBlock();
+            for(auto&& input : inputs) {
+              body->addArgument(input.getType(), $_builder.getUnknownLoc());
+            }
+            if (result)
+                $_state.addTypes(result);
+        }]>
+    ];
+
     let extraClassDeclaration = [{
         //===------------------------------------------------------------------===//
         // RegionKindInterface Methods

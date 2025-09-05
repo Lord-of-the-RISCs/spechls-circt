@@ -9,6 +9,7 @@ add_mlir_pdll_library(SpecHLSSimplifyLUTsPatternsIncGen
 )
 
 add_circt_dialect_library(SpecHLSTransforms
+    Outlining.cpp
     SimplifyLUTs.cpp
     SimplifyGammas.cpp
 
