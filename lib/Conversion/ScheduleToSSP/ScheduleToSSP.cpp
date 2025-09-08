@@ -5,7 +5,7 @@
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 
-#include "Conversion/Passes.h"
+#include "Conversion/Passes.h" // IWYU pragma: keep
 #include "Dialect/Schedule/IR/ScheduleOps.h"
 
 #include <circt/Dialect/SSP/SSPAttributes.h>
@@ -49,10 +49,8 @@ struct ScheduleToSSPOpConversion : OpConversionPattern<schedule::CircuitOp> {
 
     for (auto &&operation : op.getBody().front()) {
       if (auto scheduleOp = dyn_cast<schedule::OperationOp>(operation)) {
-
-        auto operationName = scheduleOp.getSymName();
-        std::string operatorName = "operator_" + std::to_string(idx++); // operationName.str();
-
+        std::string operatorName = "operator_" + std::to_string(idx++);
+        ;
         llvm::SmallVector<mlir::Attribute> operatorPropertyValues;
 
         operatorPropertyValues.push_back(
@@ -63,8 +61,7 @@ struct ScheduleToSSPOpConversion : OpConversionPattern<schedule::CircuitOp> {
             ssp::OutgoingDelayAttr::get(rewriter.getContext(), scheduleOp.getOutDelayAttr()));
 
         rewriter.setInsertionPointToEnd(library.getBodyBlock());
-        auto operatorOp = rewriter.create<ssp::OperatorTypeOp>(op.getLoc(), operatorName,
-                                                               rewriter.getArrayAttr(operatorPropertyValues));
+        rewriter.create<ssp::OperatorTypeOp>(op.getLoc(), operatorName, rewriter.getArrayAttr(operatorPropertyValues));
 
         ::llvm::SmallVector<mlir::Attribute> deps;
         ::llvm::SmallVector<mlir::Value> operands;
