@@ -340,8 +340,12 @@ LogicalResult printDelayInitialization(CppEmitter &emitter, Region::BlockListTyp
 LogicalResult printOperation(CppEmitter &emitter, ModuleOp moduleOp) {
   raw_indented_ostream &os = emitter.ostream();
   os << "#include <ap_int.h>\n";
-  os << "#include <io_printf.h>\n";
   os << "#include <spechls_support.h>\n";
+  os << "#ifndef __SYNTHESIS__\n";
+  os << "#include <io_printf.h>\n";
+  os << "#else\n";
+  os << "#define io_printf(...)\n";
+  os << "#endif\n";
   os << "\n";
 
   // FIXME: Change this ugliness.
