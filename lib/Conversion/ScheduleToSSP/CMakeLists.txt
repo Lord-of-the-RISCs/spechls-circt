@@ -2,7 +2,7 @@ add_circt_conversion_library(ScheduleToSSP
   ScheduleToSSP.cpp
 
   DEPENDS
-  SPECHLSConversionPassIncGen
+  ScheduleConversionPassIncGen
 
   LINK_LIBS PUBLIC
   Schedule

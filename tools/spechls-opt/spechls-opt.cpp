@@ -11,7 +11,8 @@
 #include <mlir/Tools/mlir-opt/MlirOptMain.h>
 #include <mlir/Transforms/Passes.h>
 
-#include "Conversion/Passes.h"
+#include "Conversion/Schedule/Passes.h"
+#include "Conversion/SpecHLS/Passes.h"
 #include "Dialect/Schedule/IR/Schedule.h"
 #include "Dialect/Schedule/Transforms/Passes.h"
 #include "Dialect/SpecHLS/IR/SpecHLS.h"
@@ -24,6 +25,7 @@ int main(int argc, char **argv) {
 
   mlir::registerTransformsPasses();
   spechls::registerSpecHLSPasses();
+  spechls::registerSpecHLSToHWPass();
   schedule::registerSchedulePasses();
   schedule::registerScheduleToSSPPass();
 

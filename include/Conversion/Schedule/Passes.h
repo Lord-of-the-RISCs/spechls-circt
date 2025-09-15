@@ -5,15 +5,15 @@
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 
-#ifndef SPECHLS_CONVERSION_PASSES_H
-#define SPECHLS_CONVERSION_PASSES_H
+#ifndef SPECHLS_INCLUDED_CONVERSION_SCHEDULE_PASSES_H
+#define SPECHLS_INCLUDED_CONVERSION_SCHEDULE_PASSES_H
 
 #include <mlir/Pass/Pass.h>
 
 namespace schedule {
 #define GEN_PASS_DECL
 #define GEN_PASS_REGISTRATION
-#include "Conversion/Passes.h.inc"
+#include "Conversion/Schedule/Passes.h.inc"
 } // namespace schedule
 
-#endif // SPECHLS_CONVERSION_PASSES_H
+#endif // SPECHLS_INCLUDED_CONVERSION_SCHEDULE_PASSES_H

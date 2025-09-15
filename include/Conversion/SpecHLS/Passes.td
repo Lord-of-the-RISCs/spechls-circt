@@ -5,17 +5,16 @@
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 
-#ifndef SPECHLS_CONVERSION_PASSES_TD
-#define SPECHLS_CONVERSION_PASSES_TD
+#ifndef SPECHLS_CONVERSION_SPECHLS_PASSES_TD
+#define SPECHLS_CONVERSION_SPECHLS_PASSES_TD
 
 include "mlir/Pass/PassBase.td"
-include "Dialect/Schedule/IR/Schedule.td"
 
-def ScheduleToSSPPass : Pass<"convert-schedule-to-ssp", "schedule::CircuitOp"> {
-  let summary = "Convert schedule dialect to SSP";
+def SpecHLSToHWPass : Pass<"spechls-to-hw", "spechls::KernelOp"> {
+  let summary = "Convert SpecHLS dialect ops to HW dialect ops";
   let dependentDialects = [
-    "::circt::ssp::SSPDialect",
-    "::schedule::ScheduleDialect"
+    "::spechls::SpecHLSDialect",
+    "::circt::hw::HWDialect",
   ];
 }
 

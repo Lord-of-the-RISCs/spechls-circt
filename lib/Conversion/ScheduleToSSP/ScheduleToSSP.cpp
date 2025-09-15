@@ -5,7 +5,7 @@
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 
-#include "Conversion/Passes.h" // IWYU pragma: keep
+#include "Conversion/Schedule/Passes.h" // IWYU pragma: keep
 #include "Dialect/Schedule/IR/ScheduleOps.h"
 
 #include <circt/Dialect/SSP/SSPAttributes.h>
@@ -21,7 +21,7 @@
 
 namespace schedule {
 #define GEN_PASS_DEF_SCHEDULETOSSPPASS
-#include "Conversion/Passes.h.inc"
+#include "Conversion/Schedule/Passes.h.inc"
 }; // namespace schedule
 
 using namespace circt;
@@ -34,7 +34,6 @@ struct ScheduleToSSPOpConversion : OpConversionPattern<schedule::CircuitOp> {
 
   LogicalResult matchAndRewrite(schedule::CircuitOp op, OpAdaptor adaptor,
                                 ConversionPatternRewriter &rewriter) const override {
-
     rewriter.setInsertionPointAfter(op);
     auto instanceOp = rewriter.create<ssp::InstanceOp>(op->getLoc(), rewriter.getStringAttr("ChainingCyclicProblem"));
 
@@ -50,7 +49,6 @@ struct ScheduleToSSPOpConversion : OpConversionPattern<schedule::CircuitOp> {
     for (auto &&operation : op.getBody().front()) {
       if (auto scheduleOp = dyn_cast<schedule::OperationOp>(operation)) {
         std::string operatorName = "operator_" + std::to_string(idx++);
-        ;
         llvm::SmallVector<mlir::Attribute> operatorPropertyValues;
 
         operatorPropertyValues.push_back(
@@ -119,24 +117,18 @@ struct ScheduleToSSPOpConversion : OpConversionPattern<schedule::CircuitOp> {
 namespace {
 
 struct ConvertScheduleToSSPPass : public schedule::impl::ScheduleToSSPPassBase<ConvertScheduleToSSPPass> {
-  void runOnOperation() override;
   using ScheduleToSSPPassBase<ConvertScheduleToSSPPass>::ScheduleToSSPPassBase;
+
+  void runOnOperation() override {
+    ConversionTarget target(getContext());
+    target.addLegalDialect<ssp::SSPDialect>();
+
+    RewritePatternSet patterns(&getContext());
+    patterns.add<ScheduleToSSPOpConversion>(patterns.getContext());
+
+    if (failed(mlir::applyPartialConversion(getOperation(), target, std::move(patterns))))
+      return signalPassFailure();
+  }
 };
 
-void populateScheduleToSSPConversionPatterns(RewritePatternSet &patterns) {
-  patterns.add<ScheduleToSSPOpConversion>(patterns.getContext());
-}
-
 }; // namespace
-
-void ConvertScheduleToSSPPass::runOnOperation() {
-  ConversionTarget target(getContext());
-  target.addLegalDialect<ssp::SSPDialect>();
-  //  target.addIllegalDialect<schedule::ScheduleDialect>();
-
-  RewritePatternSet patterns(&getContext());
-  populateScheduleToSSPConversionPatterns(patterns);
-
-  if (failed(mlir::applyPartialConversion(getOperation(), target, std::move(patterns))))
-    return signalPassFailure();
-}
