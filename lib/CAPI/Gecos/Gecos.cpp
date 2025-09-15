@@ -9,6 +9,8 @@
 #include "CAPI/Dialect/SpecHLS.h"
 #include "Dialect/Schedule/Transforms/Passes.h" // IWYU pragma: keep
 
+#include <circt-c/Dialect/Comb.h>
+#include <circt-c/Dialect/HW.h>
 #include <circt-c/Dialect/SSP.h>
 #include <mlir-c/IR.h>
 #include <mlir-c/Support.h>
@@ -56,6 +58,8 @@ MlirModule parseMLIR(const char *str) {
   MlirContext context = mlirContextCreate();
 
   // Register required dialects.
+  mlirDialectHandleRegisterDialect(mlirGetDialectHandle__hw__(), context);
+  mlirDialectHandleRegisterDialect(mlirGetDialectHandle__comb__(), context);
   mlirDialectHandleRegisterDialect(mlirGetDialectHandle__ssp__(), context);
   mlirDialectHandleRegisterDialect(mlirGetDialectHandle__spechls__(), context);
   mlirDialectHandleRegisterDialect(mlirGetDialectHandle__schedule__(), context);
