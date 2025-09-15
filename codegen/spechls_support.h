@@ -8,10 +8,12 @@
 #ifndef CODEGEN_INCLUDED_SPECHLS_SUPPORT_H
 #define CODEGEN_INCLUDED_SPECHLS_SUPPORT_H
 
-#include <algorithm>
-#include <memory>
+#include <initializer_list>
 
 #include "ap_int.h"
+
+#ifndef __SYNTHESIS__
+#include <memory>
 
 template <typename T, int N, int MaxModification>
 class array_by_value {
@@ -72,23 +74,12 @@ private:
   array_by_value(T *base, std::shared_ptr<modification> first, std::shared_ptr<modification> last, int nodeCount)
       : base(base), first(first), last(last), nodeCount(nodeCount) {}
 };
+#endif
 
-template <typename T, int ID>
-T mu(T init, T loop) {
-  static bool f = true;
-  T result = f ? init : loop;
-  f = false;
-  return result;
-}
-
-template <typename T, unsigned int N, int ID>
+template <typename T, unsigned int N>
 void delay_init(T (&buffer)[N], T value) {
-  static bool done = false;
-  if (!done) {
-    for (int i = 0; i < N; ++i)
-      buffer[i] = value;
-  }
-  done = true;
+  for (int i = 0; i < N; ++i)
+    buffer[i] = value;
 }
 
 template <typename T, unsigned int N>
@@ -146,7 +137,11 @@ constexpr T resolve_offset(unsigned int offset, T *values, T default_value) {
 
 template <typename T, unsigned int Offset, unsigned int... Depths>
 T rollback(T *buffer, T value, unsigned int offset, bool next_input) {
-  constexpr unsigned int max_depth = std::max({0u, Depths...});
+  unsigned int max_depth = 0;
+  for (auto &&i : {0u, Depths...}) {
+    if (i > max_depth)
+      max_depth = i;
+  }
   unsigned int off = offset - Offset;
   if (next_input) {
     for (unsigned int i = max_depth; i > 0; --i)
@@ -170,7 +165,11 @@ bool cancel(bool *buffer, bool value, unsigned int offset, bool next_input) {
 
 template <typename T, unsigned int... Depths>
 T rewind(T *buffer, T value, int offset, bool next_input) {
-  constexpr unsigned int max_depth = std::max({0u, Depths...});
+  unsigned int max_depth = 0;
+  for (auto &&i : {0u, Depths...}) {
+    if (i > max_depth)
+      max_depth = i;
+  }
   if (next_input) {
     for (unsigned int i = max_depth; i > 0; --i) {
       buffer[i] = buffer[i - 1];
@@ -200,11 +199,13 @@ T *alpha(T *array, unsigned int index, T value, bool we) {
   return array;
 }
 
+#ifndef __SYNTHESIS__
 template <typename T, int N, int MaxModification>
 array_by_value<T, N, MaxModification> alpha(array_by_value<T, N, MaxModification> &array, unsigned int index, T value,
                                             bool we) {
   return we ? array.write(index, value) : array;
 }
+#endif
 
 template <typename T>
 struct FifoType {

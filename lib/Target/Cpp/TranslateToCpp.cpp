@@ -207,20 +207,24 @@ LogicalResult printAllVariables(CppEmitter &emitter, spechls::KernelOp &kernelOp
       if (failed(emitter.emitType(op->getLoc(), delayOp.getType())))
         return failure();
       os << " " << getDelayBufferName(emitter, delayOp) << "[" << delayOp.getDepth() << "]{};\n";
+      os << "#pragma HLS array_partition variable=" << getDelayBufferName(emitter, delayOp) << " type=complete\n";
     } else if (auto rewindOp = dyn_cast<spechls::RewindOp>(op)) {
       if (failed(emitter.emitType(op->getLoc(), rewindOp.getType())))
         return failure();
       os << " " << getRewindBufferName(emitter, rewindOp) << "["
          << *std::max_element(rewindOp.getDepths().begin(), rewindOp.getDepths().end()) + 1 << "]{};\n";
+      os << "#pragma HLS array_partition variable=" << getRewindBufferName(emitter, rewindOp) << " type=complete\n";
     } else if (auto rollbackOp = dyn_cast<spechls::RollbackOp>(op)) {
       if (failed(emitter.emitType(op->getLoc(), rollbackOp.getType())))
         return failure();
       os << " " << getRollbackBufferName(emitter, rollbackOp) << "["
          << *std::max_element(rollbackOp.getDepths().begin(), rollbackOp.getDepths().end()) + 1 << "]{};\n";
+      os << "#pragma HLS array_partition variable=" << getRollbackBufferName(emitter, rollbackOp) << " type=complete\n";
     } else if (auto cancelOp = dyn_cast<spechls::CancelOp>(op)) {
       if (failed(emitter.emitType(op->getLoc(), cancelOp.getType())))
         return failure();
       os << " " << getCancelBufferName(emitter, cancelOp) << "[1]{};\n";
+      os << "#pragma HLS array_partition variable=" << getCancelBufferName(emitter, cancelOp) << " type=complete\n";
     } else if (auto fifoOp = dyn_cast<spechls::FIFOOp>(op)) {
       os << "FifoType<";
       if (failed(emitter.emitType(op->getLoc(), fifoOp.getType())))
@@ -284,55 +288,73 @@ LogicalResult printAllFunctionPrototypes(CppEmitter &emitter, ModuleOp moduleOp)
         SmallVector<Type> operandTypes;
         for (auto &&type : callOp.getOperandTypes())
           operandTypes.push_back(type);
-        LogicalResult result = emitter.emitFunctionPrototype(op->getLoc(), callOp.getCallee(), operandTypes,
-                                                             callOp.getNumResults() != 0 ? callOp.getType(0) : Type{});
-        if (failed(result))
-          return WalkResult(result);
+        if (failed(emitter.emitFunctionPrototype(op->getLoc(), callOp.getCallee(), operandTypes,
+                                                 callOp.getNumResults() != 0 ? callOp.getType(0) : Type{}))) {
+          return failure();
+        }
         declaredFunctions.insert(callOp.getCallee());
       }
     } else if (auto fsmCommandOp = dyn_cast<spechls::FSMCommandOp>(op)) {
       std::string callee = ("fsm_" + fsmCommandOp.getName() + "_command").str();
-      LogicalResult result = emitter.emitFunctionPrototype(op->getLoc(), callee, {fsmCommandOp.getState().getType()},
-                                                           fsmCommandOp.getType());
-      if (failed(result))
-        return WalkResult(result);
+      if (failed(emitter.emitFunctionPrototype(op->getLoc(), callee, {fsmCommandOp.getState().getType()},
+                                               fsmCommandOp.getType()))) {
+        return failure();
+      }
       declaredFunctions.insert(callee);
     } else if (auto fsmOp = dyn_cast<spechls::FSMOp>(op)) {
       std::string callee = ("fsm_" + fsmOp.getName() + "_next").str();
-      LogicalResult result = emitter.emitFunctionPrototype(
-          op->getLoc(), callee, {fsmOp.getMispec().getType(), fsmOp.getState().getType()}, fsmOp.getType());
-      if (failed(result))
-        return WalkResult(result);
+      if (failed(emitter.emitFunctionPrototype(
+              op->getLoc(), callee, {fsmOp.getMispec().getType(), fsmOp.getState().getType()}, fsmOp.getType()))) {
+        return failure();
+      }
       declaredFunctions.insert(callee);
     }
     return WalkResult::advance();
   });
-
   if (result.wasInterrupted())
     return failure();
 
   return success();
 }
 
-LogicalResult printDelayInitialization(CppEmitter &emitter, Region::BlockListType &blocks) {
+LogicalResult printDelayInitialization(CppEmitter &emitter, spechls::KernelOp kernelOp) {
   raw_ostream &os = emitter.ostream();
 
-  int id = 0;
-  for (auto &&block : blocks) {
-    for (auto &&op : block) {
-      if (auto delayOp = dyn_cast<spechls::DelayOp>(op)) {
-        if (!delayOp.getInit() || isSelfInitializedDelay(delayOp))
-          continue;
-        os << "delay_init<";
-        if (failed(emitter.emitType(delayOp.getLoc(), delayOp.getType())))
-          return failure();
-        os << ", " << delayOp.getDepth() << ", " << id++ << ">(" << getDelayBufferName(emitter, delayOp) << ", ";
-        if (failed(emitter.emitOperand(delayOp.getInit())))
-          return failure();
-        os << ");\n";
-      }
+  WalkResult result = kernelOp->walk<WalkOrder::PreOrder>([&](Operation *op) -> WalkResult {
+    if (auto delayOp = dyn_cast<spechls::DelayOp>(op)) {
+      if (!delayOp.getInit() || isSelfInitializedDelay(delayOp))
+        return WalkResult::advance();
+      os << "delay_init<";
+      if (failed(emitter.emitType(delayOp.getLoc(), delayOp.getType())))
+        return failure();
+      os << ", " << delayOp.getDepth() << ">(" << getDelayBufferName(emitter, delayOp) << ", ";
+      if (failed(emitter.emitOperand(delayOp.getInit())))
+        return failure();
+      os << ");\n";
     }
-  }
+    return WalkResult::advance();
+  });
+  if (result.wasInterrupted())
+    return failure();
+
+  return success();
+}
+
+LogicalResult printMuInitialization(CppEmitter &emitter, spechls::KernelOp kernelOp) {
+  raw_ostream &os = emitter.ostream();
+
+  WalkResult result = kernelOp->walk<WalkOrder::PreOrder>([&](Operation *op) -> WalkResult {
+    if (auto mu = dyn_cast<spechls::MuOp>(op)) {
+      if (failed(emitter.emitVariableAssignment(mu->getResult(0))))
+        return failure();
+      if (failed(emitter.emitOperand(mu.getInitValue())))
+        return failure();
+      os << ";\n";
+    }
+    return WalkResult::advance();
+  });
+  if (result.wasInterrupted())
+    return failure();
 
   return success();
 }
@@ -426,7 +448,26 @@ LogicalResult printOperation(CppEmitter &emitter, spechls::KernelOp kernelOp) {
   if (failed(printAllVariables(emitter, kernelOp)))
     return failure();
 
-  if (failed(printDelayInitialization(emitter, kernelOp.getBody().getBlocks())))
+  if (failed(printDelayInitialization(emitter, kernelOp)))
+    return failure();
+
+  // Initialize variables that may hold mu-node initialization values.
+  for (auto &&op : kernelOp.getBody().front()) {
+    if (auto taskOp = dyn_cast<spechls::TaskOp>(op)) {
+      for (auto [internal, external] : llvm::zip_equal(taskOp.getBody().getArguments(), taskOp.getArgs())) {
+        if (external.getDefiningOp())
+          continue;
+        if (failed(emitter.emitOperand(internal)))
+          return failure();
+        os << " = ";
+        if (failed(emitter.emitOperand(external)))
+          return failure();
+        os << ";\n";
+      }
+    }
+  }
+
+  if (failed(printMuInitialization(emitter, kernelOp)))
     return failure();
 
   // Generate the exit variable.
@@ -469,6 +510,17 @@ LogicalResult printOperation(CppEmitter &emitter, spechls::KernelOp kernelOp) {
 
   if (emitter.shouldGenerateCpi())
     os << "++spechls__cycles;\n";
+
+  for (auto &&op : kernelOp.getBody().front()) {
+    if (auto mu = dyn_cast<spechls::MuOp>(op)) {
+      if (failed(emitter.emitVariableAssignment(mu->getResult(0))))
+        return failure();
+      if (failed(emitter.emitOperand(mu.getLoopValue())))
+        return failure();
+      os << ";\n";
+    }
+  }
+
   os.unindent();
   os << "}\n";
   if (emitter.shouldGenerateCpi())
@@ -512,17 +564,16 @@ LogicalResult printOperation(CppEmitter &emitter, spechls::TaskOp taskOp) {
   }
 
   // Copy variables to the local scope.
-  for (auto arg : llvm::zip_equal(taskOp.getBody().getArguments(), taskOp.getArgs())) {
-    if (failed(emitter.emitOperand(std::get<0>(arg))))
+  for (auto [internal, external] : llvm::zip_equal(taskOp.getBody().getArguments(), taskOp.getArgs())) {
+    if (!external.getDefiningOp())
+      continue;
+    if (failed(emitter.emitOperand(internal)))
       return failure();
     os << " = ";
-    if (failed(emitter.emitOperand(std::get<1>(arg))))
+    if (failed(emitter.emitOperand(external)))
       return failure();
     os << ";\n";
   }
-
-  if (failed(printDelayInitialization(emitter, taskOp.getBody().getBlocks())))
-    return failure();
 
   mlir::sortTopologically(&taskOp.getBody().front(), spechls::topologicalSortCriterion);
 
@@ -575,18 +626,29 @@ LogicalResult printOperation(CppEmitter &emitter, spechls::TaskOp taskOp) {
       os.unindent();
       os << "}\n";
     }
-    if (fsmCommand && emitter.shouldGenerateCpi()) {
-      os << "if (";
-      if (failed(emitter.emitOperand(fsmCommand)))
-        return failure();
-      os << ".commit)\n";
-      os.indent();
-      os << "++spechls__iterations;\n";
-      os.unindent();
-    }
-    os.unindent();
-    os << "}";
   }
+
+  for (auto &&op : taskOp.getBody().front()) {
+    if (auto mu = dyn_cast<spechls::MuOp>(op)) {
+      if (failed(emitter.emitVariableAssignment(mu->getResult(0))))
+        return failure();
+      if (failed(emitter.emitOperand(mu.getLoopValue())))
+        return failure();
+      os << ";\n";
+    }
+  }
+
+  if (fsmCommand && emitter.shouldGenerateCpi()) {
+    os << "if (";
+    if (failed(emitter.emitOperand(fsmCommand)))
+      return failure();
+    os << ".commit)\n";
+    os.indent();
+    os << "++spechls__iterations;\n";
+    os.unindent();
+  }
+  os.unindent();
+  os << "}";
   return success();
 }
 
@@ -621,25 +683,6 @@ LogicalResult printOperation(CppEmitter &emitter, spechls::ExitOp exitOp) {
   os << emitter.getExitVariableName() << " = ";
   if (failed(emitter.emitOperand(exitOp.getGuard())))
     return failure();
-  return success();
-}
-
-LogicalResult printOperation(CppEmitter &emitter, spechls::MuOp muOp) {
-  static int id = 0;
-
-  Operation *operation = muOp.getOperation();
-  raw_ostream &os = emitter.ostream();
-
-  if (failed(emitter.emitAssignPrefix(*operation)))
-    return failure();
-
-  os << "mu<";
-  if (failed(emitter.emitType(muOp.getLoc(), muOp.getType())))
-    return failure();
-  os << ", " << id++ << ">(";
-  if (failed(emitter.emitOperands(*operation)))
-    return failure();
-  os << ")";
   return success();
 }
 
@@ -1189,11 +1232,11 @@ LogicalResult CppEmitter::emitOperation(Operation &op, bool trailingSemicolon) {
           // SpecHLS ops.
           .Case<spechls::AlphaOp, spechls::CallOp, spechls::CancelOp, spechls::CommitOp, spechls::DelayOp,
                 spechls::ExitOp, spechls::FIFOOp, spechls::FSMCommandOp, spechls::FSMOp, spechls::GammaOp,
-                spechls::KernelOp, spechls::TaskOp, spechls::LoadOp, spechls::LUTOp, spechls::MuOp, spechls::PackOp,
-                spechls::PrintOp, spechls::RewindOp, spechls::RollbackOp, spechls::UnpackOp>(
+                spechls::KernelOp, spechls::TaskOp, spechls::LoadOp, spechls::LUTOp, spechls::PackOp, spechls::PrintOp,
+                spechls::RewindOp, spechls::RollbackOp, spechls::UnpackOp>(
               [&](auto op) { return printOperation(*this, op); })
           // Inlined operations.
-          .Case<circt::hw::ConstantOp, spechls::FieldOp, spechls::SyncOp>([&](auto op) {
+          .Case<circt::hw::ConstantOp, spechls::FieldOp, spechls::MuOp, spechls::SyncOp>([&](auto op) {
             skipLineEnding = true;
             return success();
           })
