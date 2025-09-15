@@ -13,7 +13,6 @@
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/OperationSupport.h"
 #include "mlir/Support/LLVM.h"
-#include "llvm/Support/ErrorHandling.h"
 
 #include <circt/Dialect/HW/HWOps.h>
 #include <mlir/IR/Attributes.h>
@@ -37,7 +36,6 @@ struct SpecHLSToHWOpConversion : OpConversionPattern<spechls::KernelOp> {
 
   LogicalResult matchAndRewrite(spechls::KernelOp kernel, OpAdaptor adaptor,
                                 ConversionPatternRewriter &rewriter) const override {
-#if 0
     SmallVector<circt::hw::PortInfo> hwInputInfo;
     if (!adaptor.getFunctionType().getResults().empty()) {
       // TODO: Deconstruct struct types.
@@ -56,9 +54,8 @@ struct SpecHLSToHWOpConversion : OpConversionPattern<spechls::KernelOp> {
     auto *outputOp = hwModule.getBodyBlock()->getTerminator();
     rewriter.inlineBlockBefore(&adaptor.getBody().front(), outputOp, hwModule.getBody().getArguments());
     outputOp->setOperands({cast<spechls::ExitOp>(exitOp).getValues()});
+    // TODO: Handle exit condition.
     rewriter.eraseOp(exitOp);
-    rewriter.eraseOp(kernel);
-#endif
     rewriter.eraseOp(kernel);
     return success();
   }
@@ -80,9 +77,6 @@ struct ConvertSpecHLSToHWPass : public spechls::impl::SpecHLSToHWPassBase<Conver
     ConversionTarget target(getContext());
     target.addLegalDialect<circt::hw::HWDialect>();
     target.addIllegalDialect<spechls::SpecHLSDialect>();
-    // target.addLegalDialect<spechls::SpecHLSDialect>();
-    // target.addIllegalOp<spechls::KernelOp>();
-    // target.addIllegalOp<spechls::ExitOp>();
 
     if (failed(mlir::applyFullConversion(getOperation(), target, patterns)))
       return signalPassFailure();

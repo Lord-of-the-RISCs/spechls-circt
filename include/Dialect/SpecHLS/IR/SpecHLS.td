@@ -75,7 +75,7 @@ def SpecHLS_KernelOp : SpecHLSOp<"kernel", [IsolatedFromAbove, FunctionOpInterfa
                          TypeAttrOf<FunctionType>:$function_type,
                          OptionalAttr<DictArrayAttr>:$arg_attrs,
                          OptionalAttr<DictArrayAttr>:$res_attrs);
-    let regions = (region SizedRegion<1>:$body);
+    let regions = (region AnyRegion:$body);
 
     let hasCustomAssemblyFormat = 1;
 
@@ -113,7 +113,7 @@ def SpecHLS_ExitOp : SpecHLSOp<"exit", [HasParent<"KernelOp">, Terminator, Retur
 def SpecHLS_TaskOp : SpecHLSOp<"task", [SingleBlock, RegionKindInterface, IsolatedFromAbove]> {
     let arguments = (ins StrAttr:$sym_name, Variadic<AnyType>:$args);
     let results = (outs Optional<AnyType>:$result);
-    let regions = (region SizedRegion<1>:$body);
+    let regions = (region AnyRegion:$body);
 
     let hasCustomAssemblyFormat = 1;
 
