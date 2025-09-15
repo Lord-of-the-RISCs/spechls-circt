@@ -6,6 +6,7 @@
 //
 
 #include "Conversion/Schedule/Passes.h" // IWYU pragma: keep
+#include "Dialect/Schedule/IR/Schedule.h"
 #include "Dialect/Schedule/IR/ScheduleOps.h"
 
 #include <circt/Dialect/SSP/SSPAttributes.h>
@@ -108,6 +109,7 @@ struct ScheduleToSSPOpConversion : OpConversionPattern<schedule::CircuitOp> {
         return failure();
       }
     }
+    rewriter.eraseOp(op);
     return success();
   }
 };
@@ -122,11 +124,12 @@ struct ConvertScheduleToSSPPass : public schedule::impl::ScheduleToSSPPassBase<C
   void runOnOperation() override {
     ConversionTarget target(getContext());
     target.addLegalDialect<ssp::SSPDialect>();
+    target.addIllegalDialect<schedule::ScheduleDialect>();
 
     RewritePatternSet patterns(&getContext());
     patterns.add<ScheduleToSSPOpConversion>(patterns.getContext());
 
-    if (failed(mlir::applyPartialConversion(getOperation(), target, std::move(patterns))))
+    if (failed(mlir::applyFullConversion(getOperation(), target, std::move(patterns))))
       return signalPassFailure();
   }
 };

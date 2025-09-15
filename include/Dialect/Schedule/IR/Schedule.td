@@ -46,7 +46,7 @@ def Schedule_CircuitOp : ScheduleOp<"circuit", [RegionKindInterface, NoTerminato
     let summary = "Represents a schedulable circuit.";
 
     let arguments = (ins F32Attr:$targetClock);
-    let regions = (region SizedRegion<1>:$body);
+    let regions = (region AnyRegion:$body);
 
     let assemblyFormat = [{
         attr-dict $targetClock $body
