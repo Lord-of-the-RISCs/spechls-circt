@@ -7,6 +7,7 @@ target_link_libraries(gecosapi PUBLIC
     ScheduleToSSP
     CIRCT
     MLIR
+    MLIR-C
 )
 
 install(TARGETS gecosapi)
