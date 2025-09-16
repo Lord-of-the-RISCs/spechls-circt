@@ -6,18 +6,18 @@
 //
 
 #include "Dialect/Schedule/Transforms/Passes.h" // IWYU pragma: keep
-#include "mlir/IR/Attributes.h"
-#include "mlir/IR/Operation.h"
-#include "mlir/IR/Value.h"
-#include "llvm/ADT/SmallVector.h"
-#include "llvm/Support/Casting.h"
 
 #include <circt/Dialect/SSP/SSPAttributes.h>
 #include <circt/Dialect/SSP/SSPOps.h>
 #include <circt/Dialect/SSP/SSPPasses.h>
+#include <llvm/ADT/SmallVector.h>
+#include <llvm/Support/Casting.h>
+#include <mlir/IR/Attributes.h>
 #include <mlir/IR/BuiltinAttributes.h>
 #include <mlir/IR/BuiltinOps.h>
 #include <mlir/IR/Diagnostics.h>
+#include <mlir/IR/Operation.h>
+#include <mlir/IR/Value.h>
 #include <mlir/Pass/PassManager.h>
 
 using namespace mlir;

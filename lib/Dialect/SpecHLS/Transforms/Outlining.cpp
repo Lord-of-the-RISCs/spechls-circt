@@ -8,8 +8,9 @@
 #include "Dialect/SpecHLS/Transforms/Outlining.h"
 #include "Dialect/SpecHLS/IR/SpecHLSOps.h"
 #include "Dialect/SpecHLS/IR/SpecHLSTypes.h"
-#include "circt/Dialect/HW/HWOps.h"
-#include "llvm/ADT/STLExtras.h"
+
+#include <circt/Dialect/HW/HWOps.h>
+#include <llvm/ADT/STLExtras.h>
 
 using namespace mlir;
 

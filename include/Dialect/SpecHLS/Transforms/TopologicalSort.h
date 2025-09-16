@@ -9,8 +9,9 @@
 #define SPECHLS_INCLUDED_DIALECT_SPECHLS_TRANSFORMS_TOPOLOGICAL_SORT_H
 
 #include "Dialect/SpecHLS/IR/SpecHLSOps.h"
-#include "mlir/IR/Operation.h"
-#include "mlir/IR/Value.h"
+
+#include <mlir/IR/Operation.h>
+#include <mlir/IR/Value.h>
 
 namespace spechls {
 

@@ -8,7 +8,7 @@
 #ifndef SPECHLS_INCLUDED_DIALECT_SPECHLS_IR_SPECHLS_TYPES_H
 #define SPECHLS_INCLUDED_DIALECT_SPECHLS_IR_SPECHLS_TYPES_H
 
-#include "mlir/IR/Types.h" // IWYU pragma: keep
+#include <mlir/IR/Types.h> // IWYU pragma: keep
 
 #define GET_TYPEDEF_CLASSES
 #include "Dialect/SpecHLS/IR/SpecHLSTypes.h.inc"

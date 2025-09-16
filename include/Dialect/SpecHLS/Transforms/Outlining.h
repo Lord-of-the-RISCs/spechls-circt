@@ -9,10 +9,11 @@
 #define SPECHLS_INCLUDED_DIALECT_SPECHLS_TRANSFORMS_OUTLINING_H
 
 #include "Dialect/SpecHLS/IR/SpecHLSOps.h"
-#include "mlir/IR/Location.h"
-#include "mlir/IR/Operation.h"
-#include "mlir/IR/PatternMatch.h"
-#include "mlir/Support/LLVM.h"
+
+#include <mlir/IR/Location.h>
+#include <mlir/IR/Operation.h>
+#include <mlir/IR/PatternMatch.h>
+#include <mlir/Support/LLVM.h>
 
 namespace spechls {
 
