@@ -8,13 +8,12 @@
 #include "Conversion/SpecHLS/Passes.h" // IWYU pragma: keep
 #include "Dialect/SpecHLS/IR/SpecHLS.h"
 #include "Dialect/SpecHLS/IR/SpecHLSOps.h"
-#include "circt/Support/LLVM.h"
-#include "llvm/ADT/SmallVector.h"
 
 #include <circt/Dialect/Comb/CombOps.h>
 #include <circt/Dialect/HW/HWOps.h>
 #include <circt/Dialect/HW/HWTypes.h>
 #include <circt/Dialect/HW/PortImplementation.h>
+#include <circt/Support/LLVM.h>
 #include <mlir/IR/Attributes.h>
 #include <mlir/IR/Builders.h>
 #include <mlir/IR/BuiltinAttributes.h>

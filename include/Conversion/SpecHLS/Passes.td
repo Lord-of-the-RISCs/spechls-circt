@@ -11,7 +11,7 @@
 include "mlir/Pass/PassBase.td"
 
 def SpecHLSToHWPass : Pass<"spechls-to-hw", "spechls::KernelOp"> {
-  let summary = "Convert SpecHLS dialect ops to HW dialect ops";
+  let summary = "Convert SpecHLS dialect ops to HW and Comb dialect ops";
   let dependentDialects = [
     "::spechls::SpecHLSDialect",
     "::circt::comb::CombDialect",
