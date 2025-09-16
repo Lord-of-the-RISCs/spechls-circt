@@ -448,9 +448,6 @@ LogicalResult printOperation(CppEmitter &emitter, spechls::KernelOp kernelOp) {
   if (failed(printAllVariables(emitter, kernelOp)))
     return failure();
 
-  if (failed(printDelayInitialization(emitter, kernelOp)))
-    return failure();
-
   // Initialize variables that may hold mu-node initialization values.
   for (auto &&op : kernelOp.getBody().front()) {
     if (auto taskOp = dyn_cast<spechls::TaskOp>(op)) {
@@ -466,6 +463,9 @@ LogicalResult printOperation(CppEmitter &emitter, spechls::KernelOp kernelOp) {
       }
     }
   }
+
+  if (failed(printDelayInitialization(emitter, kernelOp)))
+    return failure();
 
   if (failed(printMuInitialization(emitter, kernelOp)))
     return failure();
