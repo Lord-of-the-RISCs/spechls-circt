@@ -14,6 +14,7 @@ def SpecHLSToHWPass : Pass<"spechls-to-hw", "spechls::KernelOp"> {
   let summary = "Convert SpecHLS dialect ops to HW dialect ops";
   let dependentDialects = [
     "::spechls::SpecHLSDialect",
+    "::circt::comb::CombDialect",
     "::circt::hw::HWDialect",
   ];
 }

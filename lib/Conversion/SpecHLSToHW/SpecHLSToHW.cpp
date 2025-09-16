@@ -8,17 +8,20 @@
 #include "Conversion/SpecHLS/Passes.h" // IWYU pragma: keep
 #include "Dialect/SpecHLS/IR/SpecHLS.h"
 #include "Dialect/SpecHLS/IR/SpecHLSOps.h"
-#include "circt/Dialect/HW/HWTypes.h"
-#include "circt/Dialect/HW/PortImplementation.h"
-#include "mlir/IR/Builders.h"
-#include "mlir/IR/OperationSupport.h"
-#include "mlir/Support/LLVM.h"
+#include "circt/Support/LLVM.h"
+#include "llvm/ADT/SmallVector.h"
 
+#include <circt/Dialect/Comb/CombOps.h>
 #include <circt/Dialect/HW/HWOps.h>
+#include <circt/Dialect/HW/HWTypes.h>
+#include <circt/Dialect/HW/PortImplementation.h>
 #include <mlir/IR/Attributes.h>
+#include <mlir/IR/Builders.h>
 #include <mlir/IR/BuiltinAttributes.h>
 #include <mlir/IR/Operation.h>
+#include <mlir/IR/OperationSupport.h>
 #include <mlir/Pass/Pass.h>
+#include <mlir/Support/LLVM.h>
 #include <mlir/Transforms/DialectConversion.h>
 #include <string>
 
@@ -31,32 +34,86 @@ using namespace mlir;
 
 namespace {
 
-struct SpecHLSToHWOpConversion : OpConversionPattern<spechls::KernelOp> {
+struct KernelConversion : OpConversionPattern<spechls::KernelOp> {
   using OpConversionPattern<spechls::KernelOp>::OpConversionPattern;
 
   LogicalResult matchAndRewrite(spechls::KernelOp kernel, OpAdaptor adaptor,
                                 ConversionPatternRewriter &rewriter) const override {
     SmallVector<circt::hw::PortInfo> hwInputInfo;
-    if (!adaptor.getFunctionType().getResults().empty()) {
+    if (!kernel.getFunctionType().getResults().empty()) {
       // TODO: Deconstruct struct types.
-      hwInputInfo.push_back({{rewriter.getStringAttr("result"), adaptor.getFunctionType().getResults().front(),
+      hwInputInfo.push_back({{rewriter.getStringAttr("result"), kernel.getFunctionType().getResults().front(),
                               circt::hw::ModulePort::Output}});
     }
-    for (auto &&argType : adaptor.getFunctionType().getInputs()) {
+    for (auto &&argType : kernel.getFunctionType().getInputs()) {
       hwInputInfo.push_back({{rewriter.getStringAttr("arg" + std::to_string(hwInputInfo.size() - 1)), argType,
                               circt::hw::ModulePort::Input}});
     }
     circt::hw::ModulePortInfo hwPortInfo(hwInputInfo);
 
-    auto hwModule = rewriter.create<circt::hw::HWModuleOp>(kernel.getLoc(), adaptor.getSymNameAttr(), hwPortInfo);
+    auto hwModule = rewriter.create<circt::hw::HWModuleOp>(kernel.getLoc(), kernel.getSymNameAttr(), hwPortInfo);
 
-    auto *exitOp = adaptor.getBody().front().getTerminator();
-    auto *outputOp = hwModule.getBodyBlock()->getTerminator();
-    rewriter.inlineBlockBefore(&adaptor.getBody().front(), outputOp, hwModule.getBody().getArguments());
-    outputOp->setOperands({cast<spechls::ExitOp>(exitOp).getValues()});
     // TODO: Handle exit condition.
+    auto *exitOp = kernel.getBody().front().getTerminator();
+    auto *outputOp = hwModule.getBodyBlock()->getTerminator();
+    rewriter.inlineBlockBefore(&kernel.getBody().front(), outputOp, hwModule.getBody().getArguments());
+    outputOp->setOperands(cast<spechls::ExitOp>(exitOp).getValues());
+
     rewriter.eraseOp(exitOp);
     rewriter.eraseOp(kernel);
+    return success();
+  }
+};
+
+struct TaskConversion : OpConversionPattern<spechls::TaskOp> {
+  using OpConversionPattern<spechls::TaskOp>::OpConversionPattern;
+
+  LogicalResult matchAndRewrite(spechls::TaskOp task, OpAdaptor adaptor,
+                                ConversionPatternRewriter &rewriter) const override {
+    auto insertionPoint = rewriter.saveInsertionPoint();
+    rewriter.setInsertionPointAfter(task->getParentOp());
+
+    SmallVector<circt::hw::PortInfo> hwInputInfo;
+    // TODO: Deconstruct struct types.
+    hwInputInfo.push_back(
+        {{rewriter.getStringAttr("result"), task.getResult().getType(), circt::hw::ModulePort::Output}});
+    for (auto &&argType : task.getArgs().getTypes()) {
+      hwInputInfo.push_back({{rewriter.getStringAttr("arg" + std::to_string(hwInputInfo.size() - 1)), argType,
+                              circt::hw::ModulePort::Input}});
+    }
+    circt::hw::ModulePortInfo hwPortInfo(hwInputInfo);
+
+    auto hwModule = rewriter.create<circt::hw::HWModuleOp>(task.getLoc(), task.getSymNameAttr(), hwPortInfo);
+
+    // TODO: Handle commit condition.
+    auto *commitOp = task.getBody().front().getTerminator();
+    auto *outputOp = hwModule.getBodyBlock()->getTerminator();
+    rewriter.inlineBlockBefore(&task.getBody().front(), outputOp, hwModule.getBody().getArguments());
+    outputOp->setOperands({cast<spechls::CommitOp>(commitOp).getValue()});
+
+    rewriter.restoreInsertionPoint(insertionPoint);
+    SmallVector<Value> operands(task.getArgs());
+    rewriter.replaceOpWithNewOp<circt::hw::InstanceOp>(task, hwModule, task.getSymNameAttr(), operands);
+
+    rewriter.eraseOp(commitOp);
+    return success();
+  }
+};
+
+struct GammaConversion : OpConversionPattern<spechls::GammaOp> {
+  using OpConversionPattern<spechls::GammaOp>::OpConversionPattern;
+
+  LogicalResult matchAndRewrite(spechls::GammaOp gamma, OpAdaptor adaptor,
+                                ConversionPatternRewriter &rewriter) const override {
+    if (gamma.getInputs().size() == 2) {
+      rewriter.replaceOpWithNewOp<circt::comb::MuxOp>(gamma, gamma.getType(), gamma.getSelect(), gamma.getInputs()[1],
+                                                      gamma.getInputs()[0]);
+      return success();
+    }
+
+    // See https://circt.llvm.org/docs/Dialects/Comb/RationaleComb/#no-multibit-mux-operations
+    auto array = rewriter.create<circt::hw::ArrayCreateOp>(gamma.getLoc(), gamma.getInputs());
+    rewriter.replaceOpWithNewOp<circt::hw::ArrayGetOp>(gamma, array, gamma.getSelect());
     return success();
   }
 };
@@ -68,7 +125,9 @@ struct ConvertSpecHLSToHWPass : public spechls::impl::SpecHLSToHWPassBase<Conver
 
   LogicalResult initialize(MLIRContext *ctx) override {
     RewritePatternSet patternList{ctx};
-    patternList.add<SpecHLSToHWOpConversion>(ctx);
+    patternList.add<KernelConversion>(ctx);
+    patternList.add<TaskConversion>(ctx);
+    patternList.add<GammaConversion>(ctx);
     patterns = std::move(patternList);
     return success();
   }
@@ -76,6 +135,7 @@ struct ConvertSpecHLSToHWPass : public spechls::impl::SpecHLSToHWPassBase<Conver
   void runOnOperation() override {
     ConversionTarget target(getContext());
     target.addLegalDialect<circt::hw::HWDialect>();
+    target.addLegalDialect<circt::comb::CombDialect>();
     target.addIllegalDialect<spechls::SpecHLSDialect>();
 
     if (failed(mlir::applyFullConversion(getOperation(), target, patterns)))
