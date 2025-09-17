@@ -9,6 +9,7 @@
 #include "Dialect/SpecHLS/IR/SpecHLSTypes.h"
 #include "Dialect/SpecHLS/Transforms/TopologicalSort.h"
 #include "Target/Cpp/Export.h"
+#include "llvm/ADT/SmallSet.h"
 
 #include <circt/Dialect/Comb/CombOps.h>
 #include <circt/Dialect/HW/HWOps.h>
@@ -41,8 +42,7 @@ class CppEmitter {
   raw_indented_ostream os;
 
 public:
-  explicit CppEmitter(raw_ostream &os, bool declareStructTypes, bool declareFunctions, bool lowerArraysAsValues,
-                      bool generateCpi);
+  explicit CppEmitter(raw_ostream &os, spechls::TranslationToCppOptions options);
 
   raw_indented_ostream &ostream() { return os; }
 
@@ -70,10 +70,11 @@ public:
   StringRef getOrCreateName(Value value);
   StringRef getExitVariableName() { return "exit_"; }
 
-  bool shouldDeclareStructTypes() { return declareStructTypes; }
-  bool shouldDeclareFunctions() { return declareFunctions; }
-  bool shouldLowerArraysAsValues() { return lowerArraysAsValues; }
-  bool shouldGenerateCpi() { return generateCpi; }
+  bool shouldDeclareStructTypes() { return options.declareStructTypes; }
+  bool shouldDeclareFunctions() { return options.declareFunctions; }
+  bool shouldLowerArraysAsValues() { return options.lowerArraysAsValues; }
+  bool shouldGenerateCpi() { return options.generateCpi; }
+  bool shouldGenerateVitisHLSCompatibleCode() { return options.vitisHlsCompatibility; }
 
   class Scope {
     llvm::ScopedHashTableScope<Value, std::string> valueMapperScope;
@@ -97,10 +98,7 @@ private:
   ValueMapper valueMapper;
 
   std::stack<int64_t> valueInScopeCount;
-  bool declareStructTypes;
-  bool declareFunctions;
-  bool lowerArraysAsValues;
-  bool generateCpi;
+  spechls::TranslationToCppOptions options;
 };
 
 int64_t maxRollback = 0;
@@ -207,29 +205,57 @@ LogicalResult printAllVariables(CppEmitter &emitter, spechls::KernelOp &kernelOp
       if (failed(emitter.emitType(op->getLoc(), delayOp.getType())))
         return failure();
       os << " " << getDelayBufferName(emitter, delayOp) << "[" << delayOp.getDepth() << "]{};\n";
-      os << "#pragma HLS array_partition variable=" << getDelayBufferName(emitter, delayOp) << " type=complete\n";
+      if (emitter.shouldGenerateVitisHLSCompatibleCode()) {
+        os << "#pragma HLS array_partition variable=" << getDelayBufferName(emitter, delayOp) << " type=complete\n";
+      }
     } else if (auto rewindOp = dyn_cast<spechls::RewindOp>(op)) {
       if (failed(emitter.emitType(op->getLoc(), rewindOp.getType())))
         return failure();
       os << " " << getRewindBufferName(emitter, rewindOp) << "["
          << *std::max_element(rewindOp.getDepths().begin(), rewindOp.getDepths().end()) + 1 << "]{};\n";
-      os << "#pragma HLS array_partition variable=" << getRewindBufferName(emitter, rewindOp) << " type=complete\n";
+      if (emitter.shouldGenerateVitisHLSCompatibleCode()) {
+        os << "#pragma HLS array_partition variable=" << getRewindBufferName(emitter, rewindOp) << " type=complete\n";
+      }
     } else if (auto rollbackOp = dyn_cast<spechls::RollbackOp>(op)) {
       if (failed(emitter.emitType(op->getLoc(), rollbackOp.getType())))
         return failure();
       os << " " << getRollbackBufferName(emitter, rollbackOp) << "["
          << *std::max_element(rollbackOp.getDepths().begin(), rollbackOp.getDepths().end()) + 1 << "]{};\n";
-      os << "#pragma HLS array_partition variable=" << getRollbackBufferName(emitter, rollbackOp) << " type=complete\n";
+      if (emitter.shouldGenerateVitisHLSCompatibleCode()) {
+        os << "#pragma HLS array_partition variable=" << getRollbackBufferName(emitter, rollbackOp)
+           << " type=complete\n";
+      }
     } else if (auto cancelOp = dyn_cast<spechls::CancelOp>(op)) {
       if (failed(emitter.emitType(op->getLoc(), cancelOp.getType())))
         return failure();
       os << " " << getCancelBufferName(emitter, cancelOp) << "[1]{};\n";
-      os << "#pragma HLS array_partition variable=" << getCancelBufferName(emitter, cancelOp) << " type=complete\n";
+      if (emitter.shouldGenerateVitisHLSCompatibleCode()) {
+        os << "#pragma HLS array_partition variable=" << getCancelBufferName(emitter, cancelOp) << " type=complete\n";
+      }
     } else if (auto fifoOp = dyn_cast<spechls::FIFOOp>(op)) {
       os << "FifoType<";
       if (failed(emitter.emitType(op->getLoc(), fifoOp.getType())))
         return failure();
       os << "> " << getFifoBufferName(emitter, fifoOp) << "{};\n";
+    }
+    return WalkResult::advance();
+  });
+  if (result.wasInterrupted())
+    return failure();
+
+  return success();
+}
+
+LogicalResult printMemoryDependencePragmas(CppEmitter &emitter, spechls::KernelOp &kernelOp) {
+  raw_ostream &os = emitter.ostream();
+  llvm::SmallSet<Value, 8> arrays;
+
+  WalkResult result = kernelOp->walk<WalkOrder::PreOrder>([&](Operation *op) -> WalkResult {
+    if (auto loadOp = dyn_cast<spechls::LoadOp>(op)) {
+      os << "#pragma HLS dependence variable=";
+      if (failed(emitter.emitOperand(loadOp.getArray())))
+        return failure();
+      os << " type=intra false\n";
     }
     return WalkResult::advance();
   });
@@ -480,6 +506,12 @@ LogicalResult printOperation(CppEmitter &emitter, spechls::KernelOp kernelOp) {
 
   os << "while (!" << emitter.getExitVariableName() << ") {\n";
   os.indent();
+
+  // Ignore intra-iteration dependencies, since they are handled by the memory speculation logic.
+  if (emitter.shouldGenerateVitisHLSCompatibleCode()) {
+    if (failed(printMemoryDependencePragmas(emitter, kernelOp)))
+      return failure();
+  }
 
   mlir::sortTopologically(&kernelOp.getBody().front(), spechls::topologicalSortCriterion);
 
@@ -842,7 +874,11 @@ LogicalResult printOperation(CppEmitter &emitter, spechls::RewindOp rewindOp) {
 
 LogicalResult printOperation(CppEmitter &emitter, spechls::RollbackOp rollbackOp) {
   Operation *operation = rollbackOp.getOperation();
-  raw_ostream &os = emitter.ostream();
+  raw_indented_ostream &os = emitter.ostream();
+
+  if (emitter.shouldGenerateVitisHLSCompatibleCode()) {
+    os << "// ";
+  }
 
   if (failed(emitter.emitAssignPrefix(*operation)))
     return failure();
@@ -861,6 +897,61 @@ LogicalResult printOperation(CppEmitter &emitter, spechls::RollbackOp rollbackOp
   if (failed(emitter.emitOperands(*operation)))
     return failure();
   os << ")";
+
+  // Inline the rollback implementation to circumvent bugs in Vitis HLS.
+  if (emitter.shouldGenerateVitisHLSCompatibleCode()) {
+    os << "\n{\n";
+    os.indent();
+
+    size_t maxDepth = *std::max_element(rollbackOp.getDepths().begin(), rollbackOp.getDepths().end());
+    os << "unsigned int off = ";
+    if (failed(emitter.emitOperand(rollbackOp.getRollback())))
+      return failure();
+    os << " - " << rollbackOp.getOffset() << ";\n";
+    os << "if (";
+    if (failed(emitter.emitOperand(rollbackOp.getWriteCommand())))
+      return failure();
+    os << ") {\n";
+    os.indent();
+    os << "for (unsigned int i = " << maxDepth << "; i > 0; --i) {\n";
+    os.indent();
+    os << getRollbackBufferName(emitter, rollbackOp) << "[i] = " << getRollbackBufferName(emitter, rollbackOp)
+       << "[i - 1];\n";
+    os.unindent();
+    os << "}\n";
+
+    if (failed(emitter.emitAssignPrefix(*operation)))
+      return failure();
+    if (failed(emitter.emitOperand(rollbackOp.getInput())))
+      return failure();
+    os << ";\n";
+    for (auto &&depth : rollbackOp.getDepths()) {
+      os << "if (off == " << depth << ") {\n";
+      os.indent();
+      if (failed(emitter.emitAssignPrefix(*operation)))
+        return failure();
+      os << getRollbackBufferName(emitter, rollbackOp) << "[" << depth << "];\n";
+      os.unindent();
+      os << "}\n";
+    }
+    os << "if (";
+    if (failed(emitter.emitOperand(rollbackOp.getWriteCommand())))
+      return failure();
+    os << ") {\n";
+    os.indent();
+    os << getRollbackBufferName(emitter, rollbackOp) << "[0] = ";
+    if (failed(emitter.emitOperand(rollbackOp.getResult())))
+      return failure();
+    os << ";\n";
+    os.unindent();
+    os << "}\n";
+    os.unindent();
+    os << "}\n";
+
+    os.unindent();
+    os << "}\n";
+  }
+
   return success();
 }
 
@@ -1207,10 +1298,8 @@ LogicalResult printOperation(CppEmitter &emitter, circt::hw::BitcastOp bitcastOp
 }
 } // namespace
 
-CppEmitter::CppEmitter(raw_ostream &os, bool declareStructTypes, bool declareFunctions, bool lowerArraysAsValues,
-                       bool generateCpi)
-    : os(os), declareStructTypes(declareStructTypes), declareFunctions(declareFunctions),
-      lowerArraysAsValues(lowerArraysAsValues), generateCpi(generateCpi) {
+CppEmitter::CppEmitter(raw_ostream &os, spechls::TranslationToCppOptions options)
+    : os(os), options(std::move(options)) {
   valueInScopeCount.push(0);
 }
 
@@ -1322,7 +1411,7 @@ LogicalResult CppEmitter::emitType(Location loc, Type type) {
     return success();
   }
   if (auto aType = dyn_cast<spechls::ArrayType>(type)) {
-    if (lowerArraysAsValues) {
+    if (options.lowerArraysAsValues) {
       os << "array_by_value<";
       if (failed(emitType(loc, aType.getElementType())))
         return failure();
@@ -1561,8 +1650,7 @@ StringRef CppEmitter::getOrCreateName(Value value) {
   return *valueMapper.begin(value);
 }
 
-LogicalResult spechls::translateToCpp(Operation *op, raw_ostream &os, bool declareStructTypes, bool declareFunctions,
-                                      bool lowerArraysAsValues, bool generateCpi) {
-  CppEmitter emitter(os, declareStructTypes, declareFunctions, lowerArraysAsValues, generateCpi);
+LogicalResult spechls::translateToCpp(Operation *op, raw_ostream &os, TranslationToCppOptions options) {
+  CppEmitter emitter(os, std::move(options));
   return emitter.emitOperation(*op, false);
 }

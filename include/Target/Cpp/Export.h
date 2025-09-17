@@ -10,7 +10,14 @@
 
 namespace spechls {
 
-llvm::LogicalResult translateToCpp(mlir::Operation *op, llvm::raw_ostream &os, bool declareStructTypes,
-                                   bool declareFunctions, bool lowerArraysAsValues, bool generateCpi);
+struct TranslationToCppOptions {
+  bool declareStructTypes;
+  bool declareFunctions;
+  bool lowerArraysAsValues;
+  bool generateCpi;
+  bool vitisHlsCompatibility;
+};
+
+llvm::LogicalResult translateToCpp(mlir::Operation *op, llvm::raw_ostream &os, TranslationToCppOptions options);
 
 } // namespace spechls

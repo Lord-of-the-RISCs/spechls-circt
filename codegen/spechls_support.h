@@ -78,8 +78,9 @@ private:
 
 template <typename T, unsigned int N>
 void delay_init(T (&buffer)[N], T value) {
-  for (int i = 0; i < N; ++i)
+  for (int i = 0; i < N; ++i) {
     buffer[i] = value;
+  }
 }
 
 template <typename T, unsigned int N>
@@ -90,8 +91,9 @@ T delay_pop(T (&buffer)[N]) {
 template <typename T, unsigned int N>
 void delay_push(T (&buffer)[N], T value, bool enable = true) {
   if (enable) {
-    for (int i = 0; i < N - 1; ++i)
+    for (int i = 0; i < N - 1; ++i) {
       buffer[i] = buffer[i + 1];
+    }
     buffer[N - 1] = value;
   }
 }
@@ -124,6 +126,7 @@ ap_int<N> concat(ap_int<N> value) {
   return value;
 }
 
+#ifndef __SYNTHESIS__
 template <typename T, unsigned int... Depths>
 constexpr T resolve_offset(unsigned int offset, T *values, T default_value) {
   T result = default_value;
@@ -153,6 +156,7 @@ T rollback(T *buffer, T value, unsigned int offset, bool next_input) {
 
   return result;
 }
+#endif
 
 template <unsigned int Offset>
 bool cancel(bool *buffer, bool value, unsigned int offset, bool next_input) {
