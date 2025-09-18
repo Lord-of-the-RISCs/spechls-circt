@@ -84,11 +84,6 @@ void delay_init(T (&buffer)[N], T value) {
 }
 
 template <typename T, unsigned int N>
-T delay_pop(T (&buffer)[N]) {
-  return buffer[0];
-}
-
-template <typename T, unsigned int N>
 void delay_push(T (&buffer)[N], T value, bool enable = true) {
   if (enable) {
     for (int i = 0; i < N - 1; ++i) {
@@ -193,14 +188,6 @@ T gamma(unsigned int select, Ts... values) {
   };
   (update(values), ...);
   return result;
-}
-
-template <typename T>
-T *alpha(T *array, unsigned int index, T value, bool we) {
-  if (we) {
-    array[index] = value;
-  }
-  return array;
 }
 
 #ifndef __SYNTHESIS__

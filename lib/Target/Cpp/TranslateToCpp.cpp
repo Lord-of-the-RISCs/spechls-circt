@@ -251,18 +251,14 @@ LogicalResult printMemoryDependencePragmas(CppEmitter &emitter, spechls::KernelO
   raw_ostream &os = emitter.ostream();
   llvm::SmallSet<Value, 8> arrays;
 
-  WalkResult result = kernelOp->walk<WalkOrder::PreOrder>([&](Operation *op) -> WalkResult {
-    if (auto loadOp = dyn_cast<spechls::LoadOp>(op)) {
+  for (auto &&arg : kernelOp.getArguments()) {
+    if (isa<spechls::ArrayType>(arg.getType())) {
       os << "#pragma HLS dependence variable=";
-      if (failed(emitter.emitOperand(loadOp.getArray())))
+      if (failed(emitter.emitOperand(arg)))
         return failure();
       os << " type=intra false\n";
     }
-    return WalkResult::advance();
-  });
-  if (result.wasInterrupted())
-    return failure();
-
+  }
   return success();
 }
 
@@ -703,11 +699,7 @@ LogicalResult printOperation(CppEmitter &emitter, spechls::DelayOp delayOp) {
 
   if (failed(emitter.emitAssignPrefix(*operation)))
     return failure();
-
-  os << "delay_pop<";
-  if (failed(emitter.emitType(delayOp.getLoc(), delayOp.getType())))
-    return failure();
-  os << ", " << delayOp.getDepth() << ">(" << getDelayBufferName(emitter, delayOp) << ")";
+  os << getDelayBufferName(emitter, delayOp) << "[0];";
   return success();
 }
 
@@ -1038,8 +1030,35 @@ LogicalResult printOperation(CppEmitter &emitter, spechls::LUTOp lutOp) {
 
 LogicalResult printOperation(CppEmitter &emitter, spechls::AlphaOp alphaOp) {
   Operation *operation = alphaOp.getOperation();
-  StringRef callee = "alpha";
-  return printCallOp(emitter, operation, callee);
+  raw_indented_ostream &os = emitter.ostream();
+
+  if (emitter.shouldLowerArraysAsValues()) {
+    StringRef callee = "alpha";
+    return printCallOp(emitter, operation, callee);
+  }
+
+  os << "if (";
+  if (failed(emitter.emitOperand(alphaOp.getWe())))
+    return failure();
+  os << ") {\n";
+  os.indent();
+  if (failed(emitter.emitOperand(alphaOp.getArray())))
+    return failure();
+  os << "[";
+  if (failed(emitter.emitOperand(alphaOp.getIndex())))
+    return failure();
+  os << "] = ";
+  if (failed(emitter.emitOperand(alphaOp.getValue())))
+    return failure();
+  os << ";\n";
+  os.unindent();
+  os << "}\n";
+
+  if (failed(emitter.emitAssignPrefix(*operation)))
+    return failure();
+  if (failed(emitter.emitOperand(alphaOp.getArray())))
+    return failure();
+  return success();
 }
 
 Type makeSigned(Type t) {
