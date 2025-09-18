@@ -8,6 +8,7 @@
 #include <circt/Dialect/Comb/CombDialect.h>
 #include <circt/Dialect/HW/HWDialect.h>
 #include <llvm/Support/raw_ostream.h>
+#include <mlir/Dialect/Arith/IR/Arith.h>
 #include <mlir/IR/DialectRegistry.h>
 #include <mlir/IR/Operation.h>
 #include <mlir/Tools/mlir-translate/MlirTranslateMain.h>
@@ -39,7 +40,8 @@ int main(int argc, char **argv) {
             op, os, {declareStructTypes, declareFunctions, lowerArraysAsValues, generateCpi, vitisHlsCompatibility});
       },
       [](mlir::DialectRegistry &registry) {
-        registry.insert<spechls::SpecHLSDialect, circt::comb::CombDialect, circt::hw::HWDialect>();
+        registry.insert<spechls::SpecHLSDialect, circt::comb::CombDialect, circt::hw::HWDialect,
+                        mlir::arith::ArithDialect>();
       });
 
   return failed(mlir::mlirTranslateMain(argc, argv, "SpecHLS translation driver"));

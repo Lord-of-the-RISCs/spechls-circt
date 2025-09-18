@@ -5,7 +5,10 @@
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 
+#include <circt/Dialect/Comb/CombDialect.h>
+#include <circt/Dialect/HW/HWDialect.h>
 #include <circt/Dialect/SSP/SSPDialect.h>
+#include <mlir/Dialect/Arith/IR/Arith.h>
 #include <mlir/IR/MLIRContext.h>
 #include <mlir/Tools/mlir-reduce/MlirReduceMain.h>
 #include <mlir/Transforms/Passes.h>
@@ -15,7 +18,8 @@
 
 int main(int argc, char **argv) {
   mlir::DialectRegistry registry;
-  registry.insert<spechls::SpecHLSDialect, schedule::ScheduleDialect, circt::ssp::SSPDialect>();
+  registry.insert<spechls::SpecHLSDialect, schedule::ScheduleDialect, circt::ssp::SSPDialect, circt::comb::CombDialect,
+                  circt::hw::HWDialect, mlir::arith::ArithDialect>();
   mlir::MLIRContext context(registry);
 
   mlir::registerTransformsPasses();

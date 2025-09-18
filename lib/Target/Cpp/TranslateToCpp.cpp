@@ -9,6 +9,7 @@
 #include "Dialect/SpecHLS/IR/SpecHLSTypes.h"
 #include "Dialect/SpecHLS/Transforms/TopologicalSort.h"
 #include "Target/Cpp/Export.h"
+#include "mlir/Dialect/Arith/IR/Arith.h"
 #include "llvm/ADT/SmallSet.h"
 
 #include <circt/Dialect/Comb/CombOps.h>
@@ -1097,6 +1098,26 @@ LogicalResult printNaryOperation(CppEmitter &emitter, Operation *operation, Stri
   return success();
 }
 
+LogicalResult printOperation(CppEmitter &emitter, mlir::arith::AddFOp addOp) {
+  Operation *operation = addOp.getOperation();
+  return printNaryOperation(emitter, operation, "+");
+}
+
+LogicalResult printOperation(CppEmitter &emitter, mlir::arith::DivFOp divOp) {
+  Operation *operation = divOp.getOperation();
+  return printNaryOperation(emitter, operation, "/");
+}
+
+LogicalResult printOperation(CppEmitter &emitter, mlir::arith::MulFOp mulOp) {
+  Operation *operation = mulOp.getOperation();
+  return printNaryOperation(emitter, operation, "*");
+}
+
+LogicalResult printOperation(CppEmitter &emitter, mlir::arith::SubFOp subOp) {
+  Operation *operation = subOp.getOperation();
+  return printNaryOperation(emitter, operation, "-");
+}
+
 LogicalResult printOperation(CppEmitter &emitter, circt::comb::AddOp addOp) {
   Operation *operation = addOp.getOperation();
   return printNaryOperation(emitter, operation, "+");
@@ -1310,6 +1331,9 @@ LogicalResult CppEmitter::emitOperation(Operation &op, bool trailingSemicolon) {
       TypeSwitch<Operation *, LogicalResult>(&op)
           // Builtin ops.
           .Case<ModuleOp>([&](auto op) { return printOperation(*this, op); })
+          // Arith ops.
+          .Case<mlir::arith::AddFOp, mlir::arith::DivFOp, mlir::arith::MulFOp, mlir::arith::SubFOp>(
+              [&](auto op) { return printOperation(*this, op); })
           // Comb ops.
           .Case<circt::comb::AddOp, circt::comb::AndOp, circt::comb::ConcatOp, circt::comb::DivSOp, circt::comb::DivUOp,
                 circt::comb::ExtractOp, circt::comb::ICmpOp, circt::comb::ModSOp, circt::comb::ModUOp,
@@ -1520,6 +1544,15 @@ std::string CppEmitter::getValueNamePrefix(Value value) {
   Operation *op = value.getDefiningOp();
   if (!op)
     return "arg";
+  // Arith ops.
+  if (isa<mlir::arith::AddFOp>(op))
+    return "add";
+  if (isa<mlir::arith::DivFOp>(op))
+    return "div";
+  if (isa<mlir::arith::MulFOp>(op))
+    return "mul";
+  if (isa<mlir::arith::SubFOp>(op))
+    return "sub";
   // Comb ops.
   if (isa<circt::comb::AddOp>(op))
     return "add";
