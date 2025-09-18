@@ -942,7 +942,7 @@ LogicalResult printOperation(CppEmitter &emitter, spechls::RollbackOp rollbackOp
     os << "}\n";
 
     os.unindent();
-    os << "}\n";
+    os << "}";
   }
 
   return success();
