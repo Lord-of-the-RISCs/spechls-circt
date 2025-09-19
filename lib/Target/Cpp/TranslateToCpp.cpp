@@ -699,7 +699,7 @@ LogicalResult printOperation(CppEmitter &emitter, spechls::DelayOp delayOp) {
 
   if (failed(emitter.emitAssignPrefix(*operation)))
     return failure();
-  os << getDelayBufferName(emitter, delayOp) << "[0];";
+  os << getDelayBufferName(emitter, delayOp) << "[0]";
   return success();
 }
 
