@@ -510,10 +510,11 @@ LogicalResult printOperation(CppEmitter &emitter, spechls::KernelOp kernelOp) {
       return failure();
   }
 
-  mlir::sortTopologically(&kernelOp.getBody().front(), spechls::topologicalSortCriterion);
+  Block *body = &kernelOp.getBody().front();
+  mlir::sortTopologically(body, spechls::topologicalSortCriterion);
 
   SmallVector<spechls::DelayOp> delays;
-  for (auto &&op : kernelOp.getBody().front()) {
+  for (auto &&op : *body) {
     if (isa<spechls::ExitOp>(op)) {
       // Print delay push operations just before the end of the kernel.
       for (auto &&delay : delays) {
@@ -676,8 +677,10 @@ LogicalResult printOperation(CppEmitter &emitter, spechls::TaskOp taskOp) {
     os << "++spechls__iterations;\n";
     os.unindent();
   }
-  os.unindent();
-  os << "}";
+  if (!fifoInputs.empty() || !fifoOutputs.empty()) {
+    os.unindent();
+    os << "}\n";
+  }
   return success();
 }
 
@@ -927,17 +930,17 @@ LogicalResult printOperation(CppEmitter &emitter, spechls::RollbackOp rollbackOp
       os.unindent();
       os << "}\n";
     }
-    os << "if (";
-    if (failed(emitter.emitOperand(rollbackOp.getWriteCommand())))
-      return failure();
-    os << ") {\n";
-    os.indent();
     os << getRollbackBufferName(emitter, rollbackOp) << "[0] = ";
     if (failed(emitter.emitOperand(rollbackOp.getResult())))
       return failure();
     os << ";\n";
     os.unindent();
     os << "}\n";
+    os << "else {\n";
+    os.indent();
+    if (failed(emitter.emitOperand(rollbackOp.getResult())))
+      return failure();
+    os << " = " << getRollbackBufferName(emitter, rollbackOp) << "[0];\n";
     os.unindent();
     os << "}\n";
 
@@ -1364,9 +1367,12 @@ LogicalResult CppEmitter::emitOperation(Operation &op, bool trailingSemicolon) {
           // SpecHLS ops.
           .Case<spechls::AlphaOp, spechls::CallOp, spechls::CancelOp, spechls::CommitOp, spechls::DelayOp,
                 spechls::ExitOp, spechls::FIFOOp, spechls::FSMCommandOp, spechls::FSMOp, spechls::GammaOp,
-                spechls::KernelOp, spechls::TaskOp, spechls::LoadOp, spechls::LUTOp, spechls::PackOp, spechls::PrintOp,
-                spechls::RewindOp, spechls::RollbackOp, spechls::UnpackOp>(
-              [&](auto op) { return printOperation(*this, op); })
+                spechls::LoadOp, spechls::LUTOp, spechls::PackOp, spechls::PrintOp, spechls::RewindOp,
+                spechls::RollbackOp, spechls::UnpackOp>([&](auto op) { return printOperation(*this, op); })
+          .Case<spechls::KernelOp, spechls::TaskOp>([&](auto op) {
+            skipLineEnding = true;
+            return printOperation(*this, op);
+          })
           // Inlined operations.
           .Case<circt::hw::ConstantOp, spechls::FieldOp, spechls::MuOp, spechls::SyncOp>([&](auto op) {
             skipLineEnding = true;

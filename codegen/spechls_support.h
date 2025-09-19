@@ -144,12 +144,11 @@ T rollback(T *buffer, T value, unsigned int offset, bool next_input) {
   if (next_input) {
     for (unsigned int i = max_depth; i > 0; --i)
       buffer[i] = buffer[i - 1];
-  }
-  T result = resolve_offset<T, Depths...>(off, buffer, value);
-  if (next_input)
+    T result = resolve_offset<T, Depths...>(off, buffer, value);
     buffer[0] = result;
-
-  return result;
+    return result;
+  }
+  return buffer[0];
 }
 #endif
 
