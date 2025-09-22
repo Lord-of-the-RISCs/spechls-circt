@@ -205,12 +205,6 @@ struct FifoType {
 };
 
 template <typename T>
-struct FifoInputType {
-  bool write = false;
-  T data{};
-};
-
-template <typename T>
 void fifo_read(FifoType<T> &fifo) {
   fifo.empty = true;
   fifo.full = false;
