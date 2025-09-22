@@ -470,9 +470,10 @@ LogicalResult printOperation(CppEmitter &emitter, spechls::KernelOp kernelOp) {
   if (failed(printAllVariables(emitter, kernelOp)))
     return failure();
 
-  // Initialize variables that may hold mu-node initialization values.
+  bool hasFifos = false;
   for (auto &&op : kernelOp.getBody().front()) {
     if (auto taskOp = dyn_cast<spechls::TaskOp>(op)) {
+      // Initialize variables that may hold mu-node initialization values.
       for (auto [internal, external] : llvm::zip_equal(taskOp.getBody().getArguments(), taskOp.getArgs())) {
         if (external.getDefiningOp())
           continue;
@@ -483,6 +484,8 @@ LogicalResult printOperation(CppEmitter &emitter, spechls::KernelOp kernelOp) {
           return failure();
         os << ";\n";
       }
+    } else if (auto fifoOp = dyn_cast<spechls::FIFOOp>(op)) {
+      hasFifos = true;
     }
   }
 
@@ -513,29 +516,54 @@ LogicalResult printOperation(CppEmitter &emitter, spechls::KernelOp kernelOp) {
   mlir::sortTopologically(body, spechls::topologicalSortCriterion);
 
   SmallVector<spechls::DelayOp> delays;
-  for (auto &&op : *body) {
-    if (isa<spechls::ExitOp>(op)) {
-      // Print delay push operations just before the end of the kernel.
-      for (auto &&delay : delays) {
-        os << "delay_push<";
-        if (failed(emitter.emitType(delay.getLoc(), delay.getType())))
-          return failure();
-        os << ", " << delay.getDepth() << ">(" << getDelayBufferName(emitter, delay) << ", ";
-        if (failed(emitter.emitOperand(delay.getInput())))
-          return failure();
-        if (delay.getEnable()) {
-          os << ", ";
-          if (failed(emitter.emitOperand(delay.getEnable())))
-            return failure();
-        }
-        os << ");\n";
-      }
-    } else if (auto delayOp = dyn_cast<spechls::DelayOp>(op)) {
+  auto processOp = [&](Operation *op) {
+    // The terminator is emitted after all operations.
+    if (isa<spechls::ExitOp>(op))
+      return success();
+    // FIFOs are emitted as part of their destination task.
+    if (isa<spechls::FIFOOp>(op))
+      return success();
+
+    // Record all delay nodes.
+    if (auto delayOp = dyn_cast<spechls::DelayOp>(op)) {
       delays.push_back(delayOp);
     }
-    if (failed(emitter.emitOperation(op, true)))
+
+    if (failed(emitter.emitOperation(*op, true)))
       return failure();
+    return success();
+  };
+
+  // We assume that the presence of a FIFO implies reverse topological order for code generation.
+  if (hasFifos) {
+    for (auto op = body->rbegin(); op != body->rend(); ++op) {
+      if (failed(processOp(&*op)))
+        return failure();
+    }
+  } else {
+    for (auto op = body->begin(); op != body->end(); ++op) {
+      if (failed(processOp(&*op)))
+        return failure();
+    }
   }
+
+  // Print delay push operations just before the end of the kernel.
+  for (auto &&delay : delays) {
+    os << "delay_push<";
+    if (failed(emitter.emitType(delay.getLoc(), delay.getType())))
+      return failure();
+    os << ", " << delay.getDepth() << ">(" << getDelayBufferName(emitter, delay) << ", ";
+    if (failed(emitter.emitOperand(delay.getInput())))
+      return failure();
+    if (delay.getEnable()) {
+      os << ", ";
+      if (failed(emitter.emitOperand(delay.getEnable())))
+        return failure();
+    }
+    os << ");\n";
+  }
+  if (failed(emitter.emitOperation(*body->getTerminator(), true)))
+    return failure();
 
   if (emitter.shouldGenerateCpi())
     os << "++spechls__cycles;\n";
@@ -576,6 +604,12 @@ LogicalResult printOperation(CppEmitter &emitter, spechls::TaskOp taskOp) {
         fifoOutputs.push_back({res, fifoOp});
       }
     }
+  }
+
+  // Peek into the FIFO buffers.
+  for (auto &&fifo : fifoInputs) {
+    if (failed(emitter.emitOperation(*fifo.getOperation(), true)))
+      return failure();
   }
 
   if (!fifoInputs.empty() || !fifoOutputs.empty()) {
