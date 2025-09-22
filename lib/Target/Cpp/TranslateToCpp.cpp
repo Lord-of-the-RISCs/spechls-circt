@@ -385,12 +385,9 @@ LogicalResult printMuInitialization(CppEmitter &emitter, spechls::KernelOp kerne
 LogicalResult printOperation(CppEmitter &emitter, ModuleOp moduleOp) {
   raw_indented_ostream &os = emitter.ostream();
   os << "#include <ap_int.h>\n";
-  os << "#ifndef __SYNTHESIS__\n";
-  os << "#include <io_printf.h>\n";
-  os << "#else\n";
-  os << "#define io_printf(...)\n";
-  os << "#endif\n\n";
-  os << "#include \"spechls_support.h\"\n\n";
+  if (!emitter.shouldGenerateVitisHLSCompatibleCode())
+    os << "#include <io_printf.h>\n";
+  os << "\n#include \"spechls_support.h\"\n\n";
 
   // FIXME: Change this ugliness.
   // Compute the maximum rollback depth.
@@ -465,7 +462,9 @@ LogicalResult printOperation(CppEmitter &emitter, spechls::KernelOp kernelOp) {
   os << "void " << kernelOp.getName() << "(";
   if (failed(printFunctionArgs(emitter, op, kernelOp.getArguments(), true)))
     return failure();
-  os << ") {\n#pragma HLS inline recursive\n";
+  os << ") {\n";
+  if (emitter.shouldGenerateVitisHLSCompatibleCode())
+    os << "#pragma HLS inline recursive\n";
   os.indent();
 
   if (failed(printAllVariables(emitter, kernelOp)))
