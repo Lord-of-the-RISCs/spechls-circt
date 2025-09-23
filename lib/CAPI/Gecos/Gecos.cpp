@@ -8,6 +8,8 @@
 #include "CAPI/Dialect/Schedule.h"
 #include "CAPI/Dialect/SpecHLS.h"
 #include "Dialect/Schedule/Transforms/Passes.h" // IWYU pragma: keep
+#include "Dialect/SpecHLS/IR/SpecHLSTypes.h"
+#include "mlir/Transforms/Passes.h"
 
 #include <circt-c/Dialect/Comb.h>
 #include <circt-c/Dialect/HW.h>
@@ -88,4 +90,52 @@ void destroyMLIR(MlirModule module) {
 DEFINE_GECOS_API_PASS(configurationExcluderMLIR, schedule, ConfigurationExcluderPass)
 DEFINE_GECOS_API_PASS(mobilityMLIR, schedule, MobilityPass)
 DEFINE_GECOS_API_PASS(scheduleMLIR, schedule, SchedulePass)
+
+
+bool mlirTypeIsSpechlsArrayType(MlirType type) {
+  return mlir::isa<spechls::ArrayType>(unwrap(type));
+}
+
+int spechlsArrayTypeGetSize(MlirType type) {
+  return mlir::dyn_cast<spechls::ArrayType>(unwrap(type)).getSize();
+}
+
+MlirType spechlsArrayTypeGetElementType(MlirType type) {
+  return wrap(mlir::dyn_cast<spechls::ArrayType>(unwrap(type)).getElementType());
+}
+
+bool mlirTypeIsSpechlsStructType(MlirType type) {
+  return mlir::isa<spechls::StructType>(unwrap(type));
+}
+
+MlirStringRef mlirStructTypeGetName(MlirType type) {
+  return wrap(mlir::dyn_cast<spechls::StructType>(unwrap(type)).getName());
+}
+
+int mlirStructTypeGetNumFields(MlirType type) {
+  return mlir::dyn_cast<spechls::StructType>(unwrap(type)).getFieldNames().size();
+}
+
+const char *mlirStructTypeGetFieldName(MlirType type, int id) {
+  return mlir::dyn_cast<spechls::StructType>(unwrap(type)).getFieldNames()[id].c_str();
+}
+
+MlirType mlirStructTypeGetFieldType(MlirType type, int id) {
+  return wrap(mlir::dyn_cast<spechls::StructType>(unwrap(type)).getFieldTypes()[id]);
+}
+
+bool mlirModuleCanonicalize(MlirModule module) {
+  auto mod = unwrap(module);
+  auto pm = mlir::PassManager::on<mlir::ModuleOp>(mod->getContext());
+  pm.addPass(mlir::createCanonicalizerPass());
+  return failed(pm.run(mod));
+}
+
+bool mlirModuleCse(MlirModule module) {
+  auto mod = unwrap(module);
+  auto pm = mlir::PassManager::on<mlir::ModuleOp>(mod->getContext());
+  pm.addPass(mlir::createCSEPass());
+  return failed(pm.run(mod));
+}
+
 }
