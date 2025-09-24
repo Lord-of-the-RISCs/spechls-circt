@@ -40,6 +40,12 @@ class SpecHLSType<string name, string typeMnemonic, list<Trait> traits = []>
 }
 
 //===--------------------------------------------------------------------------------------------------------------===//
+// Attributes
+//===--------------------------------------------------------------------------------------------------------------===//
+
+def I64ArrayArrayAttr : TypedArrayAttrBase<I64ArrayAttr, "Array of 64-bit integer dense arrays attribute">;
+
+//===--------------------------------------------------------------------------------------------------------------===//
 // Types
 //===--------------------------------------------------------------------------------------------------------------===//
 
@@ -342,16 +348,21 @@ def SpecHLS_FieldOp : SpecHLSOp<"field", [Pure, DeclareOpInterfaceMethods<InferT
 }
 
 def SpecHLS_FSMOp : SpecHLSOp<"fsm",
-        [TypesMatchWith<"State input and output types must match", "state", "result", "$_self">]> {
+        [TypesMatchWith<"State input and output types must match", "state", "result", "$_self">,
+         SameVariadicOperandSize]> {
     let arguments = (ins
         StrAttr:$name,
+        StrArrayAttr:$gammaNames,
+        DenseI64ArrayAttr:$condDelays,
+        I64ArrayArrayAttr:$inputDelays,
         SpecHLS_StructType:$mispec,
         SpecHLS_StructType:$state
     );
     let results = (outs SpecHLS_StructType:$result);
 
     let assemblyFormat = [{
-        $name `,` $mispec `,` $state attr-dict `:` type($mispec) `,` type($state)
+        $name `<` $gammaNames `>` $condDelays $inputDelays `,` $mispec `,` $state attr-dict
+            `:` type($mispec) `,` type($state)
     }];
 }
 
