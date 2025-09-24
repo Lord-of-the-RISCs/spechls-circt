@@ -91,22 +91,15 @@ DEFINE_GECOS_API_PASS(configurationExcluderMLIR, schedule, ConfigurationExcluder
 DEFINE_GECOS_API_PASS(mobilityMLIR, schedule, MobilityPass)
 DEFINE_GECOS_API_PASS(scheduleMLIR, schedule, SchedulePass)
 
+bool mlirTypeIsSpechlsArrayType(MlirType type) { return mlir::isa<spechls::ArrayType>(unwrap(type)); }
 
-bool mlirTypeIsSpechlsArrayType(MlirType type) {
-  return mlir::isa<spechls::ArrayType>(unwrap(type));
-}
-
-int spechlsArrayTypeGetSize(MlirType type) {
-  return mlir::dyn_cast<spechls::ArrayType>(unwrap(type)).getSize();
-}
+int spechlsArrayTypeGetSize(MlirType type) { return mlir::dyn_cast<spechls::ArrayType>(unwrap(type)).getSize(); }
 
 MlirType spechlsArrayTypeGetElementType(MlirType type) {
   return wrap(mlir::dyn_cast<spechls::ArrayType>(unwrap(type)).getElementType());
 }
 
-bool mlirTypeIsSpechlsStructType(MlirType type) {
-  return mlir::isa<spechls::StructType>(unwrap(type));
-}
+bool mlirTypeIsSpechlsStructType(MlirType type) { return mlir::isa<spechls::StructType>(unwrap(type)); }
 
 MlirStringRef mlirStructTypeGetName(MlirType type) {
   return wrap(mlir::dyn_cast<spechls::StructType>(unwrap(type)).getName());
@@ -137,5 +130,4 @@ bool mlirModuleCse(MlirModule module) {
   pm.addPass(mlir::createCSEPass());
   return failed(pm.run(mod));
 }
-
 }
