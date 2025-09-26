@@ -26,6 +26,7 @@
 
 namespace spechls {
 #define GEN_PASS_DEF_SPECHLSTOHWPASS
+#define GEN_PASS_DEF_SPECHLSTASKTOHWPASS
 #include "Conversion/SpecHLS/Passes.h.inc"
 }; // namespace spechls
 
@@ -112,7 +113,32 @@ struct GammaConversion : OpConversionPattern<spechls::GammaOp> {
 
     // See https://circt.llvm.org/docs/Dialects/Comb/RationaleComb/#no-multibit-mux-operations
     auto array = rewriter.create<circt::hw::ArrayCreateOp>(gamma.getLoc(), gamma.getInputs());
-    rewriter.replaceOpWithNewOp<circt::hw::ArrayGetOp>(gamma, array, gamma.getSelect());
+    auto select = gamma.getSelect();
+    auto selectType = rewriter.getIntegerType(select.getType().getWidth());
+    auto castedSelect = rewriter.create<circt::hw::BitcastOp>(select.getLoc(), selectType, select);
+    rewriter.replaceOpWithNewOp<circt::hw::ArrayGetOp>(gamma, array, castedSelect);
+    return success();
+  }
+};
+
+struct LutConversion : OpConversionPattern<spechls::LUTOp> {
+  using OpConversionPattern<spechls::LUTOp>::OpConversionPattern;
+
+  LogicalResult matchAndRewrite(spechls::LUTOp lut, OpAdaptor adaptor,
+                                ConversionPatternRewriter &rewriter) const override {
+    llvm::SmallVector<Value> inputs;
+    auto outputType = lut.getResult().getType();
+    auto signlessType = rewriter.getIntegerType(outputType.getWidth());
+    for (auto index : lut.getContents()) {
+      auto cst = rewriter.create<circt::hw::ConstantOp>(lut.getLoc(), rewriter.getIntegerAttr(signlessType, index));
+      inputs.push_back(cst.getResult());
+    }
+    auto array = rewriter.create<circt::hw::ArrayCreateOp>(lut.getLoc(), inputs);
+    auto index = lut.getIndex();
+    auto indexSignlessType = rewriter.getIntegerType(index.getType().getWidth());
+    auto castedIndex = rewriter.create<circt::hw::BitcastOp>(index.getLoc(), indexSignlessType, index);
+    auto get = rewriter.create<circt::hw::ArrayGetOp>(lut.getLoc(), array, castedIndex);
+    rewriter.replaceOpWithNewOp<circt::hw::BitcastOp>(lut, outputType, get);
     return success();
   }
 };
@@ -127,6 +153,32 @@ struct ConvertSpecHLSToHWPass : public spechls::impl::SpecHLSToHWPassBase<Conver
     patternList.add<KernelConversion>(ctx);
     patternList.add<TaskConversion>(ctx);
     patternList.add<GammaConversion>(ctx);
+    patternList.add<LutConversion>(ctx);
+    patterns = std::move(patternList);
+    return success();
+  }
+
+  void runOnOperation() override {
+    ConversionTarget target(getContext());
+    target.addLegalDialect<circt::hw::HWDialect>();
+    target.addLegalDialect<circt::comb::CombDialect>();
+    target.addIllegalDialect<spechls::SpecHLSDialect>();
+
+    if (failed(mlir::applyFullConversion(getOperation(), target, patterns)))
+      return signalPassFailure();
+  }
+};
+
+struct ConvertSpecHLSTaskToHWPass : public spechls::impl::SpecHLSTaskToHWPassBase<ConvertSpecHLSTaskToHWPass> {
+  FrozenRewritePatternSet patterns;
+
+  using SpecHLSTaskToHWPassBase<ConvertSpecHLSTaskToHWPass>::SpecHLSTaskToHWPassBase;
+
+  LogicalResult initialize(MLIRContext *ctx) override {
+    RewritePatternSet patternList{ctx};
+    patternList.add<TaskConversion>(ctx);
+    patternList.add<GammaConversion>(ctx);
+    patternList.add<LutConversion>(ctx);
     patterns = std::move(patternList);
     return success();
   }
