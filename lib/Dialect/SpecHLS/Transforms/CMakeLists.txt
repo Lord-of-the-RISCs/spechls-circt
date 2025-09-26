@@ -12,6 +12,7 @@ add_circt_dialect_library(SpecHLSTransforms
     Outlining.cpp
     SimplifyLUTs.cpp
     SimplifyGammas.cpp
+    OptimizeControlLogic.cpp
 
     DEPENDS
     SpecHLSTransformsIncGen

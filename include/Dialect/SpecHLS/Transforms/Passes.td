@@ -24,4 +24,19 @@ def SimplifyLUTsPass : Pass<"simplify-luts", "ModuleOp"> {
   ];
 }
 
+def OptimizeControlLogicPass: Pass<"optimize-control-logic", "ModuleOp"> {
+  let summary = "Optimize control logic of gammas.";
+  let dependentDialects = ["::spechls::SpecHLSDialect", "::circt::hw::HWDialect",
+    "::circt::comb::CombDialect", "::circt::sv::SVDialect",
+    "::circt::llhd::LLHDDialect", "::mlir::cf::ControlFlowDialect",
+    "::mlir::scf::SCFDialect",
+    "::mlir::math::MathDialect",
+    "::circt::sim::SimDialect",
+    "::circt::verif::VerifDialect",
+    "::circt::moore::MooreDialect",
+    "::mlir::func::FuncDialect",
+    "::circt::ltl::LTLDialect",
+    "::circt::debug::DebugDialect"];
+}
+
 #endif // SPECHLS_INCLUDED_DIALECT_SPECHLS_TRANSFORMS_PASSES_TD
