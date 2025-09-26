@@ -2,9 +2,9 @@ cmake_minimum_required(VERSION 3.13.4)
 
 # CMP0116: Ninja generators transform `DEPFILE`s from `add_custom_command()`
 # New in CMake 3.20. https://cmake.org/cmake/help/latest/policy/CMP0116.html
-if (POLICY CMP0116)
+if(POLICY CMP0116)
   cmake_policy(SET CMP0116 OLD)
-endif ()
+endif()
 
 project(SpecHLS-dialect LANGUAGES CXX C)
 
@@ -15,6 +15,16 @@ list(APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake/modules")
 find_package(MLIR REQUIRED CONFIG)
 find_package(CIRCT REQUIRED CONFIG)
 find_package(Yosys REQUIRED)
+
+
+# This rpath is used because yosys .so path would not be kept by the install process
+set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
+set(CMAKE_INSTALL_RPATH "${CMAKE_INSTALL_RPATH};${CMAKE_INSTALL_PREFIX}/lib/yosys")
+find_library(YOSYS_LIB
+  NAMES yosys
+  PATHS "${CMAKE_INSTALL_PREFIX}/lib/yosys"
+  REQUIRED
+)
 
 message(STATUS "Using MLIRConfig.cmake in: ${MLIR_DIR}")
 message(STATUS "Using LLVMConfig.cmake in: ${LLVM_DIR}")
@@ -36,9 +46,9 @@ macro(set_alternate_linker linker)
 endmacro()
 
 set(USE_ALTERNATE_LINKER "" CACHE STRING "Use alternate linker. Leave empty for system default; alternatives are 'gold', 'lld', 'bfd' or 'mold'")
-if (NOT "${USE_ALTERNATE_LINKER}" STREQUAL "")
+if(NOT "${USE_ALTERNATE_LINKER}" STREQUAL "")
   set_alternate_linker("${USE_ALTERNATE_LINKER}")
-endif ()
+endif()
 
 # Set output directories to lib for libraries, and bin for binaries
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
