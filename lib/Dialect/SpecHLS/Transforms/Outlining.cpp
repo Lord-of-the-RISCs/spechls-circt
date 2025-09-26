@@ -8,13 +8,89 @@
 #include "Dialect/SpecHLS/Transforms/Outlining.h"
 #include "Dialect/SpecHLS/IR/SpecHLSOps.h"
 #include "Dialect/SpecHLS/IR/SpecHLSTypes.h"
+#include "mlir/Support/LLVM.h"
 
 #include <circt/Dialect/HW/HWOps.h>
 #include <llvm/ADT/STLExtras.h>
 
 using namespace mlir;
 
-spechls::TaskOp spechls::outlineTask(RewriterBase &rewriter, Location loc, StringRef name,
+spechls::TaskOp spechls::outlineControl(RewriterBase &rewriter, Location loc, std::string name,
+                                        DenseSet<Operation *> &ops, Value output) {
+  auto ip = rewriter.saveInsertionPoint();
+  SmallVector<Value> inputs;
+  DenseMap<Operation *, Operation *> cloneMap;
+
+  SmallVector<Operation *> toAdd, interfaceCast;
+
+  for (auto &&op : ops) {
+    for (size_t i = 0; i < op->getNumOperands(); ++i) {
+      auto &&operand = op->getOperand(i);
+      auto *operation = operand.getDefiningOp();
+      if (!ops.contains(operation)) {
+        auto operandType = llvm::dyn_cast<IntegerType>(operand.getType());
+        auto signlessType = rewriter.getIntegerType(operandType.getWidth());
+        auto outCast = rewriter.create<circt::hw::BitcastOp>(operand.getLoc(), signlessType, operand);
+        outCast->setAttr("out", rewriter.getUnitAttr());
+        auto inCast = rewriter.create<circt::hw::BitcastOp>(operand.getLoc(), operandType, outCast.getResult());
+        inCast->setAttr("out", rewriter.getUnitAttr());
+        op->setOperand(i, inCast.getResult());
+        toAdd.push_back(inCast.getOperation());
+        inputs.push_back(inCast.getOperand());
+      }
+    }
+  }
+  ops.insert_range(toAdd);
+
+  Type returnType = output.getType();
+  auto task = rewriter.create<spechls::TaskOp>(loc, returnType, name, inputs);
+  Block &body = task.getBody().front();
+  for (auto &&op : ops) {
+    rewriter.setInsertionPointToEnd(&body);
+    auto *cloned = rewriter.clone(*op);
+    cloneMap.try_emplace(op, cloned);
+  }
+
+  for (size_t i = 0; i < inputs.size(); ++i) {
+    for (auto &&op : ops) {
+      for (size_t j = 0; j < op->getNumOperands(); ++j) {
+        if (op->getOperand(j) == inputs[i]) {
+          cloneMap[op]->setOperand(j, body.getArgument(i));
+        }
+      }
+    }
+  }
+
+  for (auto &&op : ops) {
+    for (size_t i = 0; i < op->getNumOperands(); ++i) {
+      auto operand = op->getOperand(i);
+      auto *operandOperation = operand.getDefiningOp();
+      if (ops.contains(operandOperation)) {
+        for (size_t j = 0; j < operandOperation->getNumResults(); ++j)
+          if (operandOperation->getResult(j) == operand) {
+            cloneMap[op]->setOperand(i, cloneMap[operandOperation]->getResult(j));
+            break;
+          }
+      }
+    }
+  }
+
+  output.replaceAllUsesWith(task.getResult());
+
+  rewriter.setInsertionPointToEnd(&body);
+  auto enable = rewriter.create<circt::hw::ConstantOp>(loc, rewriter.getI1Type(), 1);
+
+  Operation *outputParent = output.getDefiningOp();
+  for (size_t i = 0; i < outputParent->getNumResults(); ++i) {
+    if (outputParent->getResult(i) == output) {
+      rewriter.create<spechls::CommitOp>(loc, enable, cloneMap[outputParent]->getResult(i));
+    }
+  }
+  rewriter.restoreInsertionPoint(ip);
+  return task;
+}
+
+spechls::TaskOp spechls::outlineTask(RewriterBase &rewriter, Location loc, std::string name,
                                      const SmallPtrSetImpl<Operation *> &ops) {
   SmallVector<Value> inputs;
   SmallVector<Value> outputs;
@@ -45,8 +121,7 @@ spechls::TaskOp spechls::outlineTask(RewriterBase &rewriter, Location loc, Strin
       fieldNames.push_back("commit_" + std::to_string(i));
       fieldTypes.push_back(outputs[i].getType());
     }
-    returnType = rewriter.getType<spechls::StructType>((name + std::string{"_result"}).getSingleStringRef(), fieldNames,
-                                                       fieldTypes);
+    returnType = rewriter.getType<spechls::StructType>((name + std::string{"_result"}), fieldNames, fieldTypes);
   }
 
   // Move operations into the task's body.

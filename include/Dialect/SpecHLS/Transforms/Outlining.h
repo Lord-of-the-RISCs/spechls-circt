@@ -17,7 +17,10 @@
 
 namespace spechls {
 
-TaskOp outlineTask(mlir::RewriterBase &rewriter, mlir::Location loc, mlir::StringRef name,
+TaskOp outlineControl(mlir::RewriterBase &rewriter, mlir::Location loc, std::string name,
+                      llvm::DenseSet<mlir::Operation *> &ops, mlir::Value output);
+
+TaskOp outlineTask(mlir::RewriterBase &rewriter, mlir::Location loc, std::string name,
                    const mlir::SmallPtrSetImpl<mlir::Operation *> &ops);
 
 } // namespace spechls
