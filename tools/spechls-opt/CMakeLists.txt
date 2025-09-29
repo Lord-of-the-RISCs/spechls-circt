@@ -10,7 +10,7 @@ target_link_libraries(spechls-opt PRIVATE
     MLIR
     CIRCT
 
-    ${YOSYS_LIB}
+    Yosys::Yosys
 )
 install(TARGETS spechls-opt DESTINATION bin)
 set_property(TARGET spechls-opt PROPERTY INSTALL_RPATH "$ORIGIN/../lib")

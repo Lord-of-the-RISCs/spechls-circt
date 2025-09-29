@@ -16,15 +16,7 @@ find_package(MLIR REQUIRED CONFIG)
 find_package(CIRCT REQUIRED CONFIG)
 find_package(Yosys REQUIRED)
 
-
-# This rpath is used because yosys .so path would not be kept by the install process
-set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
-set(CMAKE_INSTALL_RPATH "${CMAKE_INSTALL_RPATH};${CMAKE_INSTALL_PREFIX}/lib/yosys")
-find_library(YOSYS_LIB
-  NAMES yosys
-  PATHS "${CMAKE_INSTALL_PREFIX}/lib/yosys"
-  REQUIRED
-)
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DYOSYS_PATH=\\\"${Yosys_INCLUDE_DIR}\\\"")
 
 message(STATUS "Using MLIRConfig.cmake in: ${MLIR_DIR}")
 message(STATUS "Using LLVMConfig.cmake in: ${LLVM_DIR}")
