@@ -154,10 +154,15 @@ void OptimizeControlLogicPass::runOnOperation() {
     std::istringstream inputStream(verilog);
     Yosys::Frontend::frontend_call(design, &inputStream, "", "verilog -sv");
 
+    std::string yosysAbc = "";
+    yosysAbc += YOSYS_PATH;
+    yosysAbc += "/yosys-abc";
+    Yosys::yosys_abc_executable = yosysAbc;
+
     Yosys::Pass::call(design, "proc");
     Yosys::Pass::call(design, "flatten");
     Yosys::Pass::call(design, "opt -full");
-    //  Yosys::Pass::call(design, "synth");
+    Yosys::Pass::call(design, "synth");
     Yosys::Pass::call(design, "abc -g AND,OR,XOR");
     std::ostringstream outputStream;
 
