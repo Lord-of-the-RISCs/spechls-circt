@@ -1,0 +1,21 @@
+//
+// This file is part of the SpecHLS project.
+// This file is licensed under the Apache license v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
+//
+
+#include "circt/Dialect/HW/HW.td"
+#include "Dialect/SpecHLS/IR/SpecHLS.td"
+
+Rewrite Rebranch(root: Op) -> Op;
+
+Constraint HasAlphaProducers(arr: Value) [{
+  return mlir::success(mlir::isa_and_nonnull<spechls::AlphaOp>(arr.getDefiningOp()));
+}];
+
+Pattern RemoveRAW {
+    let root = op<spechls.load>(op<spechls.alpha>, idx: Value);
+    //HasAlphaProducers(arr);
+    replace root with Rebranch(root); 
+  }
