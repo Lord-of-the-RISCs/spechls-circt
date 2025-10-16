@@ -6,6 +6,7 @@
 //
 
 #include "circt/Dialect/HW/HW.td"
+#include "circt/Dialect/Comb/Comb.td"
 #include "Dialect/SpecHLS/IR/SpecHLS.td"
 
 Rewrite Rebranch(root: Op) -> Op;

@@ -26,7 +26,7 @@ def SimplifyLUTsPass : Pass<"simplify-luts", "ModuleOp"> {
 
 def RemoveIntraRAWPass : Pass<"remove-intra-raw", "ModuleOp"> {
   let summary = "Remove intra-iteration RAW dependencies";
-  let dependentDialects = ["::spechls::SpecHLSDialect", "::circt::hw::HWDialect", "::mlir::pdl::PDLDialect",
+  let dependentDialects = ["::spechls::SpecHLSDialect", "::circt::comb::CombDialect", "::circt::hw::HWDialect", "::mlir::pdl::PDLDialect",
       "::mlir::pdl_interp::PDLInterpDialect",];
 }
 

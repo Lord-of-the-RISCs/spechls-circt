@@ -6,6 +6,8 @@ spechls.kernel @simple(%val: i32, %idx: i4, %array : !spechls.array<i32, 16>) ->
   %mu = spechls.mu<"arr">(%array, %next_array) : !spechls.array<i32, 16>
   %next_array = spechls.alpha %mu[%idx : i4], %val if %true : !spechls.array<i32, 16>
   // CHECK: %1 = spechls.load %mu[%arg1 : i4] : <i32, 16>
+  // CHECK: %gamma = spechls.gamma<"aliasDetection">(%true, %1, %arg0) : i1, i32
+  // CHECK: spechls.exit if %true with %gamma : i32
   %result = spechls.load %next_array [%idx : i4] : !spechls.array<i32, 16>
   spechls.exit if %true with %result : i32
 }
@@ -20,6 +22,10 @@ spechls.kernel @chainedAlphas(%val1: i32, %idx1: i32, %val2 : i32, %idx2: i32,
   %first_write = spechls.alpha %mu[%idx1 : i32], %val1 if %true : !spechls.array<i32, 16>
   %next_array = spechls.alpha %first_write[%idx2 : i32], %val2 if %true : !spechls.array<i32, 16>
   // CHECK: %2 = spechls.load %mu[%arg1 : i32] : <i32, 16>
+  // CHECK: %gamma = spechls.gamma<"aliasDetection">(%true, %2, %arg0) : i1, i32
+  // CHECK: %3 = comb.icmp eq %arg1, %arg3 : i32
+  // CHECK: %gamma_0 = spechls.gamma<"aliasDetection">(%3, %gamma, %arg2) : i1, i32
+  // CHECK: spechls.exit if %true with %gamma_0 : i32
   %result = spechls.load %next_array[%idx1 : i32] : !spechls.array<i32, 16>
   spechls.exit if %true with %result : i32
 }
@@ -31,6 +37,8 @@ spechls.kernel @outsideArray(%val: i32, %idx: i4, %arr2 : !spechls.array<i32, 16
   %true = hw.constant 1 : i1
   %next_array = spechls.alpha %arr2[%idx : i4], %val if %true : !spechls.array<i32, 16>
   // CHECK: %1 = spechls.load %arg2[%arg1 : i4] : <i32, 16>
+  // CHECK: %gamma = spechls.gamma<"aliasDetection">(%true, %1, %arg0) : i1, i32
+  // CHECK: spechls.exit if %true with %gamma : i32
   %result = spechls.load %next_array[%idx : i4] : !spechls.array<i32, 16>
   spechls.exit if %true with %result : i32
 }

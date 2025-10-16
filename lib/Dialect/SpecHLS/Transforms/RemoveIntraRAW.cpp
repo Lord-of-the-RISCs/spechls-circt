@@ -1,3 +1,5 @@
+#include "circt/Dialect/Comb/CombDialect.h"
+#include <circt/Dialect/Comb/CombOps.h>
 #include <circt/Dialect/HW/HWOps.h>
 #include <mlir/Dialect/PDL/IR/PDL.h>
 #include <mlir/Dialect/PDLInterp/IR/PDLInterp.h>
@@ -46,8 +48,19 @@ struct RemoveIntraRAWPass : public spechls::impl::RemoveIntraRAWPassBase<RemoveI
 private:
   static Operation *rebranchImpl(PatternRewriter &rewritter, Operation *op) {
     auto root = cast<spechls::LoadOp>(op);
-    auto arr = root.getArray().getDefiningOp<spechls::AlphaOp>().getArray();
-    auto newLoad = rewritter.create<spechls::LoadOp>(rewritter.getUnknownLoc(), root.getType(), arr, root.getIndex());
+    auto alpha = root.getArray().getDefiningOp<spechls::AlphaOp>();
+    auto newLoad =
+        rewritter.create<spechls::LoadOp>(rewritter.getUnknownLoc(), root.getType(), alpha.getArray(), root.getIndex());
+    auto aliasCheck =
+        rewritter.create<circt::comb::ICmpOp>(rewritter.getUnknownLoc(), rewritter.getI1Type(),
+                                              circt::comb::ICmpPredicate::eq, root.getIndex(), alpha.getIndex());
+    SmallVector<Value> inputs;
+    inputs.push_back(newLoad.getResult());
+    inputs.push_back(alpha.getValue());
+    auto gamma =
+        rewritter.create<spechls::GammaOp>(rewritter.getUnknownLoc(), root.getType(),
+                                           rewritter.getStringAttr("aliasDetection"), aliasCheck.getResult(), inputs);
+    rewritter.replaceAllOpUsesWith(root, gamma);
     return newLoad;
   }
 };
