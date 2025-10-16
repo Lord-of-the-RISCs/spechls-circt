@@ -8,16 +8,23 @@ add_mlir_pdll_library(SpecHLSSimplifyLUTsPatternsIncGen
     SimplifyLUTs.h.inc
 )
 
+add_mlir_pdll_library(SpecHLSRemoveIntraRAWPatternsIncGen
+  RemoveIntraRAW.pdll
+  RemoveIntraRAW.h.inc
+)
+
 add_circt_dialect_library(SpecHLSTransforms
     Outlining.cpp
     SimplifyLUTs.cpp
     SimplifyGammas.cpp
     OptimizeControlLogic.cpp
+    RemoveIntraRAW.cpp
 
     DEPENDS
     SpecHLSTransformsIncGen
     SpecHLSSimplifyLUTsPatternsIncGen
     SpecHLSSimplifyGammasPatternsIncGen
+    SpecHLSRemoveIntraRAWPatternsIncGen
 )
 target_include_directories(SpecHLSTransforms
     PRIVATE
