@@ -8,4 +8,14 @@
 #include "circt/Dialect/HW/HW.td"
 #include "Dialect/SpecHLS/IR/SpecHLS.td"
 
+Rewrite Rebranch(root: Op) -> Op;
 
+Constraint HasAlphaProducers(arr: Value) [{
+  return mlir::success(mlir::isa_and_nonnull<spechls::AlphaOp>(arr.getDefiningOp()));
+}];
+
+Pattern RemoveRAW {
+    let root = op<spechls.load>(op<spechls.alpha>, idx: Value);
+    //HasAlphaProducers(arr);
+    replace root with Rebranch(root); 
+  }
