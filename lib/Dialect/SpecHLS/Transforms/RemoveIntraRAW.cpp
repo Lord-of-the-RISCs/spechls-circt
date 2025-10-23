@@ -55,12 +55,14 @@ private:
     auto aliasCheck =
         rewritter.create<circt::comb::ICmpOp>(rewritter.getUnknownLoc(), rewritter.getI1Type(),
                                               circt::comb::ICmpPredicate::eq, root.getIndex(), alpha.getIndex());
+    auto gammaCtrl =
+        rewritter.create<circt::comb::AndOp>(rewritter.getUnknownLoc(), alpha.getWe(), aliasCheck.getResult());
     SmallVector<Value> inputs;
     inputs.push_back(newLoad.getResult());
     inputs.push_back(alpha.getValue());
     auto gamma =
         rewritter.create<spechls::GammaOp>(rewritter.getUnknownLoc(), root.getType(),
-                                           rewritter.getStringAttr("aliasDetection"), aliasCheck.getResult(), inputs);
+                                           rewritter.getStringAttr("aliasDetection"), gammaCtrl.getResult(), inputs);
     rewritter.replaceAllOpUsesWith(root, gamma);
     return newLoad;
   }
