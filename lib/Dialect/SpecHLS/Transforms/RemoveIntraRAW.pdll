@@ -9,14 +9,16 @@
 #include "circt/Dialect/Comb/Comb.td"
 #include "Dialect/SpecHLS/IR/SpecHLS.td"
 
-Rewrite Rebranch(root: Op) -> Op;
+Rewrite ThroughAlpha(root: Op) -> Op;
 
-Constraint HasAlphaProducers(arr: Value) [{
-  return mlir::success(mlir::isa_and_nonnull<spechls::AlphaOp>(arr.getDefiningOp()));
-}];
-
-Pattern RemoveRAW {
+Pattern GoThroughAlpha {
     let root = op<spechls.load>(op<spechls.alpha>, idx: Value);
-    //HasAlphaProducers(arr);
-    replace root with Rebranch(root); 
+    replace root with ThroughAlpha(root); 
+}
+
+Rewrite ThroughGamma(root: Op) -> Op;
+
+Pattern GoThroughGamma {
+    let root = op<spechls.load>(op<spechls.gamma>, _:Value);
+    replace root with ThroughGamma(root);
   }
