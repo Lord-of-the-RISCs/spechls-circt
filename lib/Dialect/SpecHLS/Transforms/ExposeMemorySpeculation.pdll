@@ -1,0 +1,24 @@
+//
+// This file is part of the SpecHLS project.
+// This file is licensed under Apache license v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
+//
+
+#include "circt/Dialect/HW/HW.td"
+#include "circt/Dialect/Comb/Comb.td"
+#include "Dialect/SpecHLS/IR/SpecHLS.td"
+
+
+Rewrite ExposeMemorySpeculation(root: Op) -> Op;
+
+Constraint HasDependenciesDistances(root : Op) [{
+    return mlir::success(root->getDiscardableAttr("dependenciesDistances"));
+  }];
+
+
+Pattern MemorySpeculation {
+    let root = op<spechls.mu>(_:Value, op<spechls.alpha>);
+    HasDependenciesDistances(root);
+    replace root with ExposeMemorySpeculation(root);
+  }

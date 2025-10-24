@@ -30,6 +30,12 @@ def RemoveIntraRAWPass : Pass<"remove-intra-raw", "ModuleOp"> {
       "::mlir::pdl_interp::PDLInterpDialect",];
 }
 
+def ExposeMemorySpeculationPass : Pass<"expose-memory-speculation", "ModuleOp"> {
+    let summary = "";
+    let dependentDialects = ["::spechls::SpecHLSDialect", "::circt::comb::CombDialect", "::circt::hw::HWDialect", "::mlir::pdl::PDLDialect", 
+    "::mlir::pdl_interp::PDLInterpDialect"];
+}
+
 def OptimizeControlLogicPass: Pass<"optimize-control-logic", "ModuleOp"> {
   let summary = "Optimize control logic of gammas.";
   let dependentDialects = ["::spechls::SpecHLSDialect", "::circt::hw::HWDialect",
