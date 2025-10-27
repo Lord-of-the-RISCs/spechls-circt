@@ -45,4 +45,11 @@ def OptimizeControlLogicPass: Pass<"optimize-control-logic", "ModuleOp"> {
     "::circt::debug::DebugDialect"];
 }
 
+def SpecHLSTopoSortPass: Pass<"spechls-toposort", "ModuleOp"> {
+  let summary = "Call toposort on kernel and tasks.";
+  let dependentDialects = ["::spechls::SpecHLSDialect", "::circt::hw::HWDialect", "::circt::comb::CombDialect"];
+}
+
+}
+
 #endif // SPECHLS_INCLUDED_DIALECT_SPECHLS_TRANSFORMS_PASSES_TD
