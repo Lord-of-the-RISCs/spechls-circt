@@ -8,10 +8,10 @@
 #include "Dialect/SpecHLS/Transforms/Outlining.h"
 #include "Dialect/SpecHLS/IR/SpecHLSOps.h"
 #include "Dialect/SpecHLS/IR/SpecHLSTypes.h"
-#include "mlir/Support/LLVM.h"
 
 #include <circt/Dialect/HW/HWOps.h>
 #include <llvm/ADT/STLExtras.h>
+#include <mlir/Support/LLVM.h>
 
 using namespace mlir;
 
@@ -98,7 +98,15 @@ spechls::TaskOp spechls::outlineTask(RewriterBase &rewriter, Location loc, std::
   for (auto &&op : ops) {
     for (auto &&operand : op->getOperands()) {
       if (!ops.contains(operand.getDefiningOp())) {
-        inputs.push_back(operand);
+        bool needInsert = true;
+        for (auto &in : inputs) {
+          if (in == operand) {
+            needInsert = false;
+            break;
+          }
+        }
+        if (needInsert)
+          inputs.push_back(operand);
       }
     }
     for (auto &&result : op->getResults()) {

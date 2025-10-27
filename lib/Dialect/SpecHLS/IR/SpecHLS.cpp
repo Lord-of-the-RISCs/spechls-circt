@@ -277,8 +277,8 @@ void spechls::GammaOp::print(OpAsmPrinter &printer) {
   auto select = getSelect();
   auto inputs = getInputs();
 
-  printer << "<\"" << getSymName() << "\">(" << select << ", " << inputs << ") : " << select.getType() << ", "
-          << inputs.front().getType();
+  printer << "<\"" << getSymName() << "\">(" << select << ", " << inputs << ") "
+          << (*this)->getDiscardableAttrDictionary() << ": " << select.getType() << ", " << inputs.front().getType();
 }
 
 LogicalResult spechls::GammaOp::verify() {
@@ -328,7 +328,7 @@ ParseResult spechls::MuOp::parse(OpAsmParser &parser, OperationState &result) {
 
 void spechls::MuOp::print(OpAsmPrinter &printer) {
   printer << "<\"" << getSymName() << "\">(" << getInitValue() << ", " << getLoopValue() << ") "
-          << (*this)->getAttrDictionary() << " : " << getInitValue().getType();
+          << (*this)->getDiscardableAttrDictionary() << ": " << getInitValue().getType();
 }
 
 CallInterfaceCallable spechls::CallOp::getCallableForCallee() {

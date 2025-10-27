@@ -9,8 +9,8 @@ add_mlir_pdll_library(SpecHLSSimplifyLUTsPatternsIncGen
 )
 
 add_mlir_pdll_library(SpecHLSRemoveIntraRAWPatternsIncGen
-  RemoveIntraRAW.pdll
-  RemoveIntraRAW.h.inc
+    RemoveIntraRAW.pdll
+    RemoveIntraRAW.h.inc
 )
 
 add_mlir_pdll_library(SpecHLSExposeMemorySpeculationPatternsIncGen
@@ -20,11 +20,14 @@ add_mlir_pdll_library(SpecHLSExposeMemorySpeculationPatternsIncGen
 
 add_circt_dialect_library(SpecHLSTransforms
     Outlining.cpp
+    YosysSetup.cpp
     SimplifyLUTs.cpp
     SimplifyGammas.cpp
     OptimizeControlLogic.cpp
     RemoveIntraRAW.cpp
     ExposeMemorySpeculation.cpp
+    SpecHLSTopoSort.cpp
+    SimplifyComb.cpp
 
     DEPENDS
     SpecHLSTransformsIncGen

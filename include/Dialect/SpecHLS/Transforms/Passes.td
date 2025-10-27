@@ -48,7 +48,18 @@ def OptimizeControlLogicPass: Pass<"optimize-control-logic", "ModuleOp"> {
     "::circt::moore::MooreDialect",
     "::mlir::func::FuncDialect",
     "::circt::ltl::LTLDialect",
-    "::circt::debug::DebugDialect"];
+    "::circt::debug::DebugDialect",
+    "::circt::synth::SynthDialect"];
+}
+
+def SpecHLSTopoSortPass: Pass<"spechls-toposort", "ModuleOp"> {
+  let summary = "Call toposort on kernel and tasks.";
+  let dependentDialects = ["::spechls::SpecHLSDialect", "::circt::hw::HWDialect", "::circt::comb::CombDialect"];
+}
+
+def SimplifyCombPass: Pass<"simplify-comb", "::ModuleOp"> {
+  let summary = "Simplify unwanted pattern in comb dialect.";
+  let dependentDialects = ["::circt::comb::CombDialect", "::circt::hw::HWDialect"];
 }
 
 #endif // SPECHLS_INCLUDED_DIALECT_SPECHLS_TRANSFORMS_PASSES_TD

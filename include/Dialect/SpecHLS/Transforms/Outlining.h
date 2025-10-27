@@ -10,6 +10,7 @@
 
 #include "Dialect/SpecHLS/IR/SpecHLSOps.h"
 
+#include <llvm/ADT/UniqueVector.h>
 #include <mlir/IR/Location.h>
 #include <mlir/IR/Operation.h>
 #include <mlir/IR/PatternMatch.h>
