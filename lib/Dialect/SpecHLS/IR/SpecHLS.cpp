@@ -327,8 +327,8 @@ ParseResult spechls::MuOp::parse(OpAsmParser &parser, OperationState &result) {
 }
 
 void spechls::MuOp::print(OpAsmPrinter &printer) {
-  printer << "<\"" << getSymName() << "\">(" << getInitValue() << ", " << getLoopValue()
-          << ") : " << getInitValue().getType();
+  printer << "<\"" << getSymName() << "\">(" << getInitValue() << ", " << getLoopValue() << ") "
+          << (*this)->getAttrDictionary() << " : " << getInitValue().getType();
 }
 
 CallInterfaceCallable spechls::CallOp::getCallableForCallee() {
