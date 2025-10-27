@@ -42,7 +42,8 @@ def OptimizeControlLogicPass: Pass<"optimize-control-logic", "ModuleOp"> {
     "::circt::moore::MooreDialect",
     "::mlir::func::FuncDialect",
     "::circt::ltl::LTLDialect",
-    "::circt::debug::DebugDialect"];
+    "::circt::debug::DebugDialect",
+    "::circt::synth::SynthDialect"];
 }
 
 def SpecHLSTopoSortPass: Pass<"spechls-toposort", "ModuleOp"> {
