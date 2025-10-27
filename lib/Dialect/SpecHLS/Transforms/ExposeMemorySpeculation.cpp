@@ -17,6 +17,7 @@
 #include <mlir/Transforms/GreedyPatternRewriteDriver.h>
 
 #include <Dialect/SpecHLS/IR/SpecHLSOps.h>
+#include <string>
 
 using namespace mlir;
 
@@ -129,6 +130,7 @@ private:
       }
 
       // Build the gamma for the distance i + 1
+      std::string gammaName = "alias_check_" + mu.getSymName().str() + "_distance_" + std::to_string(i + 1);
       SmallVector<Value> gammaInputs;
       // Case no alias -> aliasCheck = 0;
       if (aliasGammaResult != nullptr) {
@@ -144,7 +146,7 @@ private:
 
       aliasGammaResult = rewritter
                              .create<spechls::GammaOp>(rewritter.getUnknownLoc(), rewritter.getI32Type(),
-                                                       rewritter.getStringAttr("aliasCheck"), aliasCheck, gammaInputs)
+                                                       rewritter.getStringAttr(gammaName), aliasCheck, gammaInputs)
                              .getResult();
     }
 
@@ -152,6 +154,7 @@ private:
     // Build the memory speculation GammaOp
     //
 
+    std::string gammaName = "memory_speculation_" + mu.getSymName().str();
     // Delay the output the mu
     SmallVector<Value> gammaInputs;
     Value lastInputs = mu.getResult();
@@ -167,7 +170,7 @@ private:
     // Build the gamma
     auto memSpecGamma =
         rewritter.create<spechls::GammaOp>(rewritter.getUnknownLoc(), lastInputs.getType(),
-                                           rewritter.getStringAttr("memSpec"), aliasGammaResult, gammaInputs);
+                                           rewritter.getStringAttr(gammaName), aliasGammaResult, gammaInputs);
 
     //
     // Replace the array input of all LoadOp attach to the mu with the output of the gamma
