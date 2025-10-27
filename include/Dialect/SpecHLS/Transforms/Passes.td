@@ -50,6 +50,9 @@ def SpecHLSTopoSortPass: Pass<"spechls-toposort", "ModuleOp"> {
   let dependentDialects = ["::spechls::SpecHLSDialect", "::circt::hw::HWDialect", "::circt::comb::CombDialect"];
 }
 
+def SimplifyCombPass: Pass<"simplify-comb", "::ModuleOp"> {
+  let summary = "Simplify unwanted pattern in comb dialect.";
+  let dependentDialects = ["::circt::comb::CombDialect", "::circt::hw::HWDialect"];
 }
 
 #endif // SPECHLS_INCLUDED_DIALECT_SPECHLS_TRANSFORMS_PASSES_TD
