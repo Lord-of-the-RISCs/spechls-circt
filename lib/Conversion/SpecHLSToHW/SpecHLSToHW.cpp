@@ -8,6 +8,7 @@
 #include "Conversion/SpecHLS/Passes.h" // IWYU pragma: keep
 #include "Dialect/SpecHLS/IR/SpecHLS.h"
 #include "Dialect/SpecHLS/IR/SpecHLSOps.h"
+#include "circt/Dialect/Comb/CombDialect.h"
 
 #include <circt/Dialect/Comb/CombOps.h>
 #include <circt/Dialect/HW/HWOps.h>
@@ -106,18 +107,36 @@ struct GammaConversion : OpConversionPattern<spechls::GammaOp> {
   LogicalResult matchAndRewrite(spechls::GammaOp gamma, OpAdaptor adaptor,
                                 ConversionPatternRewriter &rewriter) const override {
     if (gamma.getInputs().size() == 2) {
-      rewriter.replaceOpWithNewOp<circt::comb::MuxOp>(gamma, gamma.getType(), gamma.getSelect(), gamma.getInputs()[1],
+      auto ctrl = gamma.getSelect();
+      auto ctrlType = llvm::dyn_cast<mlir::IntegerType>(ctrl.getType());
+      auto zero = rewriter.create<circt::hw::ConstantOp>(ctrl.getLoc(), llvm::APInt(ctrlType.getWidth(), 0, false));
+      auto ctrlTypeless =
+          rewriter.create<circt::hw::BitcastOp>(ctrl.getLoc(), rewriter.getIntegerType(ctrlType.getWidth()), ctrl);
+      auto ne = rewriter.create<circt::comb::ICmpOp>(ctrl.getLoc(), circt::comb::ICmpPredicate::ne, ctrlTypeless, zero);
+      rewriter.replaceOpWithNewOp<circt::comb::MuxOp>(gamma, gamma.getType(), ne, gamma.getInputs()[1],
                                                       gamma.getInputs()[0]);
       return success();
     }
-
+    llvm::SmallVector<mlir::Value> inputs;
+    for (auto in : llvm::reverse(gamma.getInputs()))
+      inputs.push_back(in);
     // See https://circt.llvm.org/docs/Dialects/Comb/RationaleComb/#no-multibit-mux-operations
-    auto array = rewriter.create<circt::hw::ArrayCreateOp>(gamma.getLoc(), gamma.getInputs());
+    auto array = rewriter.create<circt::hw::ArrayCreateOp>(gamma.getLoc(), inputs);
     auto select = gamma.getSelect();
     auto selectType = rewriter.getIntegerType(select.getType().getWidth());
     auto castedSelect = rewriter.create<circt::hw::BitcastOp>(select.getLoc(), selectType, select);
     rewriter.replaceOpWithNewOp<circt::hw::ArrayGetOp>(gamma, array, castedSelect);
     return success();
+  }
+};
+
+struct SyncConvesion : OpConversionPattern<spechls::SyncOp> {
+  using OpConversionPattern<spechls::SyncOp>::OpConversionPattern;
+
+  LogicalResult matchAndRewrite(spechls::SyncOp sync, OpAdaptor adaptor,
+                                ConversionPatternRewriter &rewriter) const override {
+    rewriter.replaceOp(sync, sync.getInputs().front());
+    return mlir::success();
   }
 };
 
@@ -129,7 +148,8 @@ struct LutConversion : OpConversionPattern<spechls::LUTOp> {
     llvm::SmallVector<Value> inputs;
     auto outputType = lut.getResult().getType();
     auto signlessType = rewriter.getIntegerType(outputType.getWidth());
-    for (auto index : lut.getContents()) {
+    for (auto it = lut.getContents().rbegin(); it != lut.getContents().rend(); ++it) {
+      auto index = *it;
       auto cst = rewriter.create<circt::hw::ConstantOp>(lut.getLoc(), rewriter.getIntegerAttr(signlessType, index));
       inputs.push_back(cst.getResult());
     }
@@ -179,6 +199,7 @@ struct ConvertSpecHLSTaskToHWPass : public spechls::impl::SpecHLSTaskToHWPassBas
     patternList.add<TaskConversion>(ctx);
     patternList.add<GammaConversion>(ctx);
     patternList.add<LutConversion>(ctx);
+    patternList.add<SyncConvesion>(ctx);
     patterns = std::move(patternList);
     return success();
   }
