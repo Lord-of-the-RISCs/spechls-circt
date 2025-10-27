@@ -27,7 +27,7 @@ spechls.kernel @merge_binary(%c1: i32, %c2: i32, %0: i32, %1: i32, %2: i32) -> i
   %true = hw.constant 1 : i1
   %g = spechls.gamma<"x">(%c1, %0, %1) : i32, i32
   // CHECK: %lut = spechls.lut %2 [0, 1, 2, 2] : (i2) -> i2
-  // CHECK: %gamma = spechls.gamma<"x">(%lut, %arg2, %arg3, %arg4) : i2, i32
+  // CHECK: %gamma = spechls.gamma<"x">(%lut, %arg2, %arg3, %arg4) {}: i2, i32
   %result = spechls.gamma<"x">(%c2, %g, %2) : i32, i32
   spechls.exit if %true with %result : i32
 }
@@ -43,7 +43,7 @@ spechls.kernel @merge_tree(%c1: i32, %c2: i32, %c3: i32, %c4: i32, %0: i32, %1: 
   // CHECK: %{{.*}} = spechls.lut %{{.*}} [0, 1, 2, 2] : (i2) -> i2
   // CHECK: %{{.*}} = spechls.lut %{{.*}} [0, 0, 0, 0, 1, 1, 1, 0, 2, 3, 4, 0, 0, 0, 0, 0] : (i4) -> i3
   // CHECK: %{{.*}} = spechls.lut %{{.*}} [0, 0, 1, 1, 2, 3, 4, 4, 5, 5, 0, 0, 0, 0, 0, 0] : (i4) -> i3
-  // CHECK: %{{.*}} = spechls.gamma<"x">(%{{.*}}, %arg4, %arg5, %arg6, %arg7, %arg8, %arg9) : i3, i32
+  // CHECK: %{{.*}} = spechls.gamma<"x">(%{{.*}}, %arg4, %arg5, %arg6, %arg7, %arg8, %arg9) {}: i3, i32
   %result = spechls.gamma<"x">(%c4, %g3, %g2) : i32, i32
   spechls.exit if %true with %result : i32
 }
