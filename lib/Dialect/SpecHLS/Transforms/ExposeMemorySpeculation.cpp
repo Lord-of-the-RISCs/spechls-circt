@@ -29,7 +29,7 @@ namespace spechls {
 #include "ExposeMemorySpeculation.h.inc"
 
 namespace {
-static SmallVector<SmallVector<Value>> *delayValues(PatternRewriter &rewritter, SmallVector<Value> values, int depth);
+static SmallVector<SmallVector<Value>> delayValues(PatternRewriter &rewritter, SmallVector<Value> values, int depth);
 
 struct ExposeMemorySpeculationPass
     : public spechls::impl::ExposeMemorySpeculationPassBase<ExposeMemorySpeculationPass> {
@@ -94,8 +94,8 @@ private:
     //
 
     // Delayed Write addresses and WE
-    auto *delayedWritesAddresses = delayValues(rewritter, writeAddresses, dependencyDistance);
-    auto *delayedWE = delayValues(rewritter, writeEnables, dependencyDistance);
+    auto delayedWritesAddresses = delayValues(rewritter, writeAddresses, dependencyDistance);
+    auto delayedWE = delayValues(rewritter, writeEnables, dependencyDistance);
 
     // build the comparaison logic ((@Read = @Write) && WE) for:
     //    Each dependencies distances for:
@@ -103,8 +103,8 @@ private:
     //      Each Write addresse
     Value aliasGammaResult = nullptr;
     for (int i = dependencyDistance - 1; i >= 0; i--) {
-      writeAddresses = delayedWritesAddresses->data()[i];
-      writeEnables = delayedWE->data()[i];
+      writeAddresses = delayedWritesAddresses.data()[i];
+      writeEnables = delayedWE.data()[i];
       Value aliasCheck = nullptr;
       for (auto load : loadsAddresses) {
         Value lastOpResult = nullptr;
@@ -187,8 +187,8 @@ private:
   }
 };
 
-SmallVector<SmallVector<Value>> *delayValues(PatternRewriter &rewritter, SmallVector<Value> values, int depth) {
-  SmallVector<SmallVector<Value>> *result = new SmallVector<SmallVector<Value>>();
+SmallVector<SmallVector<Value>> delayValues(PatternRewriter &rewritter, SmallVector<Value> values, int depth) {
+  SmallVector<SmallVector<Value>> result;
   auto enable = rewritter.create<circt::hw::ConstantOp>(rewritter.getUnknownLoc(), rewritter.getI1Type(), 1);
   for (int i = 0; i < depth; i++) {
     SmallVector<Value> newVals;
@@ -196,10 +196,10 @@ SmallVector<SmallVector<Value>> *delayValues(PatternRewriter &rewritter, SmallVe
       newVals.push_back(
           rewritter.create<spechls::DelayOp>(rewritter.getUnknownLoc(), val.getType(), val, 1, enable, val));
     }
-    result->push_back(newVals);
+    result.push_back(newVals);
     values = newVals;
   }
 
-  return std::move(result);
+  return result;
 }
 } // namespace
