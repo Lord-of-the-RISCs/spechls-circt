@@ -18,6 +18,11 @@ add_mlir_pdll_library(SpecHLSExposeMemorySpeculationPatternsIncGen
   ExposeMemorySpeculation.h.inc
 )
 
+add_mlir_pdll_library(SpecHLSInferLSQPatternsIncGen
+  InferLSQ.pdll
+  InferLSQ.h.inc
+)
+
 add_circt_dialect_library(SpecHLSTransforms
     Outlining.cpp
     YosysSetup.cpp
@@ -28,6 +33,7 @@ add_circt_dialect_library(SpecHLSTransforms
     ExposeMemorySpeculation.cpp
     SpecHLSTopoSort.cpp
     SimplifyComb.cpp
+    InferLSQ.cpp
 
     DEPENDS
     SpecHLSTransformsIncGen
@@ -35,6 +41,7 @@ add_circt_dialect_library(SpecHLSTransforms
     SpecHLSSimplifyGammasPatternsIncGen
     SpecHLSRemoveIntraRAWPatternsIncGen
     SpecHLSExposeMemorySpeculationPatternsIncGen
+    SpecHLSInferLSQPatternsIncGen
 )
 target_include_directories(SpecHLSTransforms
     PRIVATE

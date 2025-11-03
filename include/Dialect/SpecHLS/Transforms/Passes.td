@@ -36,6 +36,12 @@ def ExposeMemorySpeculationPass : Pass<"expose-memory-speculation", "ModuleOp"> 
     "::mlir::pdl_interp::PDLInterpDialect"];
 }
 
+def InferLSQPass : Pass<"infer-LSQ", "ModuleOp"> {
+    let summary = "";
+    let dependentDialects = ["::spechls::SpecHLSDialect", "::circt::hw::HWDialect", "::mlir::pdl::PDLDialect", 
+    "::mlir::pdl_interp::PDLInterpDialect"];
+}
+
 def OptimizeControlLogicPass: Pass<"optimize-control-logic", "ModuleOp"> {
   let summary = "Optimize control logic of gammas.";
   let dependentDialects = ["::spechls::SpecHLSDialect", "::circt::hw::HWDialect",
