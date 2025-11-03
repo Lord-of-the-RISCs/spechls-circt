@@ -56,7 +56,7 @@ private:
     auto mu = cast<spechls::MuOp>(op);
 
     // Get the dependency distance
-    auto dependencyDistance = cast<mlir::IntegerAttr>(mu->getDiscardableAttr("dependenciesDistances")).getInt();
+    auto dependencyDistance = cast<mlir::IntegerAttr>(mu->getDiscardableAttr("spechls.memspec")).getInt();
 
     // Get all LoadOp attach to the mu
     SmallVector<spechls::LoadOp> loads;
@@ -65,7 +65,9 @@ private:
       if (succ->getName().getStringRef() == spechls::LoadOp::getOperationName()) {
         auto load = cast<spechls::LoadOp>(succ);
         loads.push_back(load);
-        loadsAddresses.push_back(load.getIndex());
+        auto castOp = rewritter.create<circt::hw::BitcastOp>(
+            rewritter.getUnknownLoc(), rewritter.getIntegerType(load.getIndex().getType().getWidth()), load.getIndex());
+        loadsAddresses.push_back(castOp.getResult());
       }
     }
 
@@ -80,7 +82,10 @@ private:
       for (auto *succ : current->getResults().getUsers()) {
         if (succ->getName().getStringRef() == spechls::AlphaOp::getOperationName()) {
           auto alpha = cast<spechls::AlphaOp>(succ);
-          writeAddresses.push_back(alpha.getIndex());
+          auto castOp = rewritter.create<circt::hw::BitcastOp>(
+              rewritter.getUnknownLoc(), rewritter.getIntegerType(alpha.getIndex().getType().getWidth()),
+              alpha.getIndex());
+          writeAddresses.push_back(castOp.getResult());
           writeEnables.push_back(alpha.getWe());
           toCheck.push_back(succ);
         } else if (succ->getName().getStringRef() == spechls::GammaOp::getOperationName()) {
@@ -189,12 +194,15 @@ private:
 
 SmallVector<SmallVector<Value>> delayValues(PatternRewriter &rewritter, SmallVector<Value> values, int depth) {
   SmallVector<SmallVector<Value>> result;
+  if (values.empty())
+    return result;
   auto enable = rewritter.create<circt::hw::ConstantOp>(rewritter.getUnknownLoc(), rewritter.getI1Type(), 1);
+  auto init = rewritter.create<circt::hw::ConstantOp>(rewritter.getUnknownLoc(), values.front().getType(), 0);
   for (int i = 0; i < depth; i++) {
     SmallVector<Value> newVals;
     for (auto val : values) {
       newVals.push_back(
-          rewritter.create<spechls::DelayOp>(rewritter.getUnknownLoc(), val.getType(), val, 1, enable, val));
+          rewritter.create<spechls::DelayOp>(rewritter.getUnknownLoc(), val.getType(), val, 1, enable, init));
     }
     result.push_back(newVals);
     values = newVals;

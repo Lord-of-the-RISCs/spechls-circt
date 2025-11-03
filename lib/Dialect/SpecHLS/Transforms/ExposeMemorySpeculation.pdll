@@ -19,7 +19,7 @@ Constraint IsGreaterThanO(attr: Attr) [{
   }];
 
 Pattern MemorySpeculation {
-    let root = op<spechls.mu>(_:Value, op<spechls.alpha>) {dependenciesDistances = dist : Attr};
+    let root = op<spechls.mu>(_:Value, op<spechls.alpha>) {"spechls.memspec" = dist : Attr};
     IsGreaterThanO(dist);
     replace root with ExposeMemorySpeculation(root);
   }

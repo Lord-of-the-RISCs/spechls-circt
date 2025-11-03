@@ -3,7 +3,7 @@
 // CHECK-LABEL: @simple
 spechls.kernel @simple(%arr : !spechls.array<i32, 16>, %idxRead : i32, %idxWrite : i32, %valWrite : i32, %we : i1) -> i32 {
     %true = hw.constant 1 : i1
-    %mu = spechls.mu<"x">(%arr, %next_arr) {dependenciesDistances = 1} : !spechls.array<i32, 16>
+    %mu = spechls.mu<"x">(%arr, %next_arr) {spechls.memspec = 1} : !spechls.array<i32, 16>
     %next_arr = spechls.alpha %mu[%idxWrite : i32], %valWrite if %we : !spechls.array<i32, 16>
     //CHECK: %0 = spechls.delay %arg2 by 1 if %true init %arg2 : i32 
     //CHECK: %1 = spechls.delay %arg4 by 1 if %true init %arg4 : i1 
@@ -21,7 +21,7 @@ spechls.kernel @simple(%arr : !spechls.array<i32, 16>, %idxRead : i32, %idxWrite
 // CHECK-LABEL: @simpleD3
 spechls.kernel @simpleD3(%arr : !spechls.array<i32, 16>, %idxRead : i32, %idxWrite : i32, %valWrite : i32, %we : i1) -> i32 {
     %true = hw.constant 1 : i1
-    %mu = spechls.mu<"x">(%arr, %next_arr) {dependenciesDistances = 3} : !spechls.array<i32, 16>
+    %mu = spechls.mu<"x">(%arr, %next_arr) {spechls.memspec = 3} : !spechls.array<i32, 16>
     %next_arr = spechls.alpha %mu[%idxWrite : i32], %valWrite if %we : !spechls.array<i32, 16>
     //CHECK: %0 = spechls.delay %arg2 by 1 if %true init %arg2 : i32 
     //CHECK: %1 = spechls.delay %0 by 1 if %true init %0 : i32 
@@ -51,7 +51,7 @@ spechls.kernel @simpleD3(%arr : !spechls.array<i32, 16>, %idxRead : i32, %idxWri
 // CHECK-LABEL: @twoRead
 spechls.kernel @twoRead(%arr : !spechls.array<i32, 16>, %idxRead1 : i32, %idxRead2 : i32, %idxWrite : i32, %valWrite : i32, %we : i1) -> i32 {
     %true = hw.constant 1 : i1
-    %mu = spechls.mu<"x">(%arr, %next_arr) {dependenciesDistances = 1} : !spechls.array<i32, 16>
+    %mu = spechls.mu<"x">(%arr, %next_arr) {spechls.memspec = 1} : !spechls.array<i32, 16>
     %next_arr = spechls.alpha %mu[%idxWrite : i32], %valWrite if %we : !spechls.array<i32, 16>
     //CHECK: %0 = spechls.delay %arg3 by 1 if %true init %arg3 : i32 
     //CHECK: %1 = spechls.delay %arg5 by 1 if %true init %arg5 : i1 
@@ -80,7 +80,7 @@ spechls.kernel @twoWrite(
     %we1 : i1, %we2 : i1) -> i32 
 {
     %true = hw.constant 1 : i1
-    %mu = spechls.mu<"x">(%arr, %next_arr) {dependenciesDistances = 1} : !spechls.array<i32, 16>
+    %mu = spechls.mu<"x">(%arr, %next_arr) {spechls.memspec = 1} : !spechls.array<i32, 16>
     %temp_arr = spechls.alpha %mu[%idxWrite1 : i32], %valWrite1 if %we1 : !spechls.array<i32, 16>
     %next_arr = spechls.alpha %temp_arr[%idxWrite2 : i32], %valWrite2 if %we2 : !spechls.array<i32, 16>
     //CHECK: %0 = spechls.delay %arg2 by 1 if %true init %arg2 : i32 
@@ -112,7 +112,7 @@ spechls.kernel @twoReadsTwoWritesD3(
     %we1 : i1, %we2 : i1) -> i32 
 {
     %true = hw.constant 1 : i1
-    %mu = spechls.mu<"x">(%arr, %next_arr) {dependenciesDistances = 3} : !spechls.array<i32, 16>
+    %mu = spechls.mu<"x">(%arr, %next_arr) {spechls.memspec = 3} : !spechls.array<i32, 16>
     %temp_arr = spechls.alpha %mu[%idxWrite1 : i32], %valWrite1 if %we1 : !spechls.array<i32, 16>
     %next_arr = spechls.alpha %temp_arr[%idxWrite2 : i32], %valWrite2 if %we2 : !spechls.array<i32, 16>
     //CHECK: %0 = spechls.delay %arg3 by 1 if %true init %arg3 : i32 
@@ -187,8 +187,8 @@ spechls.kernel @twoMemSpecD3D2(
     %we1 : i1, %we2 : i1) -> i32 
 {
     %true = hw.constant 1 : i1
-    %mu1 = spechls.mu<"x">(%arr1, %next_arr1) {dependenciesDistances = 3} : !spechls.array<i32, 16>
-    %mu2 = spechls.mu<"y">(%arr2, %next_arr2) {dependenciesDistances = 2} : !spechls.array<i32, 16>
+    %mu1 = spechls.mu<"x">(%arr1, %next_arr1) {spechls.memspec = 3} : !spechls.array<i32, 16>
+    %mu2 = spechls.mu<"y">(%arr2, %next_arr2) {spechls.memspec = 2} : !spechls.array<i32, 16>
     %next_arr1 = spechls.alpha %mu1[%idxWrite1 : i32], %valWrite1 if %we1 : !spechls.array<i32, 16>
     %next_arr2 = spechls.alpha %mu2[%idxWrite2 : i32], %valWrite2 if %we2 : !spechls.array<i32, 16>
     //CHECK: %0 = spechls.delay %arg4 by 1 if %true init %arg4 : i32 
@@ -230,5 +230,25 @@ spechls.kernel @twoMemSpecD3D2(
     //CHECK: %28 = spechls.load %gamma_5[%arg3 : i32] : <i32, 16>
     %operand2 = spechls.load %mu2[%idxRead2 : i32] : !spechls.array<i32, 16>
     %result = comb.add %operand1, %operand2 : i32
+    spechls.exit if %true with %result : i32
+}
+
+// CHECK-LABEL: @simpleWithDiffType
+spechls.kernel @simpleWithDiffType(%arr : !spechls.array<i32, 16>, %idxRead : si32, %idxWrite : si32, %valWrite : i32, %we : i1) -> i32 {
+    %true = hw.constant 1 : i1
+    %mu = spechls.mu<"x">(%arr, %next_arr) {spechls.memspec = 1} : !spechls.array<i32, 16>
+    %next_arr = spechls.alpha %mu[%idxWrite : si32], %valWrite if %we : !spechls.array<i32, 16>
+    //CHECK: %0 = hw.bitcast %arg1 : (si32) -> i32
+    //CHECK: %1 = hw.bitcast %arg2 : (si32) -> i32
+    //CHECK: %2 = spechls.delay %1 by 1 if %true init %1 : i32 
+    //CHECK: %3 = spechls.delay %arg4 by 1 if %true init %arg4 : i1 
+    //CHECK: %4 = comb.icmp eq %2, %0 : i32
+    //CHECK: %5 = comb.and %4, %3 : i1
+    //CHECK: %gamma = spechls.gamma<"alias_check_x_distance_1">(%5, %c1_i32, %c0_i32) {}: i1, i32
+    //CHECK: %6 = spechls.delay %mu by 1 if %true init %arg0 : !spechls.array<i32, 16> 
+    //CHECK: %gamma_0 = spechls.gamma<"memory_speculation_x">(%gamma, %mu, %6) {}: i32, !spechls.array<i32, 16>
+    //CHECK: %7 = spechls.alpha %mu[%arg2: si32], %arg3 if %arg4 : !spechls.array<i32, 16>
+    //CHECK: %8 = spechls.load %gamma_0[%arg1 : si32] : <i32, 16>
+    %result = spechls.load %mu[%idxRead : si32] : !spechls.array<i32, 16>
     spechls.exit if %true with %result : i32
 }
