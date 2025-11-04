@@ -194,6 +194,27 @@ bool mlirModuleOptimizeControlPipeline(MlirModule mod) {
   return failed(pm.run(module));
 }
 
+bool mlirModuleExposeMemorySpeculation(MlirModule mod) {
+  auto module = unwrap(mod);
+  auto pm = mlir::PassManager::on<mlir::ModuleOp>(module->getContext());
+  pm.addPass(spechls::createExposeMemorySpeculationPass());
+  return failed(pm.run(module));
+}
+
+bool mlirModuleSimplifyGamma(MlirModule mod) {
+  auto module = unwrap(mod);
+  auto pm = mlir::PassManager::on<mlir::ModuleOp>(module->getContext());
+  pm.addPass(spechls::createSimplifyGammasPass());
+  return failed(pm.run(module));
+}
+
+bool mlirModuleRemoveIntraRaw(MlirModule mod) {
+  auto module = unwrap(mod);
+  auto pm = mlir::PassManager::on<mlir::ModuleOp>(module->getContext());
+  pm.addPass(spechls::createRemoveIntraRAWPass());
+  return failed(pm.run(module));
+}
+
 void mlirDumpModule(MlirModule module) { unwrap(module)->dump(); }
 void mlirDumpOperation(MlirOperation op) { unwrap(op)->dump(); }
 void mlirDumpValue(MlirValue val) { unwrap(val).dump(); }
