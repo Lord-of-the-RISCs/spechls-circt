@@ -24,4 +24,9 @@ def SimplifyLUTsPass : Pass<"simplify-luts", "ModuleOp"> {
   ];
 }
 
+def FactorGammaInputsPass : Pass<"factor-gamma-inputs", "ModuleOp"> {
+  let summary = "Simplify LUT patterns.";
+  let dependentDialects = ["::spechls::SpecHLSDialect", "::circt::hw::HWDialect", "::circt::comb::CombDialect"];
+}
+
 #endif // SPECHLS_INCLUDED_DIALECT_SPECHLS_TRANSFORMS_PASSES_TD
