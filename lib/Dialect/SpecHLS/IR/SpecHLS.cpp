@@ -463,7 +463,7 @@ void spechls::DelayOp::print(OpAsmPrinter &printer) {
     printer << " if " << getEnable();
   if (getInit())
     printer << " init " << getInit();
-  printer << " : " << getType();
+  printer << " " << (*this)->getDiscardableAttrDictionary() << " : " << getType();
 }
 
 LogicalResult spechls::FIFOOp::verify() {
