@@ -15,7 +15,7 @@ Rewrite ExposeMemorySpeculation(root: Op) -> Op;
 
 Constraint IsGreaterThanO(attr: Attr) [{
     int64_t value = cast<::mlir::IntegerAttr>(attr).getValue().getSExtValue();
-    return success(value > 0);
+    return success(value > 1);
   }];
 
 Pattern MemorySpeculation {

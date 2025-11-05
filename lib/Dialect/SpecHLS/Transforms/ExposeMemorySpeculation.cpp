@@ -1,4 +1,5 @@
 #include "circt/Dialect/Comb/CombDialect.h"
+#include "mlir/IR/Attributes.h"
 #include "mlir/IR/BuiltinAttributes.h"
 #include "mlir/IR/Operation.h"
 #include "mlir/Support/LLVM.h"
@@ -29,7 +30,8 @@ namespace spechls {
 #include "ExposeMemorySpeculation.h.inc"
 
 namespace {
-static SmallVector<SmallVector<Value>> delayValues(PatternRewriter &rewritter, SmallVector<Value> values, int depth);
+static SmallVector<SmallVector<Value>> delayValues(PatternRewriter &rewritter, SmallVector<Value> values, int depth,
+                                                   std::string delayType, Value initDelay, Attribute scn);
 
 struct ExposeMemorySpeculationPass
     : public spechls::impl::ExposeMemorySpeculationPassBase<ExposeMemorySpeculationPass> {
@@ -54,19 +56,39 @@ struct ExposeMemorySpeculationPass
 private:
   static Operation *exposeMemorySpeculationImpl(PatternRewriter &rewritter, Operation *op) {
     auto mu = cast<spechls::MuOp>(op);
+    auto kernel = mu->getParentOfType<spechls::KernelOp>();
+    auto maxSccAttr = dyn_cast_or_null<IntegerAttr>(kernel->getDiscardableAttr("spechls.max_scc"));
+    int sccConstraint = 0;
+    if (maxSccAttr != nullptr) {
+      sccConstraint = maxSccAttr.getInt() + 1;
+    }
+    auto scn = rewritter.getIntegerAttr(rewritter.getI32Type(), sccConstraint);
+    kernel->setAttr("spechls.max_scc", scn);
 
     // Get the dependency distance
-    auto dependencyDistance = cast<mlir::IntegerAttr>(mu->getDiscardableAttr("spechls.memspec")).getInt();
+    auto dependencyDistance = cast<mlir::IntegerAttr>(mu->getDiscardableAttr("spechls.memspec")).getInt() - 1;
 
     // Get all LoadOp attach to the mu
     SmallVector<spechls::LoadOp> loads;
     SmallVector<Value> loadsAddresses;
+    auto delayEnable = rewritter.create<circt::hw::ConstantOp>(rewritter.getUnknownLoc(), rewritter.getI1Type(), 1);
+    auto muDelay = rewritter.create<spechls::DelayOp>(rewritter.getUnknownLoc(), mu.getLoopValue(), 1, delayEnable,
+                                                      mu.getInitValue());
+    muDelay->setAttr("spechls.rollbackable", rewritter.getI32IntegerAttr(1));
+    muDelay->setAttr("spechls.memspec", rewritter.getUnitAttr());
+    muDelay->setAttr("spechls.scn", scn);
     for (auto *succ : mu.getResult().getUsers()) {
       if (succ->getName().getStringRef() == spechls::LoadOp::getOperationName()) {
         auto load = cast<spechls::LoadOp>(succ);
-        loads.push_back(load);
+        auto loadAttr = load->getAttrDictionary();
+        auto newLoad = rewritter.replaceOpWithNewOp<spechls::LoadOp>(load, muDelay, load.getIndex());
+        newLoad->setAttrs(loadAttr);
+        newLoad->setAttr("spechls.scn", scn);
+        loads.push_back(newLoad);
         auto castOp = rewritter.create<circt::hw::BitcastOp>(
-            rewritter.getUnknownLoc(), rewritter.getIntegerType(load.getIndex().getType().getWidth()), load.getIndex());
+            rewritter.getUnknownLoc(), rewritter.getIntegerType(newLoad.getIndex().getType().getWidth()),
+            newLoad.getIndex());
+        castOp->setAttr("spechls.scn", scn);
         loadsAddresses.push_back(castOp.getResult());
       }
     }
@@ -85,8 +107,11 @@ private:
           auto castOp = rewritter.create<circt::hw::BitcastOp>(
               rewritter.getUnknownLoc(), rewritter.getIntegerType(alpha.getIndex().getType().getWidth()),
               alpha.getIndex());
+          castOp->setAttr("spechls.scn", scn);
           writeAddresses.push_back(castOp.getResult());
           writeEnables.push_back(alpha.getWe());
+          alpha->setAttr("spechls.memspec", rewritter.getUnitAttr());
+          alpha->setAttr("spechls.scn", scn);
           toCheck.push_back(succ);
         } else if (succ->getName().getStringRef() == spechls::GammaOp::getOperationName()) {
           toCheck.push_back(succ);
@@ -99,8 +124,10 @@ private:
     //
 
     // Delayed Write addresses and WE
-    auto delayedWritesAddresses = delayValues(rewritter, writeAddresses, dependencyDistance);
-    auto delayedWE = delayValues(rewritter, writeEnables, dependencyDistance);
+    auto initDelay = rewritter.create<circt::hw::ConstantOp>(rewritter.getUnknownLoc(), rewritter.getI1Type(), 1);
+    initDelay->setAttr("spechls.scn", scn);
+    auto delayedWritesAddresses = delayValues(rewritter, writeAddresses, dependencyDistance, "", nullptr, scn);
+    auto delayedWE = delayValues(rewritter, writeEnables, dependencyDistance, "spechls.cancellable", initDelay, scn);
 
     // build the comparaison logic ((@Read = @Write) && WE) for:
     //    Each dependencies distances for:
@@ -118,10 +145,13 @@ private:
           auto we = writeEnables.data()[j];
           auto comp = rewritter.create<circt::comb::ICmpOp>(rewritter.getUnknownLoc(), rewritter.getI1Type(),
                                                             circt::comb::ICmpPredicate::eq, write, load);
+          comp->setAttr("spechls.scn", scn);
           auto andWe = rewritter.create<circt::comb::AndOp>(rewritter.getUnknownLoc(), comp, we);
+          andWe->setAttr("spechls.scn", scn);
           if (lastOpResult != nullptr) {
             lastOpResult =
                 rewritter.create<circt::comb::OrOp>(rewritter.getUnknownLoc(), lastOpResult, andWe).getResult();
+            lastOpResult.getDefiningOp()->setAttr("spechls.scn", scn);
           } else {
             lastOpResult = andWe.getResult();
           }
@@ -129,6 +159,7 @@ private:
         if (aliasCheck != nullptr) {
           aliasCheck =
               rewritter.create<circt::comb::OrOp>(rewritter.getUnknownLoc(), lastOpResult, aliasCheck).getResult();
+          aliasCheck.getDefiningOp()->setAttr("spechls.scn", scn);
         } else {
           aliasCheck = lastOpResult;
         }
@@ -136,23 +167,27 @@ private:
 
       // Build the gamma for the distance i + 1
       std::string gammaName = "alias_check_" + mu.getSymName().str() + "_distance_" + std::to_string(i + 1);
-      SmallVector<Value> gammaInputs;
+      Value inputFalse;
       // Case no alias -> aliasCheck = 0;
       if (aliasGammaResult != nullptr) {
-        gammaInputs.push_back(aliasGammaResult);
+        inputFalse = aliasGammaResult;
       } else {
         auto firstConst = rewritter.create<circt::hw::ConstantOp>(rewritter.getUnknownLoc(),
                                                                   rewritter.getI32IntegerAttr(dependencyDistance));
-        gammaInputs.push_back(firstConst);
+        firstConst->setAttr("spechls.scn", scn);
+        inputFalse = firstConst.getResult();
       }
       // Case alias -> aliasCheck = 1;
       auto cons = rewritter.create<circt::hw::ConstantOp>(rewritter.getUnknownLoc(), rewritter.getI32IntegerAttr(i));
-      gammaInputs.push_back(cons);
+      cons->setAttr("spechls.scn", scn);
 
-      aliasGammaResult = rewritter
-                             .create<spechls::GammaOp>(rewritter.getUnknownLoc(), rewritter.getI32Type(),
-                                                       rewritter.getStringAttr(gammaName), aliasCheck, gammaInputs)
-                             .getResult();
+      // aliasGammaResult = rewritter
+      //                        .create<spechls::GammaOp>(rewritter.getUnknownLoc(), rewritter.getI32Type(),
+      //                                                  rewritter.getStringAttr(gammaName), aliasCheck, gammaInputs)
+      //                        .getResult();
+      aliasGammaResult = rewritter.create<circt::comb::MuxOp>(rewritter.getUnknownLoc(), rewritter.getI32Type(),
+                                                              aliasCheck, cons, inputFalse);
+      aliasGammaResult.getDefiningOp()->setAttr("spechls.scn", scn);
     }
 
     //
@@ -162,12 +197,14 @@ private:
     std::string gammaName = "memory_speculation_" + mu.getSymName().str();
     // Delay the output the mu
     SmallVector<Value> gammaInputs;
-    Value lastInputs = mu.getResult();
+    Value lastInputs = muDelay.getResult();
     gammaInputs.push_back(lastInputs);
-    auto delayEnable = rewritter.create<circt::hw::ConstantOp>(rewritter.getUnknownLoc(), rewritter.getI1Type(), 1);
     for (int i = 0; i < dependencyDistance; i++) {
       auto input = rewritter.create<spechls::DelayOp>(rewritter.getUnknownLoc(), lastInputs.getType(), lastInputs, 1,
                                                       delayEnable, mu.getInitValue());
+      input->setAttr("spechls.rollbackable", rewritter.getI32IntegerAttr(i + 2));
+      input->setAttr("spechls.memspec", rewritter.getUnitAttr());
+      input->setAttr("spechls.scn", scn);
       gammaInputs.push_back(input.getResult());
       lastInputs = input.getResult();
     }
@@ -176,6 +213,8 @@ private:
     auto memSpecGamma =
         rewritter.create<spechls::GammaOp>(rewritter.getUnknownLoc(), lastInputs.getType(),
                                            rewritter.getStringAttr(gammaName), aliasGammaResult, gammaInputs);
+    memSpecGamma->setAttr("spechls.memspec", rewritter.getUnitAttr());
+    memSpecGamma->setAttr("spechls.scn", scn);
 
     //
     // Replace the array input of all LoadOp attach to the mu with the output of the gamma
@@ -186,26 +225,33 @@ private:
 
     auto result = rewritter.create<spechls::MuOp>(rewritter.getUnknownLoc(), mu.getSymName(), mu.getInitValue(),
                                                   mu.getLoopValue());
+    result->setAttr("spechls.scn", scn);
     rewritter.replaceAllUsesWith(mu, result);
 
     return result;
   }
 };
 
-SmallVector<SmallVector<Value>> delayValues(PatternRewriter &rewritter, SmallVector<Value> values, int depth) {
+SmallVector<SmallVector<Value>> delayValues(PatternRewriter &rewritter, SmallVector<Value> values, int depth,
+                                            std::string delayType, Value initDelay, Attribute scn) {
   SmallVector<SmallVector<Value>> result;
   if (values.empty())
     return result;
   auto enable = rewritter.create<circt::hw::ConstantOp>(rewritter.getUnknownLoc(), rewritter.getI1Type(), 1);
-  auto init = rewritter.create<circt::hw::ConstantOp>(rewritter.getUnknownLoc(), values.front().getType(), 0);
-  for (int i = 0; i < depth; i++) {
+  enable->setAttr("spechls.scn", scn);
+  for (int i = 1; i <= depth; i++) {
     SmallVector<Value> newVals;
     for (auto val : values) {
-      newVals.push_back(
-          rewritter.create<spechls::DelayOp>(rewritter.getUnknownLoc(), val.getType(), val, 1, enable, init));
+      auto newDel =
+          rewritter.create<spechls::DelayOp>(rewritter.getUnknownLoc(), val.getType(), val, i, enable, initDelay);
+      if (!delayType.empty())
+        newDel->setAttr(delayType, rewritter.getI32IntegerAttr(depth - i));
+      newDel->setAttr("spechls.memspece", rewritter.getUnitAttr());
+      newDel->setAttr("spechls.scn", scn);
+      newVals.push_back(newDel);
     }
     result.push_back(newVals);
-    values = newVals;
+    // values = newVals;
   }
 
   return result;
