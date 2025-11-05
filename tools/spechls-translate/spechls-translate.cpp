@@ -38,8 +38,9 @@ int main(int argc, char **argv) {
   mlir::TranslateFromMLIRRegistration registration(
       "spechls-to-cpp", "Translate SpecHLS to C++",
       [](mlir::Operation *op, llvm::raw_ostream &os) {
-        return spechls::translateToCpp(
-            op, os, {declareStructTypes, declareFunctions, lowerArraysAsValues, generateCpi, vitisHlsCompatibility});
+        return spechls::translateToCpp(op, os,
+                                       {declareStructTypes, declareFunctions, lowerArraysAsValues, generateCpi,
+                                        vitisHlsCompatibility, catapultCompatibility});
       },
       [](mlir::DialectRegistry &registry) {
         registry.insert<spechls::SpecHLSDialect, circt::comb::CombDialect, circt::hw::HWDialect,
