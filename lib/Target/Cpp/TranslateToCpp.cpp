@@ -77,6 +77,7 @@ public:
   bool shouldLowerArraysAsValues() { return options.lowerArraysAsValues; }
   bool shouldGenerateCpi() { return options.generateCpi; }
   bool shouldGenerateVitisHLSCompatibleCode() { return options.vitisHlsCompatibility; }
+  bool shouldGenerateCatapultCompatibleCode() { return options.catapultCompatibility; }
 
   class Scope {
     llvm::ScopedHashTableScope<Value, std::string> valueMapperScope;
@@ -189,7 +190,10 @@ LogicalResult printAllVariables(CppEmitter &emitter, spechls::KernelOp &kernelOp
         return WalkResult::advance();
       if (failed(emitter.emitVariableDeclaration(result, false)))
         return WalkResult(op->emitError("unable to declare result variable for op"));
-      os << "{};\n";
+      if (emitter.shouldGenerateCatapultCompatibleCode())
+        os << ";\n";
+      else
+        os << "{};\n";
     }
 
     if (op != kernelOp.getOperation()) {
@@ -199,7 +203,10 @@ LogicalResult printAllVariables(CppEmitter &emitter, spechls::KernelOp &kernelOp
                   emitter.emitVariableDeclaration(op->getLoc(), arg.getType(), emitter.getOrCreateName(arg), false))) {
             return WalkResult(op->emitError("unable to declare region argument variable for op"));
           }
-          os << "{};\n";
+          if (emitter.shouldGenerateCatapultCompatibleCode())
+            os << ";\n";
+          else
+            os << "{};\n";
         }
       }
     }
@@ -208,7 +215,11 @@ LogicalResult printAllVariables(CppEmitter &emitter, spechls::KernelOp &kernelOp
     if (auto delayOp = dyn_cast<spechls::DelayOp>(op)) {
       if (failed(emitter.emitType(op->getLoc(), delayOp.getType())))
         return failure();
-      os << " " << getDelayBufferName(emitter, delayOp) << "[" << delayOp.getDepth() << "]{};\n";
+      os << " " << getDelayBufferName(emitter, delayOp) << "[" << delayOp.getDepth();
+      if (emitter.shouldGenerateCatapultCompatibleCode())
+        os << "];\n";
+      else
+        os << "]{};\n";
       if (emitter.shouldGenerateVitisHLSCompatibleCode()) {
         os << "#pragma HLS array_partition variable=" << getDelayBufferName(emitter, delayOp) << " type=complete\n";
       }
@@ -216,7 +227,11 @@ LogicalResult printAllVariables(CppEmitter &emitter, spechls::KernelOp &kernelOp
       if (failed(emitter.emitType(op->getLoc(), rewindOp.getType())))
         return failure();
       os << " " << getRewindBufferName(emitter, rewindOp) << "["
-         << *std::max_element(rewindOp.getDepths().begin(), rewindOp.getDepths().end()) + 1 << "]{};\n";
+         << *std::max_element(rewindOp.getDepths().begin(), rewindOp.getDepths().end()) + 1;
+      if (emitter.shouldGenerateCatapultCompatibleCode())
+        os << "];\n";
+      else
+        os << "]{};\n";
       if (emitter.shouldGenerateVitisHLSCompatibleCode()) {
         os << "#pragma HLS array_partition variable=" << getRewindBufferName(emitter, rewindOp) << " type=complete\n";
       }
@@ -224,7 +239,11 @@ LogicalResult printAllVariables(CppEmitter &emitter, spechls::KernelOp &kernelOp
       if (failed(emitter.emitType(op->getLoc(), rollbackOp.getType())))
         return failure();
       os << " " << getRollbackBufferName(emitter, rollbackOp) << "["
-         << *std::max_element(rollbackOp.getDepths().begin(), rollbackOp.getDepths().end()) + 1 << "]{};\n";
+         << *std::max_element(rollbackOp.getDepths().begin(), rollbackOp.getDepths().end()) + 1;
+      if (emitter.shouldGenerateCatapultCompatibleCode())
+        os << "];\n";
+      else
+        os << "]{};\n";
       if (emitter.shouldGenerateVitisHLSCompatibleCode()) {
         os << "#pragma HLS array_partition variable=" << getRollbackBufferName(emitter, rollbackOp)
            << " type=complete\n";
@@ -232,7 +251,11 @@ LogicalResult printAllVariables(CppEmitter &emitter, spechls::KernelOp &kernelOp
     } else if (auto cancelOp = dyn_cast<spechls::CancelOp>(op)) {
       if (failed(emitter.emitType(op->getLoc(), cancelOp.getType())))
         return failure();
-      os << " " << getCancelBufferName(emitter, cancelOp) << "[1]{};\n";
+      os << " " << getCancelBufferName(emitter, cancelOp);
+      if (emitter.shouldGenerateCatapultCompatibleCode())
+        os << "[1];\n";
+      else
+        os << "[1]{};\n";
       if (emitter.shouldGenerateVitisHLSCompatibleCode()) {
         os << "#pragma HLS array_partition variable=" << getCancelBufferName(emitter, cancelOp) << " type=complete\n";
       }
@@ -240,7 +263,11 @@ LogicalResult printAllVariables(CppEmitter &emitter, spechls::KernelOp &kernelOp
       os << "FifoType<";
       if (failed(emitter.emitType(op->getLoc(), fifoOp.getType())))
         return failure();
-      os << "> " << getFifoBufferName(emitter, fifoOp) << "{};\n";
+      os << "> " << getFifoBufferName(emitter, fifoOp);
+      if (emitter.shouldGenerateCatapultCompatibleCode())
+        os << ";\n";
+      else
+        os << "{};\n";
     }
     return WalkResult::advance();
   });
@@ -889,7 +916,8 @@ LogicalResult printOperation(CppEmitter &emitter, spechls::CommitOp commitOp) {
   os << " : ";
   if (failed(emitter.emitType(commitOp.getLoc(), commitOp.getValue().getType())))
     return failure();
-  os << "{}";
+  if (!emitter.shouldGenerateCatapultCompatibleCode())
+    os << "{}";
 
   return success();
 }

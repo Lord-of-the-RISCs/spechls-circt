@@ -32,6 +32,8 @@ int main(int argc, char **argv) {
   static llvm::cl::opt<bool> vitisHlsCompatibility(
       "vitis-hls-compat", llvm::cl::desc("Emit code that circumvents bugs and limitations in Vitis HLS"),
       llvm::cl::init(false));
+  static llvm::cl::opt<bool> catapultCompatibility(
+      "catapult-compat", llvm::cl::desc("Emit code that is compatible with catapult"), llvm::cl::init(false));
 
   mlir::TranslateFromMLIRRegistration registration(
       "spechls-to-cpp", "Translate SpecHLS to C++",
