@@ -50,11 +50,15 @@ private:
   static Operation *throughAlphaImpl(PatternRewriter &rewritter, Operation *op) {
     auto root = cast<spechls::LoadOp>(op);
     auto alpha = root.getArray().getDefiningOp<spechls::AlphaOp>();
+    auto rootI32Index =
+        rewritter.create<circt::hw::BitcastOp>(rewritter.getUnknownLoc(), rewritter.getI32Type(), root.getIndex());
+    auto alphaI32Index =
+        rewritter.create<circt::hw::BitcastOp>(rewritter.getUnknownLoc(), rewritter.getI32Type(), alpha.getIndex());
     auto newLoad =
         rewritter.create<spechls::LoadOp>(rewritter.getUnknownLoc(), root.getType(), alpha.getArray(), root.getIndex());
-    auto aliasCheck =
-        rewritter.create<circt::comb::ICmpOp>(rewritter.getUnknownLoc(), rewritter.getI1Type(),
-                                              circt::comb::ICmpPredicate::eq, root.getIndex(), alpha.getIndex());
+    newLoad->setAttrs(root->getDiscardableAttrDictionary());
+    auto aliasCheck = rewritter.create<circt::comb::ICmpOp>(
+        rewritter.getUnknownLoc(), rewritter.getI1Type(), circt::comb::ICmpPredicate::eq, rootI32Index, alphaI32Index);
     auto gammaCtrl =
         rewritter.create<circt::comb::AndOp>(rewritter.getUnknownLoc(), alpha.getWe(), aliasCheck.getResult());
     SmallVector<Value> inputs;
@@ -73,6 +77,7 @@ private:
     SmallVector<Value> newReads;
     for (auto in : gammaAlpha.getInputs()) {
       auto newRead = rewritter.create<spechls::LoadOp>(rewritter.getUnknownLoc(), root.getType(), in, root.getIndex());
+      newRead->setAttrs(root->getAttrDictionary());
       newReads.push_back(newRead.getResult());
     }
     auto newGamma =
