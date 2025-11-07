@@ -1,5 +1,5 @@
-// RUN: spechls-opt -split-input-file --spechls-factor-gamma-inputs %s | FileCheck %s
-// (If your pass flag differs, replace --spechls-factor-gamma-inputs accordingly)
+// RUN: spechls-opt -split-input-file --factor-gamma-inputs %s | FileCheck %s
+// (If your pass flag differs, replace --factor-gamma-inputs accordingly)
 
 //===----------------------------------------------------------------------===//
 // Two matched comb.add arms among 4 inputs (positions 0 and 2).
