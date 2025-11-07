@@ -3,6 +3,7 @@ add_executable(spechls-translate spechls-translate.cpp)
 target_link_libraries(spechls-translate PRIVATE
     SpecHLS
     SpecHLSTargetCpp
+    SpecHLSTargetUclid
     MLIR
     CIRCT
 )
