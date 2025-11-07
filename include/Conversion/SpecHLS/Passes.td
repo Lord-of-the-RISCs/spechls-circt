@@ -15,6 +15,17 @@ def SpecHLSToHWPass : Pass<"spechls-to-hw", "spechls::KernelOp"> {
   let dependentDialects = [
     "::spechls::SpecHLSDialect",
     "::circt::comb::CombDialect",
+    "::circt::seq::SeqDialect",
+    "::circt::hw::HWDialect",
+  ];
+}
+
+def SpecHLSToSeqPass : Pass<"spechls-to-seq", "circt::hw::HWModuleOp"> {
+  let summary = "Convert SpecHLS dialect ops to HW and Comb dialect ops";
+  let dependentDialects = [
+    "::spechls::SpecHLSDialect",
+    "::circt::comb::CombDialect",
+    "::circt::seq::SeqDialect",
     "::circt::hw::HWDialect",
   ];
 }
