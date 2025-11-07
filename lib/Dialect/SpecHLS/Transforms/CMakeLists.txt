@@ -13,7 +13,8 @@ add_circt_dialect_library(SpecHLSTransforms
     SimplifyLUTs.cpp
     SimplifyGammas.cpp
         FactorGammaInputs.cpp
-
+    ExposeControlFlowSpeculation.cpp
+    GenerateHazardControlFSM.cpp
     DEPENDS
     SpecHLSTransformsIncGen
     SpecHLSSimplifyLUTsPatternsIncGen
