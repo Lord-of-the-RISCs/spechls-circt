@@ -1,4 +1,4 @@
-// RUN: spechls-opt -split-input-file  --expose-memory-speculation %s | spechls-opt | FileCheck %s
+// RUN: spechls-opt -split-input-file --remove-intra-raw --expose-memory-speculation %s | spechls-opt | FileCheck %s
 
 // CHECK-LABEL: @simple
 spechls.kernel @simple(%arr : !spechls.array<i32, 16>, %idxRead : i32, %idxWrite : i32, %valWrite : i32, %we : i1) -> i32 {
