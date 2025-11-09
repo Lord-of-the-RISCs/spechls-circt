@@ -5,12 +5,11 @@
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 
-#ifndef SPECHLS_INCLUDED_DIALECT_SPECHLS_IR_SPECHLS_H
-#define SPECHLS_INCLUDED_DIALECT_SPECHLS_IR_SPECHLS_H
+#ifndef SPECHLS_INCLUDED_DIALECT_WCET_IR_WCET_H
+#define SPECHLS_INCLUDED_DIALECT_WCET_IR_WCET_H
 
 #include <mlir/IR/Dialect.h>
 
-#include "Dialect/SpecHLS/IR/SpecHLSDialect.h.inc"
-#include "mlir/IR/PatternMatch.h"
+#include "Dialect/Wcet/IR/WcetDialect.h.inc"
 
-#endif // SPECHLS_INCLUDED_DIALECT_SPECHLS_IR_SPECHLS_H
+#endif // SPECHLS_INCLUDED_DIALECT_WCET_IR_WCET_H

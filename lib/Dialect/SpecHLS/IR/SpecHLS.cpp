@@ -7,6 +7,8 @@
 
 #include "Dialect/SpecHLS/IR/SpecHLSOps.h"
 
+#include "circt/Support/LLVM.h"
+#include "mlir/IR/OpDefinition.h"
 #include <llvm/ADT/STLExtras.h>
 #include <llvm/ADT/TypeSwitch.h>
 #include <mlir/IR/BuiltinAttributes.h>
@@ -17,6 +19,7 @@
 #include <mlir/Interfaces/CallInterfaces.h>
 #include <mlir/Interfaces/FunctionImplementation.h>
 #include <mlir/Support/LLVM.h>
+#include <string>
 
 #include "Dialect/SpecHLS/IR/SpecHLSDialect.cpp.inc"
 #include "Dialect/SpecHLS/IR/SpecHLSTypes.h"

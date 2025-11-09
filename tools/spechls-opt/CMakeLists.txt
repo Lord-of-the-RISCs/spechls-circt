@@ -5,7 +5,9 @@ target_link_libraries(spechls-opt PRIVATE
     SpecHLSTransforms
     SpecHLSToHW
     Schedule
+    Wcet
     ScheduleTransforms
+    WcetTransforms
     ScheduleToSSP
     MLIR
     CIRCT

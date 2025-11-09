@@ -1,0 +1,6 @@
+set(LLVM_TARGET_DEFINITIONS Passes.td)
+mlir_tablegen(Passes.h.inc -gen-pass-decls -name Wcet)
+mlir_tablegen(Passes.capi.h.inc -gen-pass-capi-header --prefix Wcet)
+mlir_tablegen(Passes.capi.cpp.inc -gen-pass-capi-impl --prefix Wcet)
+add_public_tablegen_target(WcetTransformsIncGen)
+add_circt_doc(Passes WcetPasses -gen-pass-doc)

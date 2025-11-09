@@ -20,18 +20,21 @@
 #include "Dialect/Schedule/Transforms/Passes.h"
 #include "Dialect/SpecHLS/IR/SpecHLS.h"
 #include "Dialect/SpecHLS/Transforms/Passes.h"
+#include "Dialect/Wcet/IR/Wcet.h"
+#include "Dialect/Wcet/Transforms/Passes.h"
 
 int main(int argc, char **argv) {
   mlir::DialectRegistry registry;
-  registry
-      .insert<spechls::SpecHLSDialect, schedule::ScheduleDialect, circt::comb::CombDialect, circt::hw::HWDialect,
-              circt::ssp::SSPDialect, mlir::arith::ArithDialect, circt::synth::SynthDialect, circt::seq::SeqDialect>();
+  registry.insert<spechls::SpecHLSDialect, schedule::ScheduleDialect, wcet::WcetDialect, circt::comb::CombDialect,
+                  circt::hw::HWDialect, circt::ssp::SSPDialect, mlir::arith::ArithDialect, circt::synth::SynthDialect,
+                  circt::seq::SeqDialect>();
 
   mlir::registerTransformsPasses();
   spechls::registerSpecHLSPasses();
   spechls::registerSpecHLSToHWPass();
   schedule::registerSchedulePasses();
   schedule::registerScheduleToSSPPass();
+  wcet::registerWcetPasses();
 
   return mlir::asMainReturnCode(mlir::MlirOptMain(argc, argv, "SpecHLS optimizer driver", registry));
 }
