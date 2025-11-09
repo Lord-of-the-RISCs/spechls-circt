@@ -3,6 +3,7 @@
 #include "mlir/IR/BuiltinAttributes.h"
 #include "mlir/IR/Operation.h"
 #include "mlir/Support/LLVM.h"
+#include "llvm/Support/raw_ostream.h"
 #include <circt/Dialect/Comb/CombOps.h>
 #include <circt/Dialect/HW/HWOps.h>
 #include <cstdio>
@@ -191,6 +192,7 @@ private:
           aliasCheck = lastOpResult;
         }
       }
+      llvm::errs() << aliasCheck.getType() << "\n";
 
       // Build the gamma for the distance i + 1
       std::string gammaName = "alias_check_" + mu.getSymName().str() + "_distance_" + std::to_string(i + 1);
@@ -213,7 +215,7 @@ private:
       //                                                  rewritter.getStringAttr(gammaName), aliasCheck, gammaInputs)
       //                        .getResult();
       aliasGammaResult = rewritter.create<circt::comb::MuxOp>(rewritter.getUnknownLoc(), rewritter.getI32Type(),
-                                                              aliasCheck, cons, inputFalse);
+                                                              aliasCheck, cons.getResult(), inputFalse);
       aliasGammaResult.getDefiningOp()->setAttr("spechls.scn", scn);
     }
 
