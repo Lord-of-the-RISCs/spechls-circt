@@ -5,6 +5,7 @@
 #include "mlir/Support/LLVM.h"
 #include <circt/Dialect/Comb/CombOps.h>
 #include <circt/Dialect/HW/HWOps.h>
+#include <cstdio>
 #include <mlir/Dialect/PDL/IR/PDL.h>
 #include <mlir/Dialect/PDLInterp/IR/PDLInterp.h>
 #include <mlir/IR/MLIRContext.h>
@@ -60,10 +61,9 @@ private:
     auto maxSccAttr = dyn_cast_or_null<IntegerAttr>(kernel->getDiscardableAttr("spechls.max_scc"));
     int sccConstraint = 0;
     if (maxSccAttr != nullptr) {
-      sccConstraint = maxSccAttr.getInt() + 1;
+      sccConstraint = maxSccAttr.getInt();
     }
     auto scn = rewritter.getIntegerAttr(rewritter.getI32Type(), sccConstraint);
-    kernel->setAttr("spechls.max_scc", scn);
 
     // Get the dependency distance
     auto dependencyDistance = cast<mlir::IntegerAttr>(mu->getDiscardableAttr("spechls.memspec")).getInt() - 1;
@@ -85,11 +85,15 @@ private:
         newLoad->setAttrs(loadAttr);
         newLoad->setAttr("spechls.scn", scn);
         loads.push_back(newLoad);
-        auto castOp = rewritter.create<circt::hw::BitcastOp>(
-            rewritter.getUnknownLoc(), rewritter.getIntegerType(newLoad.getIndex().getType().getWidth()),
-            newLoad.getIndex());
-        castOp->setAttr("spechls.scn", scn);
-        loadsAddresses.push_back(castOp.getResult());
+        Value addr = newLoad.getIndex();
+        if (newLoad.getIndex().getType().isSigned() || newLoad.getIndex().getType().isUnsigned()) {
+          auto castOp = rewritter.create<circt::hw::BitcastOp>(
+              rewritter.getUnknownLoc(), rewritter.getIntegerType(newLoad.getIndex().getType().getIntOrFloatBitWidth()),
+              newLoad.getIndex());
+          castOp->setAttr("spechls.scn", scn);
+          addr = castOp.getResult();
+        }
+        loadsAddresses.push_back(addr);
       }
     }
 
@@ -104,11 +108,15 @@ private:
       for (auto *succ : current->getResults().getUsers()) {
         if (succ->getName().getStringRef() == spechls::AlphaOp::getOperationName()) {
           auto alpha = cast<spechls::AlphaOp>(succ);
-          auto castOp = rewritter.create<circt::hw::BitcastOp>(
-              rewritter.getUnknownLoc(), rewritter.getIntegerType(alpha.getIndex().getType().getWidth()),
-              alpha.getIndex());
-          castOp->setAttr("spechls.scn", scn);
-          writeAddresses.push_back(castOp.getResult());
+          Value addr = alpha.getIndex();
+          if (alpha.getIndex().getType().isSigned() || alpha.getIndex().getType().isUnsigned()) {
+            auto castOp = rewritter.create<circt::hw::BitcastOp>(
+                rewritter.getUnknownLoc(), rewritter.getIntegerType(alpha.getIndex().getType().getIntOrFloatBitWidth()),
+                alpha.getIndex());
+            castOp->setAttr("spechls.scn", scn);
+            addr = castOp.getResult();
+          }
+          writeAddresses.push_back(addr);
           writeEnables.push_back(alpha.getWe());
           alpha->setAttr("spechls.memspec", rewritter.getUnitAttr());
           alpha->setAttr("spechls.scn", scn);
@@ -143,6 +151,25 @@ private:
         for (size_t j = 0; j < writeAddresses.size(); j++) {
           auto write = writeAddresses.data()[j];
           auto we = writeEnables.data()[j];
+          if (load.getType() != write.getType()) {
+            size_t loadSize = load.getType().getIntOrFloatBitWidth();
+            size_t writeSize = write.getType().getIntOrFloatBitWidth();
+            if (writeSize > loadSize) {
+              auto consSize = rewritter.create<circt::hw::ConstantOp>(
+                  rewritter.getUnknownLoc(), rewritter.getIntegerType(writeSize - loadSize), 0);
+              consSize->setAttr("spechls.scn", scn);
+              auto concat = rewritter.create<circt::comb::ConcatOp>(rewritter.getUnknownLoc(), consSize, load);
+              concat->setAttr("spechls.scn", scn);
+              load = concat.getResult();
+            } else {
+              auto consSize = rewritter.create<circt::hw::ConstantOp>(
+                  rewritter.getUnknownLoc(), rewritter.getIntegerType(loadSize - writeSize), 0);
+              consSize->setAttr("spechls.scn", scn);
+              auto concat = rewritter.create<circt::comb::ConcatOp>(rewritter.getUnknownLoc(), consSize, write);
+              concat->setAttr("spechls.scn", scn);
+              write = concat.getResult();
+            }
+          }
           auto comp = rewritter.create<circt::comb::ICmpOp>(rewritter.getUnknownLoc(), rewritter.getI1Type(),
                                                             circt::comb::ICmpPredicate::eq, write, load);
           comp->setAttr("spechls.scn", scn);
@@ -228,6 +255,7 @@ private:
     result->setAttr("spechls.scn", scn);
     rewritter.replaceAllUsesWith(mu, result);
 
+    kernel->setAttr("spechls.max_scc", rewritter.getI32IntegerAttr(scn.getInt() + 1));
     return result;
   }
 };
@@ -246,7 +274,7 @@ SmallVector<SmallVector<Value>> delayValues(PatternRewriter &rewritter, SmallVec
           rewritter.create<spechls::DelayOp>(rewritter.getUnknownLoc(), val.getType(), val, i, enable, initDelay);
       if (!delayType.empty())
         newDel->setAttr(delayType, rewritter.getI32IntegerAttr(depth - i));
-      newDel->setAttr("spechls.memspece", rewritter.getUnitAttr());
+      // newDel->setAttr("spechls.memspec", rewritter.getUnitAttr());
       newDel->setAttr("spechls.scn", scn);
       newVals.push_back(newDel);
     }

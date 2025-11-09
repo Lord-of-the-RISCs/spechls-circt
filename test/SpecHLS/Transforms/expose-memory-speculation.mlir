@@ -3,7 +3,7 @@
 // CHECK-LABEL: @simple
 spechls.kernel @simple(%arr : !spechls.array<i32, 16>, %idxRead : i32, %idxWrite : i32, %valWrite : i32, %we : i1) -> i32 {
     %true = hw.constant 1 : i1
-    %mu = spechls.mu<"x">(%arr, %next_arr) {spechls.memspec = 1} : !spechls.array<i32, 16>
+    %mu = spechls.mu<"x">(%arr, %next_arr) {spechls.memspec = 2} : !spechls.array<i32, 16>
     %next_arr = spechls.alpha %mu[%idxWrite : i32], %valWrite if %we : !spechls.array<i32, 16>
     //CHECK: %0 = spechls.delay %arg2 by 1 if %true init %arg2 : i32 
     //CHECK: %1 = spechls.delay %arg4 by 1 if %true init %arg4 : i1 
@@ -251,4 +251,42 @@ spechls.kernel @simpleWithDiffType(%arr : !spechls.array<i32, 16>, %idxRead : si
     //CHECK: %8 = spechls.load %gamma_0[%arg1 : si32] : <i32, 16>
     %result = spechls.load %mu[%idxRead : si32] : !spechls.array<i32, 16>
     spechls.exit if %true with %result : i32
+}
+
+spechls.kernel @simpleDoubleRead(%arr : !spechls.array<i32, 16>, %idxRead1 : i32, %idxRead2 : i32,
+    %idxWrite : i32, %valWrite : i32, %we : i1) -> i32 {
+    %true = hw.constant 1 : i1
+    %mu = spechls.mu<"x">(%arr, %next_arr) {spechls.memspec = 2} : !spechls.array<i32, 16>
+    %next_arr = spechls.alpha %mu[%idxWrite : i32], %valWrite if %we : !spechls.array<i32, 16>
+    %operand1 = spechls.load %next_arr[%idxRead1 : i32] : !spechls.array<i32, 16>
+    %operand2 = spechls.load %next_arr[%idxRead2 : i32] : !spechls.array<i32, 16>
+    %result = comb.add %operand1, %operand2 : i32
+    spechls.exit if %true with %result : i32
+}
+
+spechls.kernel @simpleUnsigned(%arr : !spechls.array<i32, 16>, %idxRead : ui8,
+    %idxWrite : ui8, %valWrite : i32, %we : i1) -> i32 {
+    %true = hw.constant 1 : i1
+    %mu = spechls.mu<"x">(%arr, %next_arr) {spechls.memspec = 2} : !spechls.array<i32, 16>
+    %next_arr = spechls.alpha %mu[%idxWrite : ui8], %valWrite if %we : !spechls.array<i32, 16>
+    %result = spechls.load %mu[%idxRead : ui8] : !spechls.array<i32, 16>
+    spechls.exit if %true with %result : i32
+}
+
+
+spechls.kernel @withFields(%arr : !spechls.array<i32, 16>, %in : !spechls.struct<"in" { "val" : i32,  "wAddr" : ui8, "we" : i1, 
+"rdAddr" : ui8 }>) -> i32 {
+  %true = hw.constant 1 : i1
+  %mu = spechls.mu<"arr">(%arr, %next_arr) {spechls.memspec=3}: !spechls.array<i32, 16>
+  %wrAddr = spechls.field<"wAddr"> %in : !spechls.struct<"in" { "val" : i32,  "wAddr" : ui8, "we" : i1, 
+"rdAddr" : ui8 }>
+  %we = spechls.field<"we"> %in : !spechls.struct<"in" { "val" : i32,  "wAddr" : ui8, "we" : i1, 
+"rdAddr" : ui8 }>
+  %val = spechls.field<"val"> %in : !spechls.struct<"in" { "val" : i32,  "wAddr" : ui8, "we" : i1, 
+"rdAddr" : ui8 }>
+  %next_arr = spechls.alpha %mu[%wrAddr : ui8], %val if %we : !spechls.array<i32, 16>
+  %rdAddr = spechls.field<"rdAddr"> %in : !spechls.struct<"in" { "val" : i32,  "wAddr" : ui8, "we" : i1, 
+"rdAddr" : ui8 }>
+  %result = spechls.load %next_arr[%rdAddr : ui8] : <i32, 16>
+  spechls.exit if %true with %result : i32
 }
