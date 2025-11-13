@@ -117,17 +117,14 @@ private:
     addrAlias->setAttr("spechls.scn", scn);
 
     // Set the gamma for the "forward"
-    auto gammaCtrl =
-        rewritter.create<circt::comb::AndOp>(rewritter.getUnknownLoc(), alpha.getWe(), aliasCheck.getResult());
-    gammaCtrl->setAttr("spechls.scn", scn);
     SmallVector<Value> inputs;
     inputs.push_back(newLoad.getResult());
     inputs.push_back(alpha.getValue());
-    // auto gamma =
-    //     rewritter.create<spechls::GammaOp>(rewritter.getUnknownLoc(), root.getType(),
-    //                                        rewritter.getStringAttr("aliasDetection"), gammaCtrl.getResult(), inputs);
-    auto gamma = rewritter.create<circt::comb::MuxOp>(rewritter.getUnknownLoc(), gammaCtrl.getResult(),
-                                                      newLoad.getResult(), alpha.getValue());
+    auto gamma =
+        rewritter.create<spechls::GammaOp>(rewritter.getUnknownLoc(), root.getType(),
+                                           rewritter.getStringAttr("aliasDetection"), aliasCheck.getResult(), inputs);
+    // auto gamma = rewritter.create<circt::comb::MuxOp>(rewritter.getUnknownLoc(), aliasCheck.getResult(),
+    //                                                   alpha.getValue(), newLoad.getResult());
     gamma->setAttr("spechls.scn", scn);
     rewritter.replaceAllOpUsesWith(root, gamma);
     return newLoad;
