@@ -10,75 +10,60 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include <climits>
-#include <cstdio>
-#include <llvm/ADT/ArrayRef.h>
-#include <llvm/ADT/SmallVector.h>
-#include <map>
-#include <stack>
-#include <system_error>
+#include "mlir/Rewrite/FrozenRewritePatternSet.h"
+#include <mlir/Dialect/PDL/IR/PDL.h>
+#include <mlir/Dialect/PDLInterp/IR/PDLInterp.h>
+#include <mlir/IR/MLIRContext.h>
+#include <mlir/IR/PatternMatch.h>
+#include <mlir/IR/Value.h>
+#include <mlir/IR/ValueRange.h>
+#include <mlir/Parser/Parser.h>
+#include <mlir/Pass/Pass.h>
+#include <mlir/Pass/PassManager.h>
+#include <mlir/Support/TypeID.h>
+#include <mlir/Transforms/GreedyPatternRewriteDriver.h>
 
-#include "Dialect/SpecHLS/IR/SpecHLS.h"
-#include "Dialect/SpecHLS/IR/SpecHLSOps.h"
-#include "Dialect/Wcet/IR/WcetOps.h"
-#include "Dialect/Wcet/Transforms/Passes.h"
-#include "circt/Dialect/HW/HWOpInterfaces.h"
-#include "circt/Dialect/HW/HWOps.h"
-#include "mlir/IR/PatternMatch.h"
-#include "mlir/IR/Verifier.h"
-#include "mlir/Interfaces/Utils/InferIntRangeCommon.h"
-#include "mlir/Pass/PassManager.h"
-#include "mlir/Support/LLVM.h"
-#include "mlir/Transforms/DialectConversion.h"
-#include "mlir/Transforms/GreedyPatternRewriteDriver.h"
-#include "mlir/Transforms/Passes.h"
-#include "llvm/Support/LogicalResult.h"
-#include "llvm/Support/raw_ostream.h"
+#include <Dialect/SpecHLS/IR/SpecHLSOps.h>
 
 using namespace mlir;
-using namespace circt;
-using namespace spechls;
 
 namespace wcet {
 #define GEN_PASS_DEF_SPLITDELAYSPASS
 #include "Dialect/Wcet/Transforms/Passes.h.inc"
 } // namespace wcet
 
-namespace {} // namespace
+#include "SplitDelays.h.inc"
 
-namespace wcet {
+namespace {
 
-struct SplitDelaysPattern : OpRewritePattern<spechls::DelayOp> {
-
-  SplitDelaysPattern(MLIRContext *ctx) : OpRewritePattern<spechls::DelayOp>(ctx) {}
-
-  LogicalResult matchAndRewrite(spechls::DelayOp top, PatternRewriter &rewriter) const override {
-    if (top.getDepth() == 1)
-      return failure();
-    rewriter.setInsertionPointAfter(top);
-    DelayOp newDelay = rewriter.create<spechls::DelayOp>(
-        rewriter.getUnknownLoc(), top.getResult(), rewriter.getUI32IntegerAttr(1), top.getEnable(), top.getInit());
-    top.setDepth(top.getDepth() - 1);
-    rewriter.replaceAllUsesExcept(top, newDelay.getResult(), newDelay);
-
-    return success();
-  }
-};
-
-struct SplitDelaysPass : public impl::SplitDelaysPassBase<SplitDelaysPass> {
+struct SplitDelaysPass : public wcet::impl::SplitDelaysPassBase<SplitDelaysPass> {
+  FrozenRewritePatternSet patterns;
 
   using SplitDelaysPassBase::SplitDelaysPassBase;
 
-public:
-  void runOnOperation() override {
-    auto *ctx = &getContext();
+  LogicalResult initialize(MLIRContext *ctx) override {
+    RewritePatternSet patternList{ctx};
+    registerNativeRewrite(patternList);
+    populateGeneratedPDLLPatterns(patternList);
+    patterns = std::move(patternList);
+    return success();
+  }
 
-    RewritePatternSet patterns(ctx);
-    patterns.add<SplitDelaysPattern>(ctx);
-    if (failed(applyPatternsGreedily(getOperation()->getParentOp(), std::move(patterns)))) {
-      llvm::errs() << "failed delay splitting\n";
-      signalPassFailure();
-    }
+  void registerNativeRewrite(RewritePatternSet &patterns) {
+    patterns.getPDLPatterns().registerRewriteFunction("SplitDelays", splitDelaysImp);
+  }
+
+  void runOnOperation() override { (void)applyPatternsGreedily(getOperation(), patterns); }
+
+private:
+  static Operation *splitDelaysImp(PatternRewriter &rewriter, Operation *op) {
+    spechls::DelayOp root = cast<spechls::DelayOp>(op);
+    auto oneDelay = rewriter.create<spechls::DelayOp>(rewriter.getUnknownLoc(), root.getType(), root.getInput(), 1,
+                                                      root.getEnable(), root.getInit());
+    auto rootMinusOne =
+        rewriter.create<spechls::DelayOp>(rewriter.getUnknownLoc(), root.getType(), oneDelay.getResult(),
+                                          root.getDepth() - 1, root.getEnable(), root.getInit());
+    return rootMinusOne;
   }
 };
-} // namespace wcet
+} // namespace

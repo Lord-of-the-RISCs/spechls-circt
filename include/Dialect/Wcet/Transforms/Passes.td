@@ -11,13 +11,14 @@
 include "mlir/Pass/PassBase.td"
 
 
-def SplitDelaysPass : Pass<"split-delays", "spechls::KernelOp"> {
+def SplitDelaysPass : Pass<"split-delays", "ModuleOp"> {
     let summary = "Split delays";
     let description = [{ TODO }];
 
     let dependentDialects = [
-      "circt::hw::HWDialect",
       "spechls::SpecHLSDialect",
+      "::mlir::pdl::PDLDialect",
+      "::mlir::pdl_interp::PDLInterpDialect",
       ];
   }
 

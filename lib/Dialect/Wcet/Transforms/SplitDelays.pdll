@@ -1,0 +1,23 @@
+//
+// This file is part of the SpecHLS project.
+// This file is licensed under Apache license v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
+//
+
+
+#include "Dialect/SpecHLS/IR/SpecHLS.td"
+#include "mlir/IR/BuiltinAttributes.td"
+
+Constraint IsGreaterThanOne(attr: Attr) [{
+    int64_t value = cast<::mlir::IntegerAttr>(attr).getValue().getSExtValue();
+    return success(value > 1);
+  }];
+
+Rewrite SplitDelays(root : Op ) -> Op;
+
+Pattern SplitDelayOneIn {
+  let root = op<spechls.delay> {depth = dist : Attr};
+  IsGreaterThanOne(dist);
+  replace root with SplitDelays(root);
+}
