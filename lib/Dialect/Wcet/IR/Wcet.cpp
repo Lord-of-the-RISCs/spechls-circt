@@ -54,70 +54,48 @@ void wcet::WcetDialect::initialize() {
 // DummyOp
 //===--------------------------------------------------------------------------------------------------------------===//
 
-LogicalResult wcet::DummyOp::canonicalize(wcet::DummyOp op, PatternRewriter &rewriter) {
-  // patterns and rewrites go here.
-  auto inputs = op.getInputs();
-  auto outputs = op.getOutputs();
-  SmallVector<Value> newIn = SmallVector<Value>();
-  SmallVector<Type> newInType = SmallVector<Type>();
-  bool change = false;
-  for (size_t i = 0; i < inputs.size(); i++) {
-    newIn.push_back(inputs[i]);
-    newInType.push_back(inputs[i].getType());
-    auto *in = inputs[i].getDefiningOp();
-    if (!in)
-      continue;
-    if (in->hasTrait<mlir::OpTrait::ConstantLike>()) {
-      rewriter.replaceAllUsesWith(outputs[i], inputs[i]);
-      newIn.pop_back();
-      newInType.pop_back();
-      change = true;
-    }
-  }
-  if (!change)
-    return failure();
-
-  op->setOperands(newIn);
-  return success();
-}
-// llvm::LogicalResult wcet::DummyOp::fold(FoldAdaptor adaptor, SmallVectorImpl<OpFoldResult> &results) {
-//   for (auto in : getInputs()) {
-//     results.push_back(in);
+// LogicalResult wcet::DummyOp::canonicalize(wcet::DummyOp op, PatternRewriter &rewriter) {
+//   // patterns and rewrites go here.
+//   auto inputs = op.getInputs();
+//   auto outputs = op.getOutputs();
+//   SmallVector<Value> newIn = SmallVector<Value>();
+//   SmallVector<Type> newInType = SmallVector<Type>();
+//   bool change = false;
+//   for (size_t i = 0; i < inputs.size(); i++) {
+//     newIn.push_back(inputs[i]);
+//     newInType.push_back(inputs[i].getType());
+//     auto *in = inputs[i].getDefiningOp();
+//     if (!in)
+//       continue;
+//     if (in->hasTrait<mlir::OpTrait::ConstantLike>()) {
+//       rewriter.replaceAllUsesWith(outputs[i], inputs[i]);
+//       newIn.pop_back();
+//       newInType.pop_back();
+//       change = true;
+//     }
 //   }
+//   if (!change)
+//     return failure();
+//
+//   op->setOperands(newIn);
 //   return success();
 // }
-
-LogicalResult  wcet::DummyOp::fold(FoldAdaptor adaptor, SmallVectorImpl<OpFoldResult> &results) {
- /* results.reserve(getInputs().size());
-  
-  for (size_t i = 9; i < getInputs().size(); ++i) {
-    if (getInputs()[i]) {
-      // On peut propager la constante en sortie
-      results.push_back(getInputs()[i]);
-    } else {
-      // Sinon, on garde la valeur non repliée
-      results.push_back(Value(getOutputs()[i]));
-    }
-  }*/
-
-  return failure();
-}
 
 //===--------------------------------------------------------------------------------------------------------------===//
 // PenaltyOp
 //===--------------------------------------------------------------------------------------------------------------===//
 
-LogicalResult wcet::PenaltyOp::canonicalize(wcet::PenaltyOp op, PatternRewriter &rewriter) {
-  if (!op.getInput().getDefiningOp()->hasTrait<mlir::OpTrait::ConstantLike>())
-    return failure();
-  for (auto *us : op.getInput().getUsers()) {
-    llvm::errs() << us->getName() << "\n";
-    us->setAttr("wcet.delay", rewriter.getI32IntegerAttr(op.getDepth()));
-  }
-  rewriter.replaceAllOpUsesWith(op, op.getInput());
-  rewriter.eraseOp(op);
-  return success();
-}
+// LogicalResult wcet::PenaltyOp::canonicalize(wcet::PenaltyOp op, PatternRewriter &rewriter) {
+//   if (!op.getInput().getDefiningOp()->hasTrait<mlir::OpTrait::ConstantLike>())
+//     return failure();
+//   for (auto *us : op.getInput().getUsers()) {
+//     llvm::errs() << us->getName() << "\n";
+//     us->setAttr("wcet.delay", rewriter.getI32IntegerAttr(op.getDepth()));
+//   }
+//   rewriter.replaceAllOpUsesWith(op, op.getInput());
+//   rewriter.eraseOp(op);
+//   return success();
+// }
 
 //===--------------------------------------------------------------------------------------------------------------===//
 // TableGen'd types and op method definitions
