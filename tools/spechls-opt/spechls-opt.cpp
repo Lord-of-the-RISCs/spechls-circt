@@ -11,6 +11,7 @@
 #include <mlir/Dialect/Arith/IR/Arith.h>
 #include <mlir/Tools/mlir-opt/MlirOptMain.h>
 #include <mlir/Transforms/Passes.h>
+#include <circt/Transforms/Passes.h>
 
 #include "Conversion/Schedule/Passes.h"
 #include "Conversion/SpecHLS/Passes.h"
@@ -19,14 +20,21 @@
 #include "Dialect/SpecHLS/IR/SpecHLS.h"
 #include "Dialect/SpecHLS/Transforms/Passes.h"
 
+#include <circt/Dialect/Seq/SeqOps.h>
+#include <circt/Dialect/Seq/SeqTypes.h>
+
 int main(int argc, char **argv) {
   mlir::DialectRegistry registry;
-  registry.insert<spechls::SpecHLSDialect, schedule::ScheduleDialect, circt::comb::CombDialect, circt::hw::HWDialect,
+  registry.insert<spechls::SpecHLSDialect, schedule::ScheduleDialect, circt::comb::CombDialect, circt::seq::SeqDialect, circt::hw::HWDialect,
                   circt::ssp::SSPDialect, mlir::arith::ArithDialect>();
 
-  mlir::registerTransformsPasses();
+
+  //mlir::registerTransformsPasses();
+  circt::registerCIRCTTransformsPasses();
   spechls::registerSpecHLSPasses();
   spechls::registerSpecHLSToHWPass();
+  spechls::registerSpecHLSToSeqPass();
+
   schedule::registerSchedulePasses();
   schedule::registerScheduleToSSPPass();
 

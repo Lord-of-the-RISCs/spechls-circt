@@ -1,5 +1,7 @@
 add_circt_conversion_library(SpecHLSToHW
-  SpecHLSToHW.cpp
+        common.cpp
+        SpecHLSToHW.cpp
+  SpecHLSToSeq.cpp
 
   DEPENDS
   SpecHLSConversionPassIncGen

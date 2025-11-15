@@ -1,3 +1,3 @@
 add_subdirectory(ScheduleToSSP)
 add_subdirectory(SpecHLSToHW)
-add_subdirectory(SpecHLSToSeq)
+

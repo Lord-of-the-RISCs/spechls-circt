@@ -1,80 +1,57 @@
 // RUN: spechls-opt --spechls-to-hw %s | FileCheck %s
 
-//===----------------------------------------------------------------------===//
-// 1) Trivial kernel + 2-way gamma → comb.mux
-//===----------------------------------------------------------------------===//
-
-// CHECK-LABEL: hw.module @k1(
-// CHECK-SAME:   %sel: i1, %a: i32, %b: i32,
-// CHECK-SAME:   %clk: !seq.clock, %rst: i1, %ce: i1
-// CHECK-SAME: ) -> (i32)
-spechls.kernel @k1(%sel: i1, %a: i32, %b: i32) -> i32 {
-  %v = spechls.gamma<"x">(%sel, %a, %b) : i1, i32
-  spechls.exit with %v : i32
-}
-
-// Inside body we expect a comb.mux and a single hw.output.
-// CHECK:         %[[MUX:.+]] = comb.mux %sel, %b, %a : i32
-// CHECK-NEXT:    hw.output %[[MUX]] : i32
-
-
-//===----------------------------------------------------------------------===//
-// 2) Kernel with a child task → child hw.module (+clk/rst/ce) and instance
-//    Parent forwards its (%clk,%rst,%ce) to the child instance (same order)
-//===----------------------------------------------------------------------===//
-
-// CHECK-LABEL: hw.module @k2(
-// CHECK-SAME:   %x: i32, %y: i32,
-// CHECK-SAME:   %clk: !seq.clock, %rst: i1, %ce: i1
-// CHECK-SAME: ) -> (i32)
-spechls.kernel @k2(%x: i32, %y: i32) -> i32 {
-  %r = spechls.task @child(%x: i32, %y: i32) -> i32 {
-    // trivial body: return first arg
-    spechls.commit %arg0 : i32
+// CHECK-LABEL: @task
+spechls.kernel @task_comb(%in1 : i32, %in2 : i1) -> i32 {
+  // CHECK: %task1.result = hw.instance "task2" @task1(arg0: %arg0: i32) -> (result: i32)
+  %0 = spechls.task "task2"(%arg1 = %in1) : (i32) -> i32 {
+    %true = hw.constant 1 : i1
+    // CHECK: comb.mux
+    spechls.commit %true, %arg1 : i32
   }
-  spechls.exit with %r : i32
+  // CHECK: hw.output %task1.result : i32
+  spechls.exit if %in2 with %0 : i32
 }
 
-// Child module must exist with (args..., clk, rst, ce) and one i32 result.
-// CHECK:       hw.module @child(
-// CHECK-SAME:    %arg0: i32, %arg1: i32,
-// CHECK-SAME:    %clk: !seq.clock, %rst: i1, %ce: i1
-// CHECK-SAME:  ) -> (i32)
-// CHECK:         hw.output %arg0 : i32
-
-// Parent body must instantiate child and append (%clk, %rst, %ce) *after* functional args.
-// CHECK:       %[[INST:.+]] = hw.instance "child" @child(%x, %y, %clk, %rst, %ce)
-// CHECK:       hw.output %[[INST]] : i32
-
-
-//===----------------------------------------------------------------------===//
-// 3) N-way gamma → hw.array_create + hw.array_get
-//===----------------------------------------------------------------------===//
-
-// CHECK-LABEL: hw.module @k3(
-// CHECK-SAME:   %idx: i2, %a0: i32, %a1: i32, %a2: i32, %a3: i32,
-// CHECK-SAME:   %clk: !seq.clock, %rst: i1, %ce: i1
-// CHECK-SAME: ) -> (i32)
-spechls.kernel @k3(%idx: i2, %a0: i32, %a1: i32, %a2: i32, %a3: i32) -> i32 {
-  %v = spechls.gamma<"x">(%idx, %a0, %a1, %a2, %a3) : i2, i32
-  spechls.exit with %v : i32
+// CHECK-LABEL: @task
+spechls.kernel @task_seq(%in1 : i32, %in2 : i1) -> i32 {
+  // CHECK: %task1.result = hw.instance "task1" @task1(arg0: %arg0: i32) -> (result: i32)
+  %0 = spechls.task "task1"(%arg1 = %in1) : (i32) -> i32 {
+    %true = hw.constant 1 : i1
+    %m = spechls.mu<"x">(%arg1, %arg1) : i32
+    // CHECK: comb.mux
+    spechls.commit %true, %arg1 : i32
+  }
+  // CHECK: hw.output %task1.result : i32
+  spechls.exit if %in2 with %0 : i32
 }
 
-// CHECK:         %[[ARR:.+]] = hw.array_create %a0, %a1, %a2, %a3 : array<4xi32>
-// CHECK-NEXT:    %[[GET:.+]] = hw.array_get %[[ARR]][%idx] : i32
-// CHECK-NEXT:    hw.output %[[GET]] : i32
 
+//---
 
-//===----------------------------------------------------------------------===//
-// 4) Multi-result kernel → hw.module with multiple outputs
-//===----------------------------------------------------------------------===//
-
-// CHECK-LABEL: hw.module @k4(
-// CHECK-SAME:   %a: i32,
-// CHECK-SAME:   %clk: !seq.clock, %rst: i1, %ce: i1
-// CHECK-SAME: ) -> (i32, i32)
-spechls.kernel @k4(%a: i32) -> (i32, i32) {
-  spechls.exit with %a, %a : i32, i32
+// CHECK-LABEL: @gamma
+spechls.kernel @gamma(%cond: i1, %x: i32, %y: i32) -> i32 {
+  %true = hw.constant 1 : i1
+  // CHECK: comb.mux %arg0, %arg2, %arg1 : i32
+  %0 = spechls.gamma<"x">(%cond, %x, %y) : i1, i32
+  spechls.exit if %true with %0 : i32
 }
 
-// CHECK:         hw.output {{%.*}}, {{%.*}} : i32, i32
+spechls.kernel @array_raw(%init :!spechls.array<i32, 4>, %index: i32, %value: i32) -> i32 {
+  %true = hw.constant true
+    %mu = spechls.mu<"x">(%1, %init) : !spechls.array<i32, 4>
+    %1 = spechls.alpha %mu[%index: i32], %value if %true : !spechls.array<i32, 4>
+    %0 = spechls.load %1[%index : i32] : <i32, 4>
+     spechls.exit if %true with %0 : i32
+  }
+//---
+
+// CHECK-LABEL: @nary_gamma
+spechls.kernel @nary_gamma(%cond: i2, %x: i32, %y: i32, %z: i32) -> i32 {
+  %true = hw.constant 1 : i1
+  // CHECK: %[[array:.+]] = hw.array_create %arg1, %arg2, %arg3 : i32
+  // CHECK: hw.array_get %[[array]][%arg0] : !hw.array<3xi32>, i2
+  %0 = spechls.gamma<"x">(%cond, %x, %y, %z) : i2, i32
+  spechls.exit if %true with %0 : i32
+}
+
+
