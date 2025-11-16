@@ -42,7 +42,7 @@ struct ExposeControlFlowSpeculationPass : public spechls::impl::ExposeControlFlo
 
 
   void runOnOperation() override {
-    spechls::dumpToUclid(getOperation(), "output.uclid");
+        llvm::outs() << "NYI";
   }
 
 
