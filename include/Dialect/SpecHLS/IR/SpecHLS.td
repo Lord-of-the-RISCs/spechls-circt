@@ -27,6 +27,12 @@ def SpecHLSDialect : Dialect {
     let cppNamespace = "spechls";
 
     let useDefaultTypePrinterParser = 1;
+
+      let extraClassDeclaration = [{
+        mlir::Attribute parseAttribute(mlir::DialectAsmParser &parser, mlir::Type type) const override;
+        void printAttribute(mlir::Attribute attr, mlir::DialectAsmPrinter &printer) const override;
+
+       }];
 }
 
 // Base class for the SpecHLS dialect operations.
@@ -42,9 +48,118 @@ class SpecHLSType<string name, string typeMnemonic, list<Trait> traits = []>
 //===--------------------------------------------------------------------------------------------------------------===//
 // Attributes
 //===--------------------------------------------------------------------------------------------------------------===//
+//===--------------------------------------------------------------------------------------------------------------===//
 
 def I64ArrayArrayAttr : TypedArrayAttrBase<I64ArrayAttr, "Array of 64-bit integer dense arrays attribute">;
 
+def SpecHLS_GammaSpecAttr : AttrDef<SpecHLSDialect, "GammaSpec"> {
+ let mnemonic = "gamma_spec";
+  let summary = "Single speculation spec";
+  let description = [{
+    Represents one speculative bundle:
+
+      #spechls.gamma_spec<"S0", 3, 0, 1, [0, 1, 2]>
+  }];
+
+  let parameters = (ins
+   "::mlir::StringAttr":$name,
+   "::mlir::IntegerAttr":$numPaths,
+   "::mlir::IntegerAttr" :$fastIndex,
+   "::mlir::IntegerAttr":$condDelay,
+   "::mlir::ArrayAttr":$inputDelays
+  );
+
+  // Pretty syntax:
+  //   #spechls.spec<"S0", 3, 0, 1, [0, 1, 2]>
+  let assemblyFormat = [{
+    `<` $name `,` $numPaths `,` $fastIndex `,` $condDelay `,` $inputDelays `>`
+  }];
+}
+
+def SpecHLS_GammaConfigAttr : AttrDef<SpecHLSDialect, "GammaConfig"> {
+  let summary = "Speculation model (list of specs)";
+  let mnemonic = "gamma_config";
+  let description = [{
+    Represents the complete speculation model:
+
+      #spechls.gamma_config<[
+        #spechls.gamma_spec<...>,
+        #spechls.gamma_spec<...>
+      ]>
+  }];
+
+  let parameters = (ins
+    "::mlir::ArrayAttr":$gammaconfigs,
+    "::mlir::DictionaryAttr":$poisonMap
+  );
+
+  let assemblyFormat = [{
+    `<` $gammaconfigs `,` $poisonMap `>`
+  }];
+}
+
+//
+//def SVAttributeAttr : AttrDef<SVDialect, "SVAttribute"> {
+//  let summary = "a Verilog Attribute";
+//  let mnemonic = "attribute";
+//  let description = [{
+//    This attribute is used to encode a Verilog _attribute_.  A Verilog attribute
+//    (not to be confused with an LLVM or MLIR attribute) is a syntactic mechanism
+//    for adding metadata to specific declarations, statements, and expressions in
+//    the Verilog language.  _There are no "standard" attributes_.  Specific tools
+//    define and handle their own attributes.
+//
+//    Verilog attributes have a mandatory name and an optional constant
+//    expression.  This is encoded as a key (name) value (expression) pair.
+//    Multiple attributes may be specified, either with multiple separate
+//    attributes or by comman-separating name--expression pairs.
+//
+//    Currently, SV attributes don't block most optimizations; therefore, users should
+//    not expect that sv attributes always appear in the output verilog.
+//    However, we must block optimizations that updating ops in-place
+//    since it is mostly invalid to transfer SV attributes one to another.
+//
+//    For more information, refer to Section 5.12 of the SystemVerilog (1800-2017)
+//    specification.
+//  }];
+//  let parameters = (ins
+//    "::mlir::StringAttr":$name,
+//    OptionalParameter<"::mlir::StringAttr">:$expression,
+//    DefaultValuedParameter<
+//      "mlir::BoolAttr", "mlir::BoolAttr::get($_ctxt, false)">:$emitAsComment
+//  );
+//
+//  let builders = [
+//    AttrBuilder<(ins "::llvm::StringRef":$name,
+//                     CArg<"bool", "false">: $emitAsComment), [{
+//      return get(context, StringAttr::get(context, name), StringAttr(),
+//                 BoolAttr::get(context, emitAsComment));
+//    }]>,
+//    AttrBuilder<(ins "::mlir::StringAttr":$name,
+//                     CArg<"bool", "false">: $emitAsComment), [{
+//      return get(context, name, StringAttr(),
+//                 BoolAttr::get(context, emitAsComment));
+//    }]>,
+//    AttrBuilder<(ins "::llvm::StringRef":$name,
+//                     "::llvm::StringRef":$expression,
+//                     CArg<"bool", "false">: $emitAsComment), [{
+//      return get(context, StringAttr::get(context, name),
+//                 StringAttr::get(context, expression),
+//                 BoolAttr::get(context, emitAsComment));
+//    }]>,
+//    AttrBuilder<(ins "::mlir::StringAttr":$name,
+//                     "::mlir::StringAttr":$expression,
+//                     CArg<"bool", "false">: $emitAsComment), [{
+//      return get(context, name, expression,
+//                 BoolAttr::get(context, emitAsComment));
+//    }]>
+//  ];
+//  let hasCustomAssemblyFormat = true;
+//  let extraClassDeclaration = [{
+//    static inline llvm::StringRef
+//        getSVAttributesAttrName() { return "sv.attributes"; }
+//  }];
+//}
 //===--------------------------------------------------------------------------------------------------------------===//
 // Types
 //===--------------------------------------------------------------------------------------------------------------===//
@@ -249,7 +364,7 @@ def SpecHLS_LoadOp : SpecHLSOp<"load", [DeclareOpInterfaceMethods<InferTypeOpInt
     let results = (outs AnyType:$result);
 
     let assemblyFormat = [{
-        $array `[` $index `:` type($index) `]` attr-dict `:` type($array)
+        $array `[`           $index `:` type($index) `]` attr-dict `:` type($array)
     }];
 }
 

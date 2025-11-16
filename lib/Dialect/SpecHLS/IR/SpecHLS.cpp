@@ -18,8 +18,10 @@
 #include <mlir/Interfaces/FunctionImplementation.h>
 #include <mlir/Support/LLVM.h>
 
+//#include "Dialect/SpecHLS/IR/SpecHLSDialect.h.inc"
 #include "Dialect/SpecHLS/IR/SpecHLSDialect.cpp.inc"
 #include "Dialect/SpecHLS/IR/SpecHLSTypes.h"
+#include "Dialect/SpecHLS/IR/SpecHLSAttributes.h"
 #include "Utils.h"
 
 using namespace mlir;
@@ -27,6 +29,10 @@ using namespace mlir;
 //===--------------------------------------------------------------------------------------------------------------===//
 // SpecHLS dialect
 //===--------------------------------------------------------------------------------------------------------------===//
+
+#define GET_ATTRDEF_CLASSES
+#include "Dialect/SpecHLS/IR/SpecHLSAttributes.cpp.inc"
+#undef GET_ATTRDEF_CLASSES
 
 void spechls::SpecHLSDialect::initialize() {
   addOperations<
@@ -38,46 +44,42 @@ void spechls::SpecHLSDialect::initialize() {
 #include "Dialect/SpecHLS/IR/SpecHLSTypes.cpp.inc"
       >();
 
-//   addAttributes<
-// #define GET_ATTRDEF_LIST
-// #include "Dialect/SpecHLS/IR/SpecHLSAttributes.cpp.inc"
-//       >();
+  addAttributes<
+#define GET_ATTRDEF_LIST
+#include "Dialect/SpecHLS/IR/SpecHLSAttributes.cpp.inc"
+      >();
 }
 
 //===--------------------------------------------------------------------------------------------------------------===//
 // Attributes
 //===--------------------------------------------------------------------------------------------------------------===//
 
-// LogicalResult GammaSpeculationAttr::verify(Attribute a, Location loc) {
-//   auto self = a.cast<GammaSpeculationAttr>();
-//   if (self.getCondLatency().getInt() < 0) return emitError(loc) << "condLatency >= 0";
-//   for (int64_t v : self.getInputLatencies().asArrayRef())
-//     if (v < 0) return emitError(loc) << "inputLatencies must be non-negative";
-//   for (Attribute el : self.getRollBackTargets())
-//     if (!isa<mlir::FlatSymbolRefAttr, mlir::SymbolRefAttr>(el))
-//       return emitError(loc) << "rollBackTargets must contain SymbolRefAttr";
-//   if (self.getRollBackDepth().getInt() < 0) return emitError(loc) << "rollBackDepth >= 0";
-//   return success();
-// }
-//
-// LogicalResult GammaConfigEntryAttr::verify(Attribute a, Location loc) {
-//   auto e = a.cast<GammaConfigEntryAttr>();
-//   if (e.getInputIndex().getInt() < 0)
-//     return emitError(loc) << "inputIndex must be >= 0";
-//   return success();
-// }
-//
-// LogicalResult GammaConfigurationAttr::verify(Attribute a, Location loc) {
-//   auto cfg = a.cast<GammaConfigurationAttr>();
-//   for (Attribute el : cfg.getEntries())
-//     if (!isa<spechls::GammaConfigEntryAttr>(el))
-//       return emitError(loc) << "entries must contain GammaConfigEntryAttr";
-//   if (cfg.getTargetII().getInt() <= 0)
-//     return emitError(loc) << "targetII must be > 0";
-//   if (cfg.getRecmin().getInt() < 0)
-//     return emitError(loc) << "recmin must be >= 0";
-//   return success();
-// }
+namespace spechls {
+Attribute SpecHLSDialect::parseAttribute(DialectAsmParser &parser,
+                                         Type type) const {
+  StringRef attrTag;
+  if (parser.parseKeyword(&attrTag))
+    return {};
+
+  Attribute attr;
+  // generatedAttributeParser is declared in the .h.inc and defined in the .cpp.inc
+  auto parseResult = generatedAttributeParser(parser, &attrTag, type, attr);
+  if (parseResult.has_value())
+    return attr;
+
+  parser.emitError(parser.getNameLoc())
+      << "unknown spechls attribute '" << attrTag << "'";
+  return {};
+}
+
+void SpecHLSDialect::printAttribute(Attribute attr,
+                                    DialectAsmPrinter &printer) const {
+  // generatedAttributePrinter returns success if it handled the attr
+  if (succeeded(generatedAttributePrinter(attr, printer)))
+    return;
+  llvm_unreachable("unexpected spechls attribute kind");
+}
+}
 
 //===--------------------------------------------------------------------------------------------------------------===//
 // Operations
