@@ -50,6 +50,7 @@ static bool isStateFull(mlir::Operation *op) {
     debug() << "Visiting op: " << *inner << "\n";
     llvm::TypeSwitch<mlir::Operation *>(inner)
         .Case<spechls::MuOp, spechls::DelayOp, spechls::RollbackOp>([&](auto) { found = true; })
+        .Case<spechls::TaskOp>([&](auto) { found = isStateFull(inner); })
         .Default([&](mlir::Operation *) { /* no-op */ });
 
     if (found)
