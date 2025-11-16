@@ -86,7 +86,9 @@ static inline std::string sanitize(StringRef s) {
 //------------------------------------------------------------------------------
 
 class UclidEmitter {
-  raw_indented_ostream os;
+
+  raw_indented_ostream declOs;
+  raw_indented_ostream bodyOS;
 
   using ValueMapper = llvm::ScopedHashTable<Value, std::string>;
   ValueMapper valueMapper;
@@ -135,11 +137,11 @@ class UclidEmitter {
 
 public:
   explicit UclidEmitter(raw_ostream &ros, TranslationToUclidOptions options)
-      : os(ros), opts(std::move(options)) {
+      : declOs(ros), bodyOS(ros), opts(std::move(options)) {
     valueInScopeCount.push(0);
   }
 
-  raw_indented_ostream &ostream() { return os; }
+  raw_indented_ostream &ostream() { return bodyOS; }
 
   //---- scoped mapping --------------------------------------------------------
   class Scope {
@@ -155,7 +157,9 @@ public:
   bool has(Value v) const { return valueMapper.count(v); }
   StringRef getOrCreate(Value v, StringRef hintPrefix = "v") {
     if (!valueMapper.count(v)) {
-      valueMapper.insert(v, llvm::formatv("{0}_{1}", hintPrefix, ++valueInScopeCount.top()));
+      auto i = ++valueInScopeCount.top();
+      auto formatv = llvm::formatv("{0}_{1}", hintPrefix, i);
+      valueMapper.insert(v, formatv);
     }
     return *valueMapper.begin(v);
   }
@@ -206,30 +210,30 @@ public:
   //---- printing primitives ---------------------------------------------------
 
   LogicalResult emitType(Location loc, Type t) {
-    if (!t) { os << "void"; return success(); }
+    if (!t) { bodyOS << "void"; return success(); }
     if (auto it = dyn_cast<IntegerType>(t)) {
-      if (it.getWidth() == 1) { os << "boolean"; return success(); }
-      os << "bv" << it.getWidth();
+      if (it.getWidth() == 1) { bodyOS << "boolean"; return success(); }
+      bodyOS << "bv" << it.getWidth();
       return success();
     }
     if (auto at = dyn_cast<spechls::ArrayType>(t)) {
-      os << "array [";
+      bodyOS << "array [";
       // Index type
       if (opts.arraysWithBvIndex) {
         // Round up width to cover [0..size-1].
         uint64_t size = at.getSize();
         unsigned idxW = size <= 1 ? 1u : llvm::Log2_64_Ceil(size);
-        os << "bv" << idxW;
+        bodyOS << "bv" << idxW;
       } else {
-        os << "integer";
+        bodyOS << "integer";
       }
-      os << "] of ";
+      bodyOS << "] of ";
       if (failed(emitType(loc, at.getElementType()))) return failure();
       return success();
     }
     // Fallback: named/opaque -> print as-is name
     if (auto st = dyn_cast<spechls::StructType>(t)) {
-      os << sanitize(st.getName());
+      bodyOS << sanitize(st.getName());
       return success();
     }
     return emitError(loc, "cannot emit Uclid type for ") << t;
@@ -240,24 +244,24 @@ public:
     if (auto *def = v.getDefiningOp()) {
       if (auto c = dyn_cast<circt::hw::ConstantOp>(def)) {
         auto ap = c.getValue();
-        if (ap.getBitWidth() == 1) { os << (ap.isOne() ? "true" : "false"); return success(); }
+        if (ap.getBitWidth() == 1) { bodyOS << (ap.isOne() ? "true" : "false"); return success(); }
         // Print as decimal; type carries the width.
-        os << ap;
+        bodyOS << ap;
         return success();
       }
     }
-    os << getOrCreate(v);
+    bodyOS << getOrCreate(v);
     return success();
   }
 
   // Generic binary op (bitvectors)
   LogicalResult printBinary(Operation *op, StringRef sym) {
     if (op->getNumResults() != 1) return op->emitOpError("expected single result");
-    os << getOrCreate(op->getResult(0)) << " = ";
+    bodyOS << getOrCreate(op->getResult(0)) << " = ";
     if (failed(emitOperand(op->getOperand(0)))) return failure();
-    os << " " << sym << " ";
+    bodyOS << " " << sym << " ";
     if (failed(emitOperand(op->getOperand(1)))) return failure();
-    os << ";\n";
+    bodyOS << ";\n";
     return success();
   }
 
@@ -280,9 +284,9 @@ public:
       (void)getDelayStageName(d, 0); // force init vector
       auto &vec = delayStageNames[d.getOperation()];
       for (unsigned i=0;i<vec.size();++i) {
-        os << "var " << vec[i] << " : ";
+        bodyOS << "var " << vec[i] << " : ";
         (void)emitType(d.getLoc(), d.getType());
-        os << ";\n";
+        bodyOS << ";\n";
       }
     });
   }
@@ -296,11 +300,11 @@ public:
       if (d.getInit()) {
         // Initialize the tail (oldest) stage with provided init; others to 0.
         for (unsigned i=0;i<vec.size()-1;++i) {
-          os << vec[i] << " = 0;\n"; // default zero
+          bodyOS << vec[i] << " = 0;\n"; // default zero
         }
-        os << vec.back() << " = "; (void)emitOperand(d.getInit()); os << ";\n";
+        bodyOS << vec.back() << " = "; (void)emitOperand(d.getInit()); bodyOS << ";\n";
       } else {
-        for (auto &n : vec) os << n << " = 0;\n";
+        for (auto &n : vec) bodyOS << n << " = 0;\n";
       }
     });
   }
@@ -308,6 +312,74 @@ public:
   //---- High-level printers ---------------------------------------------------
 
   LogicalResult print(Operation &op);
+  LogicalResult emitTask(spechls::TaskOp task) {
+
+
+    // 5) procedure step() returns (...)
+    // returns = (mu_n for all mu, delay_in for each DelayOp if enabled)
+    SmallVector<std::pair<std::string, Type>> retNames;
+    task->walk([&](spechls::MuOp mu){
+      retNames.emplace_back((getOrCreate(mu.getResult()).str() + "_n"), mu.getType());
+    });
+    if (opts.declareDelaysAsState) {
+      task->walk([&](spechls::DelayOp d){
+        // create a local name to hold the computed new head value
+        std::string nm = sanitize(getOrCreate(d.getResult()).str()) + "_in";
+        delayStepInputName[d.getOperation()] = nm;
+        retNames.emplace_back(nm, d.getType());
+      });
+    }
+
+    // signature
+    bodyOS << "procedure " << sanitize(task.getSymName()) << "() returns (";
+    for (size_t i=0;i<retNames.size();++i) {
+      if (i) bodyOS << ", ";
+      bodyOS << retNames[i].first << " : "; (void)emitType(task.getLoc(), retNames[i].second);
+    }
+    bodyOS << ") {\n"; bodyOS.indent();
+
+    // Body: combinational evaluation in topological order
+    {
+      Scope bodyScope(*this);
+      Block *body = &task.getBody().front();
+      mlir::sortTopologically(body, spechls::topologicalSortCriterion);
+      for (Operation &op : *body) {
+        if (isa<spechls::ExitOp>(op)) continue; // no loop to break in Uclid
+        if (failed(print(op))) return failure();
+      }
+
+      // Bind mu_n returns from loop values
+      task->walk([&](spechls::MuOp mu){
+        bodyOS << (getOrCreate(mu.getResult()).str() + "_n") << " = ";
+        (void)emitOperand(mu.getLoopValue());
+        bodyOS << ";\n";
+      });
+
+      // For delays: capture the newly computed input value
+      if (opts.declareDelaysAsState) {
+        task->walk([&](spechls::DelayOp d){
+          bodyOS << delayStepInputName[d.getOperation()] << " = ";
+          if (d.getEnable()) {
+            // if enable then input else current s0 (hold)
+            bodyOS << "ite("; (void)emitOperand(d.getEnable()); bodyOS << ", ";
+            (void)emitOperand(d.getInput()); bodyOS << ", " << getDelayStageName(d, 0) << ")";
+          } else {
+            (void)emitOperand(d.getInput());
+          }
+          bodyOS << ";\n";
+        });
+      }
+
+      // return tuple
+      bodyOS << "return (";
+      for (size_t i=0;i<retNames.size();++i) { if (i) bodyOS << ", "; bodyOS << retNames[i].first; }
+      bodyOS << ");\n";
+    }
+
+    bodyOS.unindent(); bodyOS << "}\n"; // end procedure
+
+     return success();
+  }
 
   LogicalResult emitKernel(spechls::KernelOp kernel) {
     // Pre-scan to collect gamma/mux signatures for preamble.
@@ -325,35 +397,35 @@ public:
     });
 
     // module header
-    os << "module " << sanitize(kernel.getName()) << " {\n"; os.indent();
+    bodyOS << "module " << sanitize(kernel.getName()) << " {\n"; bodyOS.indent();
 
     // emit preamble (`define` helpers)
-    if (!preamble.empty()) os << preamble << "\n";
+    if (!preamble.empty()) bodyOS << preamble << "\n";
 
     // 1) inputs (kernel region arguments)
     for (BlockArgument arg : kernel.getArguments()) {
-      os << "input " ; (void)emitType(kernel.getLoc(), arg.getType()); os << " " << getOrCreate(arg) << ";\n";
+      bodyOS << "input " ; (void)emitType(kernel.getLoc(), arg.getType()); bodyOS << " " << getOrCreate(arg) << ";\n";
     }
 
     // 2) state vars (mus)
     kernel->walk([&](spechls::MuOp mu){
       // Bind a stable name to the mu result (used as the state var name)
       (void)getOrCreate(mu.getResult());
-      os << "var " << getOrCreate(mu.getResult()) << " : "; (void)emitType(mu.getLoc(), mu.getType()); os << ";\n";
+      bodyOS << "var " << getOrCreate(mu.getResult()) << " : "; (void)emitType(mu.getLoc(), mu.getType()); bodyOS << ";\n";
     });
 
     // 3) optional: delays as state
     declareDelayVarsIfNeeded(kernel);
 
     // 4) init { ... }
-    os << "init {\n"; os.indent();
+    bodyOS << "init {\n"; bodyOS.indent();
     // mu init
     kernel->walk([&](spechls::MuOp mu){
-      os << getOrCreate(mu.getResult()) << " = "; (void)emitOperand(mu.getInitValue()); os << ";\n";
+      bodyOS << getOrCreate(mu.getResult()) << " = "; (void)emitOperand(mu.getInitValue()); bodyOS << ";\n";
     });
     // delay init
     initDelaysIfNeeded(kernel);
-    os.unindent(); os << "}\n";
+    bodyOS.unindent(); bodyOS << "}\n";
 
     // 5) procedure step() returns (...)
     // returns = (mu_n for all mu, delay_in for each DelayOp if enabled)
@@ -371,12 +443,19 @@ public:
     }
 
     // signature
-    os << "procedure step() returns (";
-    for (size_t i=0;i<retNames.size();++i) {
-      if (i) os << ", ";
-      os << retNames[i].first << " : "; (void)emitType(kernel.getLoc(), retNames[i].second);
+    bodyOS << "procedure step_"<< sanitize(kernel.getSymName())<<"(" ;
+    for (size_t i=0;i<kernel.getNumArguments();++i) {
+      if (i>0) bodyOS << ", ";
+      bodyOS << getOrCreate(kernel.getArgument(i)) << " : ";
+      emitType(kernel.getLoc(), kernel.getArgument(i).getType());
     }
-    os << ") {\n"; os.indent();
+      bodyOS<< ") returns (";
+
+    for (size_t i=0;i<retNames.size();++i) {
+      if (i) bodyOS << ", ";
+      bodyOS << retNames[i].first << " : "; (void)emitType(kernel.getLoc(), retNames[i].second);
+    }
+    bodyOS << ") {\n"; bodyOS.indent();
 
     // Body: combinational evaluation in topological order
     {
@@ -390,59 +469,64 @@ public:
 
       // Bind mu_n returns from loop values
       kernel->walk([&](spechls::MuOp mu){
-        os << (getOrCreate(mu.getResult()).str() + "_n") << " = ";
+        bodyOS << (getOrCreate(mu.getResult()).str() + "_n") << " = ";
         (void)emitOperand(mu.getLoopValue());
-        os << ";\n";
+        bodyOS << ";\n";
       });
 
       // For delays: capture the newly computed input value
       if (opts.declareDelaysAsState) {
         kernel->walk([&](spechls::DelayOp d){
-          os << delayStepInputName[d.getOperation()] << " = ";
+          bodyOS << delayStepInputName[d.getOperation()] << " = ";
           if (d.getEnable()) {
             // if enable then input else current s0 (hold)
-            os << "ite("; (void)emitOperand(d.getEnable()); os << ", ";
-            (void)emitOperand(d.getInput()); os << ", " << getDelayStageName(d, 0) << ")";
+            bodyOS << "ite("; (void)emitOperand(d.getEnable()); bodyOS << ", ";
+            (void)emitOperand(d.getInput()); bodyOS << ", " << getDelayStageName(d, 0) << ")";
           } else {
             (void)emitOperand(d.getInput());
           }
-          os << ";\n";
+          bodyOS << ";\n";
         });
       }
 
       // return tuple
-      os << "return (";
-      for (size_t i=0;i<retNames.size();++i) { if (i) os << ", "; os << retNames[i].first; }
-      os << ");\n";
+      bodyOS << "return (";
+      for (size_t i=0;i<retNames.size();++i) { if (i) bodyOS << ", "; bodyOS << retNames[i].first; }
+      bodyOS << ");\n";
     }
 
-    os.unindent(); os << "}\n"; // end procedure
+    bodyOS.unindent(); bodyOS << "}\n"; // end procedure
 
     // 6) next { call (state') = step();  delay shifts; }
-    os << "next {\n"; os.indent();
+    bodyOS << "next {\n"; bodyOS.indent();
 
     // Build LHS list for call: mu' and delay_s0'
-    os << "call (";
+    bodyOS << "call "<< kernel.getSymName() <<"(";
     bool first = true;
-    kernel->walk([&](spechls::MuOp mu){ if (!first) os << ", "; first=false; os << getOrCreate(mu.getResult()) << "'"; });
+    kernel->walk([&](spechls::MuOp mu){ if (!first) bodyOS << ", "; first=false; bodyOS << getOrCreate(mu.getResult()) << "'"; });
     if (opts.declareDelaysAsState) {
-      kernel->walk([&](spechls::DelayOp d){ os << ", " << getDelayStageName(d, 0) << "'"; });
+      kernel->walk([&](spechls::DelayOp d){ bodyOS << ", " << getDelayStageName(d, 0) << "'"; });
     }
-    os << ") = step();\n";
+    bodyOS << ") = step_"<< kernel.getSymName() <<"(" ;
+    for (size_t i = 0;i < kernel.getNumArguments();++i) {
+      if (i>0) bodyOS << ", ";
+      bodyOS << getOrCreate(kernel.getArgument(i));
+    }
+    bodyOS << ");\n";
 
     // Delay shifts: s{i}' = s{i-1}; already s0' set by call
     if (opts.declareDelaysAsState) {
       kernel->walk([&](spechls::DelayOp d){
         auto &vec = delayStageNames[d.getOperation()];
         for (unsigned i=1;i<vec.size();++i) {
-          os << vec[i] << "' = " << vec[i-1] << ";\n";
+          bodyOS << vec[i] << "' = " << vec[i-1] << ";\n";
         }
       });
     }
 
-    os.unindent(); os << "}\n"; // end next
+    bodyOS.unindent(); bodyOS << "}\n"; // end next
 
-    os.unindent(); os << "}\n"; // end module
+    bodyOS.unindent(); bodyOS << "}\n"; // end module
     return success();
   }
 };
@@ -470,10 +554,19 @@ static StringRef bvCmpToken(circt::comb::ICmpPredicate p, bool &isUnsigned) {
 LogicalResult UclidEmitter::print(Operation &op) {
   return llvm::TypeSwitch<Operation*, LogicalResult>(&op)
     // Module is handled at entry point
-    .Case<ModuleOp>([&](auto){ return success(); })
+    .Case<ModuleOp>([&](ModuleOp m) {
+      Scope globalScope(*this);
+      for (auto child: m.getOps<spechls::KernelOp>()) {
+        if (failed(emitKernel(child))) return failure();
+      }
+      return success();
+    })
 
     // Kernel (top-level emission)
     .Case<spechls::KernelOp>([&](auto k){ return emitKernel(k); })
+
+  // Task (taks-level emission)
+    .Case<spechls::TaskOp>([&](auto k){ return emitTask(k); })
 
     // --- Comb ops ---
     .Case<circt::comb::AddOp>([&](auto o){ return printBinary(o.getOperation(), "+"); })
@@ -491,13 +584,13 @@ LogicalResult UclidEmitter::print(Operation &op) {
     .Case<circt::comb::ModSOp>([&](auto o){ return printBinary(o.getOperation(), "%"); })
     .Case<circt::comb::ConcatOp>([&](auto o){
       Operation *op = o.getOperation();
-      os << getOrCreate(op->getResult(0)) << " = ";
+      bodyOS << getOrCreate(op->getResult(0)) << " = ";
       // a ++ b ++ c
       for (unsigned i=0;i<op->getNumOperands();++i) {
-        if (i) os << " ++ ";
+        if (i) bodyOS << " ++ ";
         if (failed(emitOperand(op->getOperand(i)))) return failure();
       }
-      os << ";\n"; return success();
+      bodyOS << ";\n"; return success();
     })
     .Case<circt::comb::ExtractOp>([&](auto o){
       Operation *op = o.getOperation();
@@ -505,37 +598,37 @@ LogicalResult UclidEmitter::print(Operation &op) {
       unsigned low = o.getLowBit();
       unsigned width = o.getType().getIntOrFloatBitWidth();
       unsigned high = low + width - 1;
-      os << getOrCreate(op->getResult(0)) << " = ";
+      bodyOS << getOrCreate(op->getResult(0)) << " = ";
       if (failed(emitOperand(op->getOperand(0)))) return failure();
-      os << "[" << high << ":" << low << "]" << ";\n";
+      bodyOS << "[" << high << ":" << low << "]" << ";\n";
       return success();
     })
     .Case<circt::comb::ICmpOp>([&](auto o){
       Operation *op = o.getOperation();
       bool isUnsigned=false; StringRef tok = bvCmpToken(o.getPredicate(), isUnsigned);
-      os << getOrCreate(op->getResult(0)) << " = ";
+      bodyOS << getOrCreate(op->getResult(0)) << " = ";
       if (failed(emitOperand(o.getLhs()))) return failure();
-      os << " " << tok << " ";
+      bodyOS << " " << tok << " ";
       if (failed(emitOperand(o.getRhs()))) return failure();
-      os << ";\n"; return success();
+      bodyOS << ";\n"; return success();
     })
     .Case<circt::comb::MuxOp>([&](auto o){
       unsigned elemBW = 0; bool isBool=false;
       if (auto it = dyn_cast<IntegerType>(o.getTrueValue().getType())) { elemBW = it.getWidth(); isBool = elemBW==1; }
       std::string fname = ensureGammaDefine(/*arity*/2, isBool?1:elemBW, /*selBW*/0, isBool);
-      os << getOrCreate(o.getResult()) << " = " << fname << "(";
+      bodyOS << getOrCreate(o.getResult()) << " = " << fname << "(";
       if (failed(emitOperand(o.getCond()))) return failure();
-      os << ", "; if (failed(emitOperand(o.getTrueValue()))) return failure();
-      os << ", "; if (failed(emitOperand(o.getFalseValue()))) return failure();
-      os << ");\n"; return success();
+      bodyOS << ", "; if (failed(emitOperand(o.getTrueValue()))) return failure();
+      bodyOS << ", "; if (failed(emitOperand(o.getFalseValue()))) return failure();
+      bodyOS << ");\n"; return success();
     })
 
     // --- HW ops ---
     .Case<circt::hw::BitcastOp>([&](auto o){
       // Best-effort: cast is no-op on Uclid side if widths align; otherwise emit explicit type cast
-      os << getOrCreate(o.getResult()) << " = ("; (void)emitType(o.getLoc(), o.getType()); os << ") ";
+      bodyOS << getOrCreate(o.getResult()) << " = ("; (void)emitType(o.getLoc(), o.getType()); bodyOS << ") ";
       if (failed(emitOperand(o.getInput()))) return failure();
-      os << ";\n"; return success();
+      bodyOS << ";\n"; return success();
     })
 
     // --- SpecHLS ops ---
@@ -545,21 +638,21 @@ LogicalResult UclidEmitter::print(Operation &op) {
       if (auto it = dyn_cast<IntegerType>(g.getResult().getType())) { elemBW = it.getWidth(); isBool = elemBW==1; }
       const unsigned arity = g.getInputs().size();
       std::string fname = ensureGammaDefine(arity, isBool?1:elemBW, selBW, isBool);
-      os << "{ // gamma via " << fname << "\n"; os.indent();
-      os << getOrCreate(g.getResult()) << " = " << fname << "(";
+      bodyOS << "{ // gamma via " << fname << "\n"; bodyOS.indent();
+      bodyOS << getOrCreate(g.getResult()) << " = " << fname << "(";
       if (failed(emitOperand(g.getSelect()))) return failure();
-      for (Value a : g.getInputs()) { os << ", "; if (failed(emitOperand(a))) return failure(); }
-      os << ");\n";
-      os.unindent(); os << "}\n"; return success();
+      for (Value a : g.getInputs()) { bodyOS << ", "; if (failed(emitOperand(a))) return failure(); }
+      bodyOS << ");\n";
+      bodyOS.unindent(); bodyOS << "}\n"; return success();
     })
     .Case<spechls::LUTOp>([&](auto lut){
       // Inline case for small LUTs
       auto table = lut.getContents();
       unsigned outBW = lut.getType().getIntOrFloatBitWidth(); (void)outBW;
-      os << getOrCreate(lut.getResult()) << " = case "; if (failed(emitOperand(lut.getIndex()))) return failure(); os << " of\n";
-      unsigned idx=0; for (auto v : table) { os << "  " << idx++ << ": " << v << ";\n"; }
-      os << "  otherwise: 0;\n";
-      os << "esac;\n";
+      bodyOS << getOrCreate(lut.getResult()) << " = case "; if (failed(emitOperand(lut.getIndex()))) return failure(); bodyOS << " of\n";
+      unsigned idx=0; for (auto v : table) { bodyOS << "  " << idx++ << ": " << v << ";\n"; }
+      bodyOS << "  otherwise: 0;\n";
+      bodyOS << "esac;\n";
       return success();
     })
     .Case<spechls::DelayOp>([&](auto d){
@@ -569,14 +662,57 @@ LogicalResult UclidEmitter::print(Operation &op) {
         return failure();
       }
       auto &vec = delayStageNames[d.getOperation()]; if (vec.empty()) (void)getDelayStageName(d, 0);
-      os << getOrCreate(d.getResult()) << " = " << vec.back() << ";\n"; // head == oldest
+      bodyOS << getOrCreate(d.getResult()) << " = " << vec.back() << ";\n"; // head == oldest
       return success();
     })
-    .Case<spechls::MuOp>([&](auto){
-      // No direct emission here: reads of mu use its bound name; mu_n assignment is in step epilogue.
-      return success();
-    })
-    .Case<spechls::ExitOp>([&](auto){ return success(); })
+  .Case<spechls::MuOp>([&](auto){
+    // No direct emission here: reads of mu use its bound name; mu_n assignment is in step epilogue.
+    return success();
+  })
+  .Case<spechls::CommitOp>([&](CommitOp c){
+    bodyOS << "// commit(";
+    emitOperand(c.getEnable()) ;
+    bodyOS << ", " ;
+    emitOperand(c.getValue());
+    bodyOS <<  ")\n";
+    // No direct emission here: reads of mu use its bound name; mu_n assignment is in step epilogue.
+    return success();
+  })
+  .Case<spechls::CallOp>([&](CallOp c){
+   //  declOs << "function " << c.getCallee() << "\n";
+   //  declOs << c.getCallee() << "(";
+   // for (auto operand : c.getOperands()) {
+   //
+   //   emitType(c.getLoc(),operand.getType());
+   //   declOs << ", ";
+   //
+   // }
+   //   declOs <<  ")\n";
+     bodyOS << getOrCreate(c.getResult()) << " = " << c.getCallee() << "(";
+    bool first = true;
+    for (auto operand : c.getOperands()) {
+      if (!first)  bodyOS << ", ";
+      emitOperand(operand);
+      first = false;
+
+    }
+      bodyOS <<  ");\n";
+     // No direct emission here: reads of mu use its bound name; mu_n assignment is in step epilogue.
+     return success();
+   })
+ .Case<spechls::ExitOp>([&](auto){ return success(); })
+    .Case<circt::hw::ConstantOp>([&](circt::hw::ConstantOp cst) {
+      Operation *op = cst.getOperation();
+       bodyOS << getOrCreate(op->getResult(0)) << " = ";
+       auto ap = cst.getValue();
+       if (ap.getBitWidth() == 1) {
+         bodyOS << (ap.isOne() ? "true" : "false");
+       } else {
+         bodyOS << ap << "bv" << ap.getBitWidth();
+       }
+       bodyOS << ";\n";
+       return success();
+  })
 
     .Default([&](Operation *u) {
       auto message = "no Uclid printer yet for this operation type" + std::string(u->getName().getStringRef());
@@ -598,16 +734,5 @@ LogicalResult translateToUclid(Operation *op, raw_ostream &os) {
 }
 
 
-  LogicalResult dumpToUclid(Operation *op, llvm::StringRef path) {
-  std::string err;
-  auto out = mlir::openOutputFile(path, &err); // returns ToolOutputFile
-  if (!out) {
-    llvm::errs() << err << "\n";
-    return mlir::failure();
-  }
-  LogicalResult res = spechls::translateToUclid(op, out->os());
-  if (succeeded(res)) out->keep();            // persist the file
-  return res;
-}
 
 } // namespace spechls
