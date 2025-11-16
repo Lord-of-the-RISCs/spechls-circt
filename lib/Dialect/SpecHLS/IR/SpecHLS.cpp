@@ -37,7 +37,47 @@ void spechls::SpecHLSDialect::initialize() {
 #define GET_TYPEDEF_LIST
 #include "Dialect/SpecHLS/IR/SpecHLSTypes.cpp.inc"
       >();
+
+//   addAttributes<
+// #define GET_ATTRDEF_LIST
+// #include "Dialect/SpecHLS/IR/SpecHLSAttributes.cpp.inc"
+//       >();
 }
+
+//===--------------------------------------------------------------------------------------------------------------===//
+// Attributes
+//===--------------------------------------------------------------------------------------------------------------===//
+
+// LogicalResult GammaSpeculationAttr::verify(Attribute a, Location loc) {
+//   auto self = a.cast<GammaSpeculationAttr>();
+//   if (self.getCondLatency().getInt() < 0) return emitError(loc) << "condLatency >= 0";
+//   for (int64_t v : self.getInputLatencies().asArrayRef())
+//     if (v < 0) return emitError(loc) << "inputLatencies must be non-negative";
+//   for (Attribute el : self.getRollBackTargets())
+//     if (!isa<mlir::FlatSymbolRefAttr, mlir::SymbolRefAttr>(el))
+//       return emitError(loc) << "rollBackTargets must contain SymbolRefAttr";
+//   if (self.getRollBackDepth().getInt() < 0) return emitError(loc) << "rollBackDepth >= 0";
+//   return success();
+// }
+//
+// LogicalResult GammaConfigEntryAttr::verify(Attribute a, Location loc) {
+//   auto e = a.cast<GammaConfigEntryAttr>();
+//   if (e.getInputIndex().getInt() < 0)
+//     return emitError(loc) << "inputIndex must be >= 0";
+//   return success();
+// }
+//
+// LogicalResult GammaConfigurationAttr::verify(Attribute a, Location loc) {
+//   auto cfg = a.cast<GammaConfigurationAttr>();
+//   for (Attribute el : cfg.getEntries())
+//     if (!isa<spechls::GammaConfigEntryAttr>(el))
+//       return emitError(loc) << "entries must contain GammaConfigEntryAttr";
+//   if (cfg.getTargetII().getInt() <= 0)
+//     return emitError(loc) << "targetII must be > 0";
+//   if (cfg.getRecmin().getInt() < 0)
+//     return emitError(loc) << "recmin must be >= 0";
+//   return success();
+// }
 
 //===--------------------------------------------------------------------------------------------------------------===//
 // Operations

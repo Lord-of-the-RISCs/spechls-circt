@@ -3,4 +3,5 @@ add_circt_dialect_library(SpecHLS
 
     DEPENDS
     MLIRSpecHLSIncGen
+        SpecHLSAttributesIncGen
 )
