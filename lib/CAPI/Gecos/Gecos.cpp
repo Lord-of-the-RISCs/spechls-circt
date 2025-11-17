@@ -215,6 +215,13 @@ bool mlirModuleRemoveIntraRaw(MlirModule mod) {
   return failed(pm.run(module));
 }
 
+bool mlirModuleInferLSQ(MlirModule mod) {
+  auto module = unwrap(mod);
+  auto pm = mlir::PassManager::on<mlir::ModuleOp>(module->getContext());
+  pm.addPass(spechls::createInferLSQPass());
+  return failed(pm.run(module));
+}
+
 void mlirDumpModule(MlirModule module) { unwrap(module)->dump(); }
 void mlirDumpOperation(MlirOperation op) { unwrap(op)->dump(); }
 void mlirDumpValue(MlirValue val) { unwrap(val).dump(); }
