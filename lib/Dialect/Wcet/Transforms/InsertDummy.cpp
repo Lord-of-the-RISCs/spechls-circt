@@ -10,74 +10,56 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "Dialect/SpecHLS/IR/SpecHLS.h"
 #include "Dialect/SpecHLS/IR/SpecHLSOps.h"
-#include "Dialect/SpecHLS/IR/SpecHLSTypes.h"
 #include "Dialect/Wcet/IR/WcetOps.h"
-#include "Dialect/Wcet/Transforms/Passes.h"
-#include "circt/Dialect/HW/HWOpInterfaces.h"
-#include "circt/Dialect/HW/HWOps.h"
-#include "circt/Support/LLVM.h"
-#include "mlir/IR/Builders.h"
-#include "mlir/IR/Operation.h"
+#include "mlir/IR/MLIRContext.h"
 #include "mlir/IR/PatternMatch.h"
-#include "mlir/IR/TypeRange.h"
-#include "mlir/IR/Value.h"
-#include "mlir/IR/ValueRange.h"
-#include "mlir/IR/Verifier.h"
 #include "mlir/Pass/PassManager.h"
+#include "mlir/Rewrite/FrozenRewritePatternSet.h"
 #include "mlir/Support/LLVM.h"
-#include "mlir/Transforms/DialectConversion.h"
 #include "mlir/Transforms/GreedyPatternRewriteDriver.h"
 #include "mlir/Transforms/Passes.h"
-#include "llvm/ADT/STLExtras.h"
-#include "llvm/ADT/SmallPtrSet.h"
-#include "llvm/BinaryFormat/MachO.h"
-#include "llvm/Support/Casting.h"
-#include "llvm/Support/LogicalResult.h"
-#include "llvm/Support/raw_ostream.h"
-#include <cstddef>
-#include <cstdio>
-#include <memory>
-#include <string>
+#include <mlir/Dialect/PDL/IR/PDL.h>
+#include <mlir/Dialect/PDLInterp/IR/PDLInterp.h>
+#include <mlir/Parser/Parser.h>
 
 using namespace mlir;
-using namespace spechls;
-using namespace circt;
 
 namespace wcet {
 #define GEN_PASS_DEF_INSERTDUMMYPASS
 #include "Dialect/Wcet/Transforms/Passes.h.inc"
 } // namespace wcet
 
-namespace wcet {
+#include "InsertDummy.h.inc"
 
-struct InsertDummyPass : public impl::InsertDummyPassBase<InsertDummyPass> {
+namespace {
+
+struct InsertDummyPass : public wcet::impl::InsertDummyPassBase<InsertDummyPass> {
+  FrozenRewritePatternSet patterns;
 
   using InsertDummyPassBase::InsertDummyPassBase;
 
-public:
-  void runOnOperation() override {
-    auto *ctx = &getContext();
-    auto top = getOperation();
+  LogicalResult initialize(MLIRContext *ctx) override {
+    RewritePatternSet patternList{ctx};
+    registerNativeRewrite(patternList);
+    populateGeneratedPDLLPatterns(patternList);
+    patterns = std::move(patternList);
+    return success();
+  }
 
-    PatternRewriter rewriter(ctx);
-    SmallVector<spechls::UnpackOp> unpacks = SmallVector<spechls::UnpackOp>();
-    top->walk([&](spechls::UnpackOp unp) {
-      if (unp.getInput().getDefiningOp()->getName().getStringRef() == spechls::PackOp::getOperationName())
-        unpacks.push_back(unp);
-    });
+  void registerNativeRewrite(RewritePatternSet &patterns) {
+    patterns.getPDLPatterns().registerRewriteFunction("InsertDummy", insertDummyImp);
+  }
 
-    if (unpacks.empty())
-      return;
+  void runOnOperation() override { (void)applyPatternsGreedily(getOperation(), patterns); }
 
-    for (auto un : unpacks) {
-      rewriter.setInsertionPointAfter(un);
-      spechls::PackOp pack = dyn_cast_or_null<spechls::PackOp>(un.getInput().getDefiningOp());
-      rewriter.replaceOpWithNewOp<wcet::DummyOp>(un, pack.getInputs().getType(), pack.getInputs());
-      rewriter.eraseOp(pack);
-    }
+private:
+  static Operation *insertDummyImp(PatternRewriter &rewritter, Operation *op) {
+    auto root = cast<spechls::UnpackOp>(op);
+    auto pack = root.getInput().getDefiningOp<spechls::PackOp>();
+    auto dummy = rewritter.create<wcet::DummyOp>(rewritter.getUnknownLoc(), root->getResultTypes(), pack.getInputs());
+    return dummy;
   }
 };
 
-} // namespace wcet
+} // namespace

@@ -3,6 +3,10 @@ add_mlir_pdll_library(WcetSplitDelaysPatternsIncGen
   SplitDelays.h.inc
 )
 
+add_mlir_pdll_library(WcetInsertDummyPatternsIncGen
+  InsertDummy.pdll
+  InsertDummy.h.inc
+)
 
 add_circt_dialect_library(WcetTransforms
     UnrollInstr.cpp
@@ -15,6 +19,7 @@ add_circt_dialect_library(WcetTransforms
     DEPENDS
     WcetTransformsIncGen
     WcetSplitDelaysPatternsIncGen
+    WcetInsertDummyPatternsIncGen
 )
 target_include_directories(WcetTransforms
   PRIVATE

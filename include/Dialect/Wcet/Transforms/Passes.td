@@ -51,9 +51,10 @@ def InsertDummyPass : Pass<"insert-dummy", "spechls::KernelOp"> {
     let description = [{ TODO }];
 
     let dependentDialects = [
-      "circt::hw::HWDialect",
       "spechls::SpecHLSDialect",
-      "wcet::WcetDialect"
+      "wcet::WcetDialect",
+      "::mlir::pdl::PDLDialect",
+      "::mlir::pdl_interp::PDLInterpDialect",
       ];
   }
 
