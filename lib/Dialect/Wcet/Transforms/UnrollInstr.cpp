@@ -71,71 +71,71 @@ bool hasPragmaContaining(Operation *op, llvm::StringRef keyword) {
 
 // Setup the HWModuleOp to be unrolled
 StructType setupTask(TaskOp top, PatternRewriter &rewriter) {
-  auto savedIP = rewriter.saveInsertionPoint();
-  rewriter.setInsertionPointToStart(&top.getBody().getBlocks().front());
-  top->walk([&](Operation *op) {
-    if (hasPragmaContaining(op, "WCET fetch")) {
-      hw::ConstantOp inst =
-          rewriter.replaceOpWithNewOp<hw::ConstantOp>(op, op->getResult(0).getType(), rewriter.getI32IntegerAttr(0));
-      inst->setAttr(rewriter.getStringAttr("wcet.pragma"), rewriter.getStringAttr("instruction"));
-      return;
-    }
-  });
+  // auto savedIP = rewriter.saveInsertionPoint();
+  // rewriter.setInsertionPointToStart(&top.getBody().getBlocks().front());
+  // top->walk([&](Operation *op) {
+  //   if (hasPragmaContaining(op, "WCET fetch")) {
+  //     hw::ConstantOp inst =
+  //         rewriter.replaceOpWithNewOp<hw::ConstantOp>(op, op->getResult(0).getType(), rewriter.getI32IntegerAttr(0));
+  //     inst->setAttr(rewriter.getStringAttr("wcet.pragma"), rewriter.getStringAttr("instruction"));
+  //     return;
+  //   }
+  // });
 
-  CommitOp commit = *top.getBody().getOps<CommitOp>().begin();
-  if (!commit)
-    return nullptr;
+  // CommitOp commit = *top.getBody().getOps<CommitOp>().begin();
+  // if (!commit)
+  //   return nullptr;
 
-  SmallVector<Value> outputs = SmallVector<Value>();
-  SmallVector<Type> outputsType = SmallVector<Type>();
-  SmallVector<std::string> outputsName = SmallVector<std::string>();
+  // SmallVector<Value> outputs = SmallVector<Value>();
+  // SmallVector<Type> outputsType = SmallVector<Type>();
+  // SmallVector<std::string> outputsName = SmallVector<std::string>();
 
-  if (commit.getValue().getDefiningOp()->getName().getStringRef() == spechls::MuOp::getOperationName()) {
-    spechls::MuOp mu = llvm::dyn_cast<spechls::MuOp>(commit.getValue().getDefiningOp());
-    outputs.push_back(mu.getInitValue());
-    outputsType.push_back(mu.getType());
-    outputsName.push_back("originalOutput");
-  } else {
-    outputs.push_back(commit.getValue());
-    outputsType.push_back(commit.getValue().getType());
-    outputsName.push_back("originalOutput");
-  }
+  // if (commit.getValue().getDefiningOp()->getName().getStringRef() == spechls::MuOp::getOperationName()) {
+  //   spechls::MuOp mu = llvm::dyn_cast<spechls::MuOp>(commit.getValue().getDefiningOp());
+  //   outputs.push_back(mu.getInitValue());
+  //   outputsType.push_back(mu.getType());
+  //   outputsName.push_back("originalOutput");
+  // } else {
+  //   outputs.push_back(commit.getValue());
+  //   outputsType.push_back(commit.getValue().getType());
+  //   outputsName.push_back("originalOutput");
+  // }
 
-  top.getBody().getArgument(0).getUsers().begin()->getName();
+  // top.getBody().getArgument(0).getUsers().begin()->getName();
 
-  for (size_t i = 0; i < top->getOperands().size(); i++) {
-    auto in = top.getBody().getArgument(i);
-    mlir::Value val = dyn_cast<mlir::Value>(in);
-    for (auto *use : in.getUsers()) {
-      if (use->getName().getStringRef() == spechls::MuOp::getOperationName()) {
-        auto mu = dyn_cast_or_null<spechls::MuOp>(use);
-        rewriter.replaceAllOpUsesWith(mu, mu.getInitValue());
-        val = mu.getLoopValue();
-        break;
-      }
-    }
-    outputs.push_back(val);
-    outputsType.push_back(val.getType());
-    outputsName.push_back("input" + std::to_string(i));
-  }
+  // for (size_t i = 0; i < top->getOperands().size(); i++) {
+  //   auto in = top.getBody().getArgument(i);
+  //   mlir::Value val = dyn_cast<mlir::Value>(in);
+  //   for (auto *use : in.getUsers()) {
+  //     if (use->getName().getStringRef() == spechls::MuOp::getOperationName()) {
+  //       auto mu = dyn_cast_or_null<spechls::MuOp>(use);
+  //       rewriter.replaceAllOpUsesWith(mu, mu.getInitValue());
+  //       val = mu.getLoopValue();
+  //       break;
+  //     }
+  //   }
+  //   outputs.push_back(val);
+  //   outputsType.push_back(val.getType());
+  //   outputsName.push_back("input" + std::to_string(i));
+  // }
 
-  int i = 0;
-  top->walk([&](DelayOp delay) {
-    outputs.push_back(delay.getInput());
-    outputsName.push_back("delay_" + std::to_string(i));
-    outputsType.push_back(delay.getType());
-    delay->setAttr(rewriter.getStringAttr("wcet.pragma"), rewriter.getStringAttr("delay_" + std::to_string(i++)));
-  });
+  // int i = 0;
+  // top->walk([&](DelayOp delay) {
+  //   outputs.push_back(delay.getInput());
+  //   outputsName.push_back("delay_" + std::to_string(i));
+  //   outputsType.push_back(delay.getType());
+  //   delay->setAttr(rewriter.getStringAttr("wcet.pragma"), rewriter.getStringAttr("delay_" + std::to_string(i++)));
+  // });
 
-  rewriter.setInsertionPointAfter(commit);
-  auto resultStruct =
-      rewriter.getType<spechls::StructType>(rewriter.getStringAttr("result_struct"), outputsName, outputsType);
-  PackOp pack = rewriter.create<PackOp>(rewriter.getUnknownLoc(), resultStruct, outputs);
-  rewriter.replaceOpWithNewOp<CommitOp>(commit, commit.getEnable(), pack.getResult());
-  top.getResult().setType(resultStruct);
-  rewriter.restoreInsertionPoint(savedIP);
-  // top->getParentOfType<mlir::ModuleOp>()->dumpPretty();
-  return resultStruct;
+  // rewriter.setInsertionPointAfter(commit);
+  // auto resultStruct =
+  //     rewriter.getType<spechls::StructType>(rewriter.getStringAttr("result_struct"), outputsName, outputsType);
+  // PackOp pack = rewriter.create<PackOp>(rewriter.getUnknownLoc(), resultStruct, outputs);
+  // rewriter.replaceOpWithNewOp<CommitOp>(commit, commit.getEnable(), pack.getResult());
+  // top.getResult().setType(resultStruct);
+  // rewriter.restoreInsertionPoint(savedIP);
+  // // top->getParentOfType<mlir::ModuleOp>()->dumpPretty();
+  // return resultStruct;
 }
 
 LogicalResult superpapatern(spechls::KernelOp top, PatternRewriter &rewriter, llvm::ArrayRef<unsigned int> instrs) {
@@ -280,15 +280,15 @@ struct UnrollInstrPass : public impl::UnrollInstrPassBase<UnrollInstrPass> {
 
 public:
   void runOnOperation() override {
-    auto top = getOperation();
-    auto *ctx = &getContext();
+    // auto top = getOperation();
+    // auto *ctx = &getContext();
 
-    mlir::PatternRewriter paptern(ctx);
+    // mlir::PatternRewriter paptern(ctx);
 
-    if (failed(superpapatern(top, paptern, *instrs))) {
-      llvm::errs() << "failed unrolling\n";
-      signalPassFailure();
-    }
+    // if (failed(superpapatern(top, paptern, *instrs))) {
+    //   llvm::errs() << "failed unrolling\n";
+    //   signalPassFailure();
+    // }
 
     // OpPassManager dynamicPM(spechls::KernelOp::getOperationName());
     // dynamicPM.addPass(wcet::createInlineTasksPass());
