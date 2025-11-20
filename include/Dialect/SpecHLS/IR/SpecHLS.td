@@ -292,12 +292,12 @@ def SpecHLS_DelayOp : SpecHLSOp<"delay",
     let hasCustomAssemblyFormat = 1;
 }
 
-def SpecHLS_FIFOOp : SpecHLSOp<"fifo", [DeclareOpInterfaceMethods<OpAsmOpInterface, ["getAsmResultNames"]>]> {
+def SpecHLS_FIFOOp : SpecHLSOp<"fifo", [DeclareOpInterfaceMethods<OpAsmOpInterface, ["getAsmResultNames"]>, AllTypesMatch<["input", "result"]>]> {
     let arguments = (ins SpecHLS_StructType:$input, UI32Attr:$depth);
     let results = (outs SpecHLS_StructType:$result);
 
     let assemblyFormat = [{
-        `<` $depth `>` $input attr-dict `:` functional-type($input, $result)
+        `<` $depth `>` $input attr-dict `:` type($input)
     }];
 
     let hasVerifier = 1;
@@ -358,6 +358,7 @@ def SpecHLS_FSMOp : SpecHLSOp<"fsm",
         StrAttr:$name,
         StrArrayAttr:$gammaNames,
         DenseI64ArrayAttr:$condDelays,
+        DenseI64ArrayAttr:$fastIndices,
         I64ArrayArrayAttr:$inputDelays,
         SpecHLS_StructType:$mispec,
         SpecHLS_StructType:$state
@@ -365,7 +366,7 @@ def SpecHLS_FSMOp : SpecHLSOp<"fsm",
     let results = (outs SpecHLS_StructType:$result);
 
     let assemblyFormat = [{
-        $name `<` $gammaNames `>` $condDelays $inputDelays `,` $mispec `,` $state attr-dict
+        $name `<` $gammaNames `>` $condDelays $fastIndices $inputDelays `,` $mispec `,` $state attr-dict
             `:` type($mispec) `,` type($state)
     }];
 }
