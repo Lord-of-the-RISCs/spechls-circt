@@ -348,6 +348,7 @@ def SpecHLS_FieldOp : SpecHLSOp<"field", [Pure, DeclareOpInterfaceMethods<InferT
     }];
 
     let hasVerifier = 1;
+    let hasFolder = 1;
 }
 
 def SpecHLS_FSMOp : SpecHLSOp<"fsm",

@@ -533,6 +533,21 @@ LogicalResult spechls::FieldOp::inferReturnTypes(MLIRContext *context, std::opti
   return success();
 }
 
+mlir::OpFoldResult spechls::FieldOp::fold(FoldAdaptor adaptor) {
+  auto *pred = getInput().getDefiningOp();
+  if (pred != nullptr) {
+    if (auto pack = llvm::dyn_cast<spechls::PackOp>(pred)) {
+      auto structType = pack.getType();
+      for (unsigned i = 0; i < structType.getFieldNames().size(); ++i) {
+        if (structType.getFieldNames()[i] == getName()) {
+          return pack.getOperand(i);
+        }
+      }
+    }
+  }
+  return nullptr;
+}
+
 //===--------------------------------------------------------------------------------------------------------------===//
 // TableGen'd types and op method definitions
 //===--------------------------------------------------------------------------------------------------------------===//
