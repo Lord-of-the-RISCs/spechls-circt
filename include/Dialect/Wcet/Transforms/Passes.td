@@ -36,14 +36,11 @@ def UnrollInstrPass : Pass<"unroll-instr", "spechls::KernelOp"> {
     ];
   }
 
-def InlineTasksPass : Pass<"inline-task", "spechls::KernelOp"> {
-    let summary = "Inline wcet::task";
-    let description = [{ TODO }];
-
-    let dependentDialects = [
-      "circt::hw::HWDialect",
-      "spechls::SpecHLSDialect",
-      ];
+def InlineCorePass : Pass<"inline-core", "mlir::ModuleOp"> {
+    let summary = "Inline core_instance";
+    let description = [{
+      Add inliner interface to circt::Comb and spechls dialects then schedule inliner pass
+    }];
   }
 
 def InsertDummyPass : Pass<"insert-dummy", "spechls::KernelOp"> {

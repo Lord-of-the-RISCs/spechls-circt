@@ -13,7 +13,7 @@ add_circt_dialect_library(WcetTransforms
     LongestPath.cpp
     SplitDelays.cpp
     WcetAnalysis.cpp
-    InlineTasks.cpp
+    InlineCore.cpp
     InsertDummy.cpp
 
     DEPENDS

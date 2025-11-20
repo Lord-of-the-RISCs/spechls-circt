@@ -14,6 +14,10 @@
 
 #include "Dialect/Wcet/IR/Wcet.h"      // IWYU pragma: export
 #include "Dialect/Wcet/IR/WcetTypes.h" // IWYU pragma: keep
+#include "mlir/Interfaces/CallInterfaces.h"
+#include "mlir/Interfaces/CastInterfaces.h"
+#include "mlir/Interfaces/FunctionInterfaces.h"
+#include <mlir/Interfaces/InferTypeOpInterface.h>
 
 #include "mlir/IR/PatternMatch.h"
 #define GET_OP_CLASSES

@@ -7,12 +7,23 @@
 
 #include "Dialect/Wcet/IR/WcetOps.h"
 
-#include "circt/Dialect/HW/HWOps.h"
-#include "mlir/Dialect/CommonFolders.h"
+#include "mlir/IR/Attributes.h"
+#include "mlir/IR/Builders.h"
+#include "mlir/IR/BuiltinTypes.h"
+#include "mlir/IR/Dialect.h"
+#include "mlir/IR/IRMapping.h"
 #include "mlir/IR/OpDefinition.h"
-#include "mlir/IR/PatternMatch.h"
+#include "mlir/IR/OpImplementation.h"
+#include "mlir/IR/OperationSupport.h"
+#include "mlir/IR/Types.h"
+#include "mlir/IR/Value.h"
+#include "mlir/IR/ValueRange.h"
+#include "mlir/Interfaces/CallInterfaces.h"
+#include "mlir/Interfaces/FunctionImplementation.h"
+#include "mlir/Transforms/InliningUtils.h"
 #include <llvm/ADT/STLExtras.h>
 #include <llvm/ADT/TypeSwitch.h>
+#include <llvm/Support/DebugLog.h>
 #include <mlir/IR/BuiltinAttributes.h>
 #include <mlir/IR/DialectImplementation.h>
 #include <mlir/IR/OpImplementation.h>
@@ -23,11 +34,36 @@
 #include <mlir/Support/LLVM.h>
 
 #include "Dialect/Wcet/IR/WcetDialect.cpp.inc"
-#include "llvm/Support/Errc.h"
-#include "llvm/Support/LogicalResult.h"
-#include "llvm/Support/raw_ostream.h"
+#include "llvm/ADT/ArrayRef.h"
 
 using namespace mlir;
+
+//===--------------------------------------------------------------------------------------------------------------===//
+// Wcet Inliner Interface
+//===--------------------------------------------------------------------------------------------------------------===//
+
+struct WcetInlinerInterface : public DialectInlinerInterface {
+  using DialectInlinerInterface::DialectInlinerInterface;
+
+  bool isLegalToInline(Operation *call, Operation *callable, bool wouldBeCloned) const final { return true; }
+
+  bool isLegalToInline(Operation *, Region *, bool, IRMapping &) const final { return true; }
+
+  bool isLegalToInline(Region *dest, Region *src, bool wouldBeCloned, IRMapping &valueMapping) const final {
+    return true;
+  }
+
+  void handleTerminator(Operation *op, ValueRange valuesToRepl) const final {
+    auto commit = cast<wcet::CommitOp>(op);
+    for (const auto &it : llvm::enumerate(commit->getOperands()))
+      valuesToRepl[it.index()].replaceAllUsesWith(it.value());
+  }
+
+  Operation *materializeCallConversion(OpBuilder &builder, Value input, Type resultType,
+                                       Location conversionLoc) const final {
+    return wcet::CastOp::create(builder, conversionLoc, resultType, input);
+  }
+};
 
 //===--------------------------------------------------------------------------------------------------------------===//
 // Wcet dialect
@@ -42,7 +78,9 @@ void wcet::WcetDialect::initialize() {
 #define GET_TYPEDEF_LIST
 #include "Dialect/Wcet/IR/WcetTypes.cpp.inc"
       >();
+  addInterface<WcetInlinerInterface>();
 }
+
 //
 // LogicalResult wcet::OperationOp::verify() {
 //  if (getNumOperands() != getDistances().size())
@@ -96,6 +134,56 @@ void wcet::WcetDialect::initialize() {
 //   rewriter.eraseOp(op);
 //   return success();
 // }
+
+//===--------------------------------------------------------------------------------------------------------------===//
+// CastOp
+//===--------------------------------------------------------------------------------------------------------------===//
+
+bool wcet::CastOp::areCastCompatible(::mlir::TypeRange inputs, ::mlir::TypeRange outputs) { return true; }
+
+//===--------------------------------------------------------------------------------------------------------------===//
+// CoreOp
+//===--------------------------------------------------------------------------------------------------------------===//
+
+void wcet::CoreOp::build(mlir::OpBuilder &builder, mlir::OperationState &state, llvm::StringRef name,
+                         mlir::FunctionType type, llvm::ArrayRef<mlir::NamedAttribute> attrs) {
+  buildWithEntryBlock(builder, state, name, type, attrs, type.getInputs());
+}
+
+mlir::ParseResult wcet::CoreOp::parse(mlir::OpAsmParser &parser, mlir::OperationState &result) {
+  auto buildFuncType = [](mlir::Builder &builder, llvm::ArrayRef<mlir::Type> argTypes,
+                          llvm::ArrayRef<mlir::Type> results, mlir::function_interface_impl::VariadicFlag,
+                          std::string &) { return builder.getFunctionType(argTypes, results); };
+
+  return mlir::function_interface_impl::parseFunctionOp(parser, result, false, getFunctionTypeAttrName(result.name),
+                                                        buildFuncType, getArgAttrsAttrName(result.name),
+                                                        getResAttrsAttrName(result.name));
+}
+
+void wcet::CoreOp::print(mlir::OpAsmPrinter &p) {
+  mlir::function_interface_impl::printFunctionOp(p, *this, false, getFunctionTypeAttrName(), getArgAttrsAttrName(),
+                                                 getResAttrsAttrName());
+}
+
+//===--------------------------------------------------------------------------------------------------------------===//
+// CoreInstanceOp
+//===--------------------------------------------------------------------------------------------------------------===//
+
+CallInterfaceCallable wcet::CoreInstanceOp::getCallableForCallee() {
+  return (*this)->getAttrOfType<SymbolRefAttr>("callee");
+}
+
+void wcet::CoreInstanceOp::setCalleeFromCallable(CallInterfaceCallable callee) {
+  (*this)->setAttr("callee", cast<SymbolRefAttr>(callee));
+}
+
+Operation::operand_range wcet::CoreInstanceOp::getArgOperands() { return getInputs(); }
+
+MutableOperandRange wcet::CoreInstanceOp::getArgOperandsMutable() { return getInputsMutable(); }
+
+//===--------------------------------------------------------------------------------------------------------------===//
+// CommitOp
+//===--------------------------------------------------------------------------------------------------------------===//
 
 //===--------------------------------------------------------------------------------------------------------------===//
 // TableGen'd types and op method definitions

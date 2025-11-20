@@ -89,7 +89,7 @@ public:
       return signalPassFailure();
 
     dynamicPM.addPass(std::move(unrollPass));
-    dynamicPM.addPass(wcet::createInlineTasksPass());
+    dynamicPM.addPass(wcet::createInlineCorePass());
     dynamicPM.addPass(wcet::createInsertDummyPass());
     dynamicPM.addPass(mlir::createCanonicalizerPass());
     dynamicPM.addPass(wcet::createLongestPathPass());
