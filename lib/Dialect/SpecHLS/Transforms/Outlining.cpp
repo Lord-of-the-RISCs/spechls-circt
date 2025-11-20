@@ -8,6 +8,8 @@
 #include "Dialect/SpecHLS/Transforms/Outlining.h"
 #include "Dialect/SpecHLS/IR/SpecHLSOps.h"
 #include "Dialect/SpecHLS/IR/SpecHLSTypes.h"
+#include "circt/Support/LLVM.h"
+#include "llvm/Support/LogicalResult.h"
 
 #include <circt/Dialect/HW/HWOps.h>
 #include <llvm/ADT/STLExtras.h>
@@ -42,7 +44,10 @@ spechls::TaskOp spechls::outlineControl(RewriterBase &rewriter, Location loc, st
   }
   ops.insert_range(toAdd);
 
-  Type returnType = output.getType();
+  //  Type returnType = output.getType();
+  StructType returnType = spechls::StructType::get(
+      rewriter.getContext(), name + "_commit", llvm::SmallVector<std::string>{"enable", "commit_val_0"},
+      llvm::SmallVector<mlir::Type>{mlir::IntegerType::get(rewriter.getContext(), 1), output.getType()});
   auto task = rewriter.create<spechls::TaskOp>(loc, returnType, name, inputs);
   Block &body = task.getBody().front();
   for (auto &&op : ops) {
@@ -74,8 +79,9 @@ spechls::TaskOp spechls::outlineControl(RewriterBase &rewriter, Location loc, st
       }
     }
   }
-
-  output.replaceAllUsesWith(task.getResult());
+  rewriter.setInsertionPointAfter(task);
+  auto field = rewriter.create<spechls::FieldOp>(output.getLoc(), "commit_val_0", task.getResult());
+  output.replaceAllUsesWith(field.getResult());
 
   rewriter.setInsertionPointToEnd(&body);
   auto enable = rewriter.create<circt::hw::ConstantOp>(loc, rewriter.getI1Type(), 1);
@@ -83,7 +89,8 @@ spechls::TaskOp spechls::outlineControl(RewriterBase &rewriter, Location loc, st
   Operation *outputParent = output.getDefiningOp();
   for (size_t i = 0; i < outputParent->getNumResults(); ++i) {
     if (outputParent->getResult(i) == output) {
-      rewriter.create<spechls::CommitOp>(loc, enable, cloneMap[outputParent]->getResult(i));
+      rewriter.create<spechls::CommitOp>(loc,
+                                         llvm::SmallVector<mlir::Value>{enable, cloneMap[outputParent]->getResult(i)});
     }
   }
   rewriter.restoreInsertionPoint(ip);
@@ -120,17 +127,15 @@ spechls::TaskOp spechls::outlineTask(RewriterBase &rewriter, Location loc, std::
   Type returnType{};
   SmallVector<std::string> fieldNames;
   SmallVector<Type> fieldTypes;
-  if (outputs.size() == 1) {
-    returnType = outputs[0].getType();
-  } else if (outputs.size() > 1) {
-    fieldNames.reserve(outputs.size());
-    fieldTypes.reserve(outputs.size());
-    for (size_t i = 0; i < outputs.size(); ++i) {
-      fieldNames.push_back("commit_" + std::to_string(i));
-      fieldTypes.push_back(outputs[i].getType());
-    }
-    returnType = rewriter.getType<spechls::StructType>((name + std::string{"_result"}), fieldNames, fieldTypes);
+  fieldNames.reserve(outputs.size() + 1);
+  fieldTypes.reserve(outputs.size() + 1);
+  fieldNames.push_back("enable");
+  fieldTypes.push_back(mlir::IntegerType::get(outputs.front().getContext(), 1));
+  for (size_t i = 0; i < outputs.size(); ++i) {
+    fieldNames.push_back("commit_val_" + std::to_string(i));
+    fieldTypes.push_back(outputs[i].getType());
   }
+  returnType = rewriter.getType<spechls::StructType>((name + std::string{"_result"}), fieldNames, fieldTypes);
 
   // Move operations into the task's body.
   auto task = rewriter.create<spechls::TaskOp>(loc, returnType, name, inputs);
@@ -150,27 +155,27 @@ spechls::TaskOp spechls::outlineTask(RewriterBase &rewriter, Location loc, std::
     }
   }
 
-  // Replace outgoing values with task results.
-  if (outputs.size() == 1) {
-    outputs[0].replaceAllUsesWith(task.getResult());
-  } else {
-    Value result = task.getResult();
-    for (size_t i = 0; i < outputs.size(); ++i) {
-      outputs[i].replaceAllUsesWith(rewriter.create<spechls::FieldOp>(loc, fieldNames[i], result));
-    }
+  rewriter.setInsertionPointAfter(task);
+  Value result = task.getResult();
+  for (size_t i = 0; i < outputs.size(); ++i) {
+    auto field = rewriter.create<spechls::FieldOp>(loc, fieldNames[i + 1], result);
+    rewriter.replaceUsesWithIf(outputs[i], field, [&](auto &&opOperand) {
+      if (ops.contains(opOperand.getOwner()))
+        return false;
+      return true;
+    });
   }
 
   // Create the commit terminator.
   auto ip = rewriter.saveInsertionPoint();
   rewriter.setInsertionPointToEnd(&body);
-  Value returnValue{};
-  if (outputs.size() == 1) {
-    returnValue = outputs[0];
-  } else {
-    returnValue = rewriter.create<spechls::PackOp>(loc, returnType, outputs);
-  }
+  llvm::SmallVector<mlir::Value> returnValues;
   auto enable = rewriter.create<circt::hw::ConstantOp>(loc, rewriter.getI1Type(), 1);
-  rewriter.create<spechls::CommitOp>(loc, enable, returnValue);
+  returnValues.push_back(enable);
+  for (auto &out : outputs) {
+    returnValues.push_back(out);
+  }
+  rewriter.create<spechls::CommitOp>(loc, returnValues);
   rewriter.restoreInsertionPoint(ip);
 
   return task;

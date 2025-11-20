@@ -118,7 +118,7 @@ def SpecHLS_ExitOp : SpecHLSOp<"exit", [HasParent<"KernelOp">, Terminator, Retur
 
 def SpecHLS_TaskOp : SpecHLSOp<"task", [SingleBlock, RegionKindInterface, IsolatedFromAbove]> {
     let arguments = (ins StrAttr:$sym_name, Variadic<AnyType>:$args);
-    let results = (outs Optional<AnyType>:$result);
+    let results = (outs SpecHLS_StructType:$result);
     let regions = (region AnyRegion:$body);
 
     let hasCustomAssemblyFormat = 1;
@@ -155,12 +155,11 @@ def SpecHLS_TaskOp : SpecHLSOp<"task", [SingleBlock, RegionKindInterface, Isolat
 
 def SpecHLS_CommitOp : SpecHLSOp<"commit", [HasParent<"TaskOp">, Terminator]> {
     let arguments = (ins
-        I1:$enable,
-        Optional<AnyType>:$value
+        Variadic<AnyType>:$value
     );
 
     let assemblyFormat = [{
-        $enable (`,` $value^ `:` type($value))? attr-dict
+        $value `:` type($value) attr-dict
     }];
     let hasVerifier = 1;
 }

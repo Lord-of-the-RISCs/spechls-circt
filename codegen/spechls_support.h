@@ -212,10 +212,10 @@ void fifo_read(FifoType<T> &fifo) {
 
 template <typename Arg, typename T>
 void fifo_write(FifoType<T> &fifo, const Arg &input) {
-  if (input.write) {
+  if (input.enable) {
     fifo.empty = false;
     fifo.full = true;
-    fifo.data = input.data;
+    fifo.data = input;
   }
 }
 
