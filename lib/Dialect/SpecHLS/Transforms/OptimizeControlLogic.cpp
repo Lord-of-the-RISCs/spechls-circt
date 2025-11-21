@@ -119,13 +119,10 @@ llvm::DenseSet<Operation *> OptimizeControlLogicPass::sliceControl(Operation *fi
 void OptimizeControlLogicPass::runOnOperation() {
   spechls::setupYosys();
   auto operation = getOperation();
-  auto *ctx = &getContext();
+  auto *ctx = operation->getContext();
   IRRewriter builder(ctx);
 
   operation.walk([&](spechls::KernelOp kernel) {
-    auto spechlsToHwPm = PassManager::on<spechls::TaskOp>(ctx);
-    spechlsToHwPm.addPass(spechls::createSpecHLSTaskToHWPass());
-
     unsigned index = 0;
 
     auto simplifyControl = [&](Operation *op, int input) {
@@ -139,11 +136,20 @@ void OptimizeControlLogicPass::runOnOperation() {
       op->setOperand(input, outCast.getResult());
       auto task = spechls::outlineControl(builder, inCast->getLoc(), "outline_control_" + std::to_string(index++),
                                           outlineSet, inCast.getResult());
-      if (failed(spechlsToHwPm.run(task))) {
+
+      auto spechlsToHwPm = PassManager::on<spechls::KernelOp>(ctx);
+      auto taskToHWPass = spechls::createSpecHLSTaskToHWPass();
+      if (failed(taskToHWPass->initializeOptions("targetTask=" + std::string(task.getSymName()), [](const Twine &msg) {
+            llvm::errs() << msg << '\n';
+            return failure();
+          })))
+        return signalPassFailure();
+      spechlsToHwPm.addPass(std::move(taskToHWPass));
+
+      if (failed(spechlsToHwPm.run(kernel))) {
         return signalPassFailure();
       }
     };
-
     // Outline gamma control as HWModule
     kernel.walk([&](spechls::GammaOp gamma) { simplifyControl(gamma, 0); });
     kernel.walk([&](spechls::AlphaOp alpha) { simplifyControl(alpha, 3); });
@@ -236,7 +242,11 @@ void OptimizeControlLogicPass::runOnOperation() {
         }
 
         if (auto output = llvm::dyn_cast<circt::hw::OutputOp>(op)) {
-          builder.replaceAllOpUsesWith(instance, output.getOperand(0).getDefiningOp());
+          for (unsigned i = 0; i < instance->getNumResults(); ++i) {
+            auto result = instance.getResult(i);
+            auto out = output.getOperand(i);
+            builder.replaceAllUsesWith(result, out);
+          }
         }
       }
 

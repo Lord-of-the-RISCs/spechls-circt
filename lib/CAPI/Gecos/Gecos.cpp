@@ -239,4 +239,18 @@ MlirOperation mlirGetSSPInstance(MlirModule module) {
   }
   return wrap(static_cast<mlir::Operation *>(nullptr));
 }
+
+MlirOperation spechlsGetFsmFromFsmCmd(MlirOperation op) {
+  auto fsmCmd = llvm::dyn_cast<spechls::FSMCommandOp>(unwrap(op));
+  for (auto &use : fsmCmd.getState().getUses()) {
+    if (auto fsm = llvm::dyn_cast<spechls::FSMOp>(use.getOwner())) {
+      return wrap(fsm.getOperation());
+    }
+  }
+  return wrap(static_cast<mlir::Operation *>(nullptr));
+}
+
+MlirType spechlsKernelGetArgumentType(MlirOperation op, int index) {
+  return wrap(llvm::cast<spechls::KernelOp>(unwrap(op)).getArgumentTypes()[index]);
+}
 }
