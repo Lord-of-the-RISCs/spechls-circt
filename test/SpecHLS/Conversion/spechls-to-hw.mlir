@@ -11,13 +11,15 @@ spechls.kernel @kernel() {
 
 // CHECK-LABEL: @task
 spechls.kernel @task(%in1 : i32, %in2 : i1) -> i32 {
-  // CHECK: %task1.result = hw.instance "task1" @task1(arg0: %arg0: i32) -> (result: i32)
-  %0 = spechls.task "task1"(%arg1 = %in1) : (i32) -> i32 {
+  // CHECK: %task1.enable, %task1.commit_val_0 = hw.instance "task1" @task1(arg1: %arg0: i32) -> (enable: i1, commit_val_0: i32)
+  %0 = spechls.task "task1"(%arg1 = %in1) : (i32) -> !spechls.struct<"commit_type_0" {"enable": i1, "commit_val_0" : i32}> {
     %true = hw.constant 1 : i1
-    spechls.commit %true, %arg1 : i32
+    spechls.commit %true, %arg1 : i1, i32
   }
-  // CHECK: hw.output %task1.result : i32
-  spechls.exit if %in2 with %0 : i32
+
+  %1 = spechls.field<"commit_val_0"> %0 : !spechls.struct<"commit_type_0" {"enable": i1, "commit_val_0" : i32}>
+  // CHECK: hw.output %task1.commit_val_0 : i32
+  spechls.exit if %in2 with %1 : i32
 }
 
 //---
