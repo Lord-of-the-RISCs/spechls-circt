@@ -170,18 +170,46 @@ struct LutConversion : OpConversionPattern<spechls::LUTOp> {
   }
 };
 
+struct FieldConversion : OpConversionPattern<spechls::FieldOp> {
+  using OpConversionPattern<spechls::FieldOp>::OpConversionPattern;
+
+  LogicalResult matchAndRewrite(spechls::FieldOp field, OpAdaptor adaptor,
+                                ConversionPatternRewriter &rewriter) const override {
+    if (auto pack = llvm::dyn_cast_or_null<spechls::PackOp>(field.getOperand().getDefiningOp())) {
+      auto name = field.getName();
+      auto packType = pack.getType();
+      for (unsigned i = 0; i < packType.getFieldNames().size(); ++i) {
+        if (packType.getFieldNames()[i] == name) {
+          auto value = pack.getOperand(i);
+          rewriter.replaceAllUsesWith(field.getResult(), value);
+          rewriter.eraseOp(field);
+          return success();
+        }
+      }
+    }
+    return failure();
+  }
+};
+
 struct ConvertSpecHLSToHWPass : public spechls::impl::SpecHLSToHWPassBase<ConvertSpecHLSToHWPass> {
-  FrozenRewritePatternSet patterns;
+  FrozenRewritePatternSet patterns1;
+  FrozenRewritePatternSet patterns2;
 
   using SpecHLSToHWPassBase<ConvertSpecHLSToHWPass>::SpecHLSToHWPassBase;
 
   LogicalResult initialize(MLIRContext *ctx) override {
-    RewritePatternSet patternList{ctx};
-    patternList.add<KernelConversion>(ctx);
-    patternList.add<TaskConversion>(ctx);
-    patternList.add<GammaConversion>(ctx);
-    patternList.add<LutConversion>(ctx);
-    patterns = std::move(patternList);
+    RewritePatternSet patternList1{ctx};
+    patternList1.add<TaskConversion>(ctx);
+    patternList1.add<GammaConversion>(ctx);
+    patternList1.add<LutConversion>(ctx);
+    patterns1 = std::move(patternList1);
+    RewritePatternSet patternList2{ctx};
+    patternList2.add<KernelConversion>(ctx);
+    patternList2.add<TaskConversion>(ctx);
+    patternList2.add<GammaConversion>(ctx);
+    patternList2.add<LutConversion>(ctx);
+    patternList2.add<FieldConversion>(ctx);
+    patterns2 = std::move(patternList2);
     return success();
   }
 
@@ -190,8 +218,21 @@ struct ConvertSpecHLSToHWPass : public spechls::impl::SpecHLSToHWPassBase<Conver
     target.addLegalDialect<circt::hw::HWDialect>();
     target.addLegalDialect<circt::comb::CombDialect>();
     target.addIllegalDialect<spechls::SpecHLSDialect>();
+    target.addLegalOp<spechls::PackOp>();
+    target.addLegalOp<spechls::FieldOp>();
+    target.addLegalOp<spechls::KernelOp>();
+    target.addLegalOp<spechls::ExitOp>();
 
-    if (failed(mlir::applyFullConversion(getOperation(), target, patterns)))
+    if (failed(mlir::applyFullConversion(getOperation(), target, patterns1)))
+      return signalPassFailure();
+
+    ConversionTarget target2(getContext());
+    target2.addLegalDialect<circt::hw::HWDialect>();
+    target2.addLegalDialect<circt::comb::CombDialect>();
+    target2.addIllegalDialect<spechls::SpecHLSDialect>();
+    target2.addLegalOp<spechls::PackOp>();
+
+    if (failed(mlir::applyFullConversion(getOperation(), target2, patterns2)))
       return signalPassFailure();
   }
 };
