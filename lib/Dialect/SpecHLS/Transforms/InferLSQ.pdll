@@ -1,0 +1,38 @@
+// 
+// This file is part of the SpecHLS project.
+// This file is licensed under the Apach License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for License information.
+// SPDX-License-Identifier: Apach-2.0 WITH LLVM-exception
+//
+
+#include "Dialect/SpecHLS/IR/SpecHLS.td"
+#include "circt/Dialect/HW/HW.td"
+
+Rewrite BuildDelayRB(root:Op) -> Op;
+
+Pattern AlphaMuRbDelay {
+    let alpha = op<spechls.alpha>;
+    let mu = op<spechls.mu>(_:Value, alpha);
+    let rb = op<spechls.rollback>(mu, _:Value, _:Value);
+    let root = op<spechls.delay>(rb, _:Value, _:Value);
+
+    replace root with BuildDelayRB(root);
+}
+
+Rewrite RetimingDelay(root: Op) -> Op;
+
+Pattern MoveDelay {
+    let root = op<spechls.alpha>;
+    let delay = op<spechls.delay>(root, _:Value, _:Value);
+
+    replace root with RetimingDelay(delay);
+}
+
+Rewrite RetimingRollback(root : Op) -> Op;
+
+Pattern MoveRollback {
+    let root = op<spechls.alpha>;
+    let rb = op<spechls.rollback>(root, _:Value, _:Value);
+
+    replace root with RetimingRollback(rb);
+  }

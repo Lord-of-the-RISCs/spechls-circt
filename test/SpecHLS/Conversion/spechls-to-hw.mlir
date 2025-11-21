@@ -1,4 +1,14 @@
 // RUN: spechls-opt --spechls-to-hw %s | FileCheck %s
+=======
+// RUN: spechls-opt -split-input-file --spechls-to-hw --canonicalize --cse %s | spechls-opt | FileCheck %s
+
+// CHECK-LABEL: hw.module @kernel
+spechls.kernel @kernel() {
+  %true = hw.constant 1 : i1
+  // CHECK: hw.output
+  spechls.exit if %true
+}
+
 
 // CHECK-LABEL: @task
 spechls.kernel @task_comb(%in1 : i32, %in2 : i1) -> i32 {
@@ -48,7 +58,7 @@ spechls.kernel @array_raw(%init :!spechls.array<i32, 4>, %index: i32, %value: i3
 // CHECK-LABEL: @nary_gamma
 spechls.kernel @nary_gamma(%cond: i2, %x: i32, %y: i32, %z: i32) -> i32 {
   %true = hw.constant 1 : i1
-  // CHECK: %[[array:.+]] = hw.array_create %arg1, %arg2, %arg3 : i32
+  // CHECK: %[[array:.+]] = hw.array_create %arg3, %arg2, %arg1 : i32
   // CHECK: hw.array_get %[[array]][%arg0] : !hw.array<3xi32>, i2
   %0 = spechls.gamma<"x">(%cond, %x, %y, %z) : i2, i32
   spechls.exit if %true with %0 : i32

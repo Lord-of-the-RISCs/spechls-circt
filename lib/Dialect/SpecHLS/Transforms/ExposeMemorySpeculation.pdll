@@ -1,0 +1,25 @@
+//
+// This file is part of the SpecHLS project.
+// This file is licensed under Apache license v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
+//
+
+#include "circt/Dialect/HW/HW.td"
+#include "circt/Dialect/Comb/Comb.td"
+#include "Dialect/SpecHLS/IR/SpecHLS.td"
+#include "mlir/IR/BuiltinAttributes.td"
+
+
+Rewrite ExposeMemorySpeculation(root: Op) -> Op;
+
+Constraint IsGreaterThanO(attr: Attr) [{
+    int64_t value = cast<::mlir::IntegerAttr>(attr).getValue().getSExtValue();
+    return success(value > 0);
+  }];
+
+Pattern MemorySpeculation {
+    let root = op<spechls.mu>(_:Value, op<spechls.alpha>) {dependenciesDistances = dist : Attr};
+    IsGreaterThanO(dist);
+    replace root with ExposeMemorySpeculation(root);
+  }

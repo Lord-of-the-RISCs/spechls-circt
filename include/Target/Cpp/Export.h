@@ -16,6 +16,7 @@ struct TranslationToCppOptions {
   bool lowerArraysAsValues;
   bool generateCpi;
   bool vitisHlsCompatibility;
+  bool catapultCompatibility;
 };
 
 llvm::LogicalResult translateToCpp(mlir::Operation *op, llvm::raw_ostream &os, TranslationToCppOptions options);

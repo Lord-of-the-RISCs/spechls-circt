@@ -5,9 +5,17 @@ target_link_libraries(gecosapi PUBLIC
     ScheduleCAPI
     SpecHLSCAPI
     ScheduleToSSP
+    SpecHLSTransforms
+    SpecHLSToHW
     CIRCT
     MLIR
     MLIR-C
+    SpecHLS
+    SpecHLSToHW
+    Schedule
+    ScheduleTransforms
+
+    Yosys::Yosys
 )
 
 install(TARGETS gecosapi)

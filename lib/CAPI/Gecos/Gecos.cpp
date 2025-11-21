@@ -8,19 +8,38 @@
 #include "CAPI/Dialect/Schedule.h"
 #include "CAPI/Dialect/SpecHLS.h"
 #include "Dialect/Schedule/Transforms/Passes.h" // IWYU pragma: keep
+#include "Dialect/SpecHLS/IR/SpecHLSOps.h"
 #include "Dialect/SpecHLS/IR/SpecHLSTypes.h"
-#include "mlir/Transforms/Passes.h"
+#include "Dialect/SpecHLS/Transforms/Passes.h"
+#include "Dialect/SpecHLS/Transforms/TopologicalSort.h"
 
 #include <circt-c/Dialect/Comb.h>
+#include <circt-c/Dialect/Debug.h>
 #include <circt-c/Dialect/HW.h>
+#include <circt-c/Dialect/LLHD.h>
+#include <circt-c/Dialect/LTL.h>
+#include <circt-c/Dialect/Moore.h>
 #include <circt-c/Dialect/SSP.h>
+#include <circt-c/Dialect/SV.h>
+#include <circt-c/Dialect/Seq.h>
+#include <circt-c/Dialect/Sim.h>
+#include <circt-c/Dialect/Synth.h>
+#include <circt-c/Dialect/Verif.h>
+#include <circt/Dialect/SSP/SSPDialect.h>
+#include <circt/Dialect/SSP/SSPOps.h>
+#include <mlir-c/Dialect/ControlFlow.h>
+#include <mlir-c/Dialect/Func.h>
+#include <mlir-c/Dialect/Math.h>
+#include <mlir-c/Dialect/SCF.h>
 #include <mlir-c/IR.h>
 #include <mlir-c/Support.h>
+#include <mlir/Analysis/TopologicalSortUtils.h>
 #include <mlir/CAPI/IR.h>
 #include <mlir/CAPI/Pass.h>
 #include <mlir/CAPI/Support.h>
 #include <mlir/IR/BuiltinOps.h>
 #include <mlir/Pass/PassManager.h>
+#include <mlir/Transforms/Passes.h>
 
 extern "C" {
 
@@ -65,6 +84,19 @@ MlirModule parseMLIR(const char *str) {
   mlirDialectHandleRegisterDialect(mlirGetDialectHandle__ssp__(), context);
   mlirDialectHandleRegisterDialect(mlirGetDialectHandle__spechls__(), context);
   mlirDialectHandleRegisterDialect(mlirGetDialectHandle__schedule__(), context);
+  mlirDialectHandleRegisterDialect(mlirGetDialectHandle__seq__(), context);
+  mlirDialectHandleRegisterDialect(mlirGetDialectHandle__synth__(), context);
+  mlirDialectHandleRegisterDialect(mlirGetDialectHandle__sv__(), context);
+  mlirDialectHandleRegisterDialect(mlirGetDialectHandle__llhd__(), context);
+  mlirDialectHandleRegisterDialect(mlirGetDialectHandle__cf__(), context);
+  mlirDialectHandleRegisterDialect(mlirGetDialectHandle__scf__(), context);
+  mlirDialectHandleRegisterDialect(mlirGetDialectHandle__math__(), context);
+  mlirDialectHandleRegisterDialect(mlirGetDialectHandle__sim__(), context);
+  mlirDialectHandleRegisterDialect(mlirGetDialectHandle__verif__(), context);
+  mlirDialectHandleRegisterDialect(mlirGetDialectHandle__moore__(), context);
+  mlirDialectHandleRegisterDialect(mlirGetDialectHandle__func__(), context);
+  mlirDialectHandleRegisterDialect(mlirGetDialectHandle__ltl__(), context);
+  mlirDialectHandleRegisterDialect(mlirGetDialectHandle__debug__(), context);
 
   MlirStringRef wrapped = mlirStringRefCreateFromCString(str);
   return mlirModuleCreateParse(context, wrapped);
@@ -129,5 +161,54 @@ bool mlirModuleCse(MlirModule module) {
   auto pm = mlir::PassManager::on<mlir::ModuleOp>(mod->getContext());
   pm.addPass(mlir::createCSEPass());
   return failed(pm.run(mod));
+}
+
+bool mlirModuleOptimizeControl(MlirModule module) {
+  auto mod = unwrap(module);
+  auto pm = mlir::PassManager::on<mlir::ModuleOp>(mod->getContext());
+  pm.addPass(spechls::createOptimizeControlLogicPass());
+  return failed(pm.run(mod));
+}
+
+bool mlirIdgTopologicalSort(MlirModule module) {
+  auto mod = unwrap(module);
+  auto pm = mlir::PassManager::on<mlir::ModuleOp>(mod->getContext());
+  pm.addPass(spechls::createSpecHLSTopoSortPass());
+  return failed(pm.run(mod));
+}
+
+MlirBlock spechlsTaskGetBodyBlock(MlirOperation op) {
+  auto task = llvm::dyn_cast<spechls::TaskOp>(unwrap(op));
+  return wrap(task.getBodyBlock());
+}
+
+bool mlirModuleOptimizeControlPipeline(MlirModule mod) {
+  auto module = unwrap(mod);
+  auto pm = mlir::PassManager::on<mlir::ModuleOp>(module.getContext());
+  pm.addPass(mlir::createCanonicalizerPass());
+  pm.addPass(mlir::createCSEPass());
+  pm.addPass(spechls::createOptimizeControlLogicPass());
+  pm.addPass(mlir::createCanonicalizerPass());
+  pm.addPass(mlir::createCSEPass());
+  pm.addPass(spechls::createSpecHLSTopoSortPass());
+  return failed(pm.run(module));
+}
+
+void mlirDumpModule(MlirModule module) { unwrap(module)->dump(); }
+void mlirDumpOperation(MlirOperation op) { unwrap(op)->dump(); }
+void mlirDumpValue(MlirValue val) { unwrap(val).dump(); }
+
+MlirBlock sspGetGraphBlock(MlirOperation op) {
+  auto instance = llvm::dyn_cast<circt::ssp::InstanceOp>(unwrap(op));
+  return wrap(&(instance.getDependenceGraph().getBody().front()));
+}
+
+MlirOperation mlirGetSSPInstance(MlirModule module) {
+  auto mod = unwrap(module);
+  for (auto &op : mod.getOperation()->getRegions().front().getBlocks().front()) {
+    if (auto instance = llvm::dyn_cast<circt::ssp::InstanceOp>(op))
+      return wrap(instance);
+  }
+  return wrap(static_cast<mlir::Operation *>(nullptr));
 }
 }
