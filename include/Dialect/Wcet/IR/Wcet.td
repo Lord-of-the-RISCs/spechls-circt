@@ -121,9 +121,27 @@ def Wcet_CoreOp : WcetOp<"core", [
 
   let regions = (region AnyRegion:$body);
 
-  let builders = [OpBuilder<(ins
+  let builders = [
+    OpBuilder<(ins
       "::mlir::StringRef":$name, "::mlir::FunctionType":$type,
-      CArg<"::mlir::ArrayRef<::mlir::NamedAttribute>", "{}">:$attrs)>];
+      CArg<"::mlir::ArrayRef<::mlir::NamedAttribute>", "{}">:$attrs)>,
+      
+    OpBuilder<(ins "::mlir::FunctionType":$type, "::mlir::StringRef":$name, CArg<"::mlir::ArrayRef<::mlir::DictionaryAttr>", "{}">:$argAttrs), 
+    [{
+        $_state.addAttribute("sym_name", $_builder.getStringAttr(name));
+        $_state.addAttribute(getFunctionTypeAttrName($_state.name), ::mlir::TypeAttr::get(type));
+        ::mlir::Region * body = $_state.addRegion();
+        body->emplaceBlock();
+        for (auto && input : type.getInputs()) {
+            body->addArgument(input, $_builder.getUnknownLoc());
+        }
+        if (argAttrs.empty())
+            return;
+        call_interface_impl::addArgAndResultAttrs(
+            $_builder, $_state, argAttrs, {},
+              getArgAttrsAttrName($_state.name), getResAttrsAttrName($_state.name));
+      }]>
+  ];
 
   let extraClassDeclaration = [{
     ::mlir::ArrayRef<::mlir::Type> getArgumentTypes() { return getFunctionType().getInputs(); }

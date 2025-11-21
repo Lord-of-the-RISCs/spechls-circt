@@ -22,6 +22,22 @@ def SplitDelaysPass : Pass<"split-delays", "ModuleOp"> {
       ];
   }
 
+def OutlineCorePass : Pass<"outline-core", "ModuleOp"> {
+    let summary = "Outline speculative spechls.task into wcet.core";
+
+    let description = [{
+        This pass proceed speculative spechls.task (spechls.task with spechls.speculative attribute) in three steps:
+        1) retrieve the speculative task
+        2) create a wcet.core with the body of the task and the input of task + one input for the instructions
+        3) replace the spechls.commit of the task by wcet.commit
+      }];
+
+    let dependentDialects = [
+      "spechls::SpecHLSDialect",
+      "wcet::WcetDialect"
+    ];
+  }
+
 def UnrollInstrPass : Pass<"unroll-instr", "spechls::KernelOp"> {
     let summary = "Unroll the spechls kernel with the given instructions";
     let description = [{ TODO }];
