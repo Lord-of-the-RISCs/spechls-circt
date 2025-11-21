@@ -232,10 +232,16 @@ void spechls::TaskOp::print(OpAsmPrinter &printer) {
 
 LogicalResult spechls::CommitOp::verify() {
   auto task = cast<TaskOp>((*this)->getParentOp());
-  auto const &result = task.getResult().getType();
-  if (getValue().getType() != result) {
-    return emitError() << "type of commit operand (" << getValue().getType() << ") doesn't match result type ("
-                       << result << ") in task \"" << task.getSymName() << "\"";
+  auto taskType = task.getResult().getType();
+  if (taskType.getFieldTypes().size() != getNumOperands()) {
+    return emitError() << "Bad number of commit operands. Got" << getNumOperands() << ", but "
+                       << taskType.getFieldTypes().size() << "was expected.\n";
+  }
+  for (unsigned i = 0; i < getNumOperands(); ++i) {
+    if (getOperand(i).getType() != taskType.getFieldTypes()[i]) {
+      return emitError() << "Bad commit operand type at index " << i << ". Operand of type " << getOperand(i).getType()
+                         << ", but type" << taskType.getFieldTypes()[i] << "was expected.\n";
+    }
   }
   return success();
 }
@@ -472,15 +478,11 @@ void spechls::DelayOp::print(OpAsmPrinter &printer) {
 LogicalResult spechls::FIFOOp::verify() {
   StructType structType = getInput().getType();
   auto fields = structType.getFieldTypes();
-  if (fields.size() != 2 || !fields.front().isInteger(1)) {
+  if (!fields.front().isInteger(1)) {
     return emitOpError(
-               "FIFO input type expected to be a structure of the form !spechls.struct<i1, output-type>, but got ")
+               "FIFO input type expected to be a structure of the form !spechls.struct<i1, output-type...>, but got ")
            << structType;
   }
-
-  if (fields.back() != getType())
-    return emitOpError("FIFO output expected to be of type ") << fields.back() << ", but got " << getType();
-
   return success();
 }
 
@@ -529,6 +531,21 @@ LogicalResult spechls::FieldOp::inferReturnTypes(MLIRContext *context, std::opti
     ++i;
   }
   return success();
+}
+
+mlir::OpFoldResult spechls::FieldOp::fold(FoldAdaptor adaptor) {
+  auto *pred = getInput().getDefiningOp();
+  if (pred != nullptr) {
+    if (auto pack = llvm::dyn_cast<spechls::PackOp>(pred)) {
+      auto structType = pack.getType();
+      for (unsigned i = 0; i < structType.getFieldNames().size(); ++i) {
+        if (structType.getFieldNames()[i] == getName()) {
+          return pack.getOperand(i);
+        }
+      }
+    }
+  }
+  return nullptr;
 }
 
 //===--------------------------------------------------------------------------------------------------------------===//

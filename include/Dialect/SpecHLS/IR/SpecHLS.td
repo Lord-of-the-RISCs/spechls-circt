@@ -118,7 +118,7 @@ def SpecHLS_ExitOp : SpecHLSOp<"exit", [HasParent<"KernelOp">, Terminator, Retur
 
 def SpecHLS_TaskOp : SpecHLSOp<"task", [SingleBlock, RegionKindInterface, IsolatedFromAbove]> {
     let arguments = (ins StrAttr:$sym_name, Variadic<AnyType>:$args);
-    let results = (outs Optional<AnyType>:$result);
+    let results = (outs SpecHLS_StructType:$result);
     let regions = (region AnyRegion:$body);
 
     let hasCustomAssemblyFormat = 1;
@@ -155,12 +155,11 @@ def SpecHLS_TaskOp : SpecHLSOp<"task", [SingleBlock, RegionKindInterface, Isolat
 
 def SpecHLS_CommitOp : SpecHLSOp<"commit", [HasParent<"TaskOp">, Terminator]> {
     let arguments = (ins
-        I1:$enable,
-        Optional<AnyType>:$value
+        Variadic<AnyType>:$value
     );
 
     let assemblyFormat = [{
-        $enable (`,` $value^ `:` type($value))? attr-dict
+        $value `:` type($value) attr-dict
     }];
     let hasVerifier = 1;
 }
@@ -293,12 +292,12 @@ def SpecHLS_DelayOp : SpecHLSOp<"delay",
     let hasCustomAssemblyFormat = 1;
 }
 
-def SpecHLS_FIFOOp : SpecHLSOp<"fifo", [DeclareOpInterfaceMethods<OpAsmOpInterface, ["getAsmResultNames"]>]> {
+def SpecHLS_FIFOOp : SpecHLSOp<"fifo", [DeclareOpInterfaceMethods<OpAsmOpInterface, ["getAsmResultNames"]>, AllTypesMatch<["input", "result"]>]> {
     let arguments = (ins SpecHLS_StructType:$input, UI32Attr:$depth);
     let results = (outs SpecHLS_StructType:$result);
 
     let assemblyFormat = [{
-        `<` $depth `>` $input attr-dict `:` functional-type($input, $result)
+        `<` $depth `>` $input attr-dict `:` type($input)
     }];
 
     let hasVerifier = 1;
@@ -349,6 +348,7 @@ def SpecHLS_FieldOp : SpecHLSOp<"field", [Pure, DeclareOpInterfaceMethods<InferT
     }];
 
     let hasVerifier = 1;
+    let hasFolder = 1;
 }
 
 def SpecHLS_FSMOp : SpecHLSOp<"fsm",
@@ -358,6 +358,7 @@ def SpecHLS_FSMOp : SpecHLSOp<"fsm",
         StrAttr:$name,
         StrArrayAttr:$gammaNames,
         DenseI64ArrayAttr:$condDelays,
+        DenseI64ArrayAttr:$fastIndices,
         I64ArrayArrayAttr:$inputDelays,
         SpecHLS_StructType:$mispec,
         SpecHLS_StructType:$state
@@ -365,7 +366,7 @@ def SpecHLS_FSMOp : SpecHLSOp<"fsm",
     let results = (outs SpecHLS_StructType:$result);
 
     let assemblyFormat = [{
-        $name `<` $gammaNames `>` $condDelays $inputDelays `,` $mispec `,` $state attr-dict
+        $name `<` $gammaNames `>` $condDelays $fastIndices $inputDelays `,` $mispec `,` $state attr-dict
             `:` type($mispec) `,` type($state)
     }];
 }

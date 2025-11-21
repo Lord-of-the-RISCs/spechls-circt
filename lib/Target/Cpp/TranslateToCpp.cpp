@@ -654,11 +654,10 @@ LogicalResult printOperation(CppEmitter &emitter, spechls::TaskOp taskOp) {
       fifoInputs.push_back(fifoOp);
     }
   }
-  for (auto &&res : taskOp.getResults()) {
-    for (auto &&user : res.getUsers()) {
-      if (auto fifoOp = dyn_cast_if_present<spechls::FIFOOp>(user)) {
-        fifoOutputs.push_back({res, fifoOp});
-      }
+  auto &&res = taskOp.getResult();
+  for (auto &&user : res.getUsers()) {
+    if (auto fifoOp = dyn_cast_if_present<spechls::FIFOOp>(user)) {
+      fifoOutputs.push_back({res, fifoOp});
     }
   }
 
@@ -887,37 +886,23 @@ LogicalResult printOperation(CppEmitter &emitter, spechls::PrintOp printOp) {
 LogicalResult printOperation(CppEmitter &emitter, spechls::CommitOp commitOp) {
   raw_indented_ostream &os = emitter.ostream();
 
-  if (!commitOp.getValue())
-    return success();
-
   spechls::TaskOp task = commitOp.getParentOp();
   if (failed(emitter.emitOperand(task.getResult())))
     return failure();
-  os << " = ";
-
-  bool alwaysEnabled = false;
-  Value enable = commitOp.getEnable();
-  if (auto constantOp = dyn_cast<circt::hw::ConstantOp>(enable.getDefiningOp())) {
-    // Special case for supernodes with always-enabled outputs (i.e., non-speculative supernodes).
-    alwaysEnabled = constantOp.getValue().getBoolValue();
-  }
-
-  if (alwaysEnabled) {
-    if (failed(emitter.emitOperand(commitOp.getValue())))
+  os << " = (";
+  spechls::TaskOp parentTask = commitOp->getParentOfType<spechls::TaskOp>();
+  if (failed(emitter.emitType(commitOp.getLoc(), parentTask->getResultTypes().front())))
+    return failure();
+  os << "){";
+  bool first = true;
+  for (auto op : commitOp.getOperands()) {
+    if (!first)
+      os << ", ";
+    first = false;
+    if (failed(emitter.emitOperand(op)))
       return failure();
-    return success();
   }
-
-  if (failed(emitter.emitOperand(enable)))
-    return failure();
-  os << " ? ";
-  if (failed(emitter.emitOperand(commitOp.getValue())))
-    return failure();
-  os << " : ";
-  if (failed(emitter.emitType(commitOp.getLoc(), commitOp.getValue().getType())))
-    return failure();
-  if (!emitter.shouldGenerateCatapultCompatibleCode())
-    os << "{}";
+  os << "}";
 
   return success();
 }
