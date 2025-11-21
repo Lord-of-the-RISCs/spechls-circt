@@ -115,8 +115,8 @@ public:
       if (opName == spechls::CommitOp::getOperationName().str() && !isResultsPacked) {
         auto commit = cast<spechls::CommitOp>(op);
         funOutputsNames.push_back("result");
-        funOutputsTypes.push_back(commit.getValue().getType());
-        commit.getValue().getDefiningOp()->setAttr("wcet.output", builder.getUnitAttr());
+        funOutputsTypes.push_back(commit.getValue().front().getType());
+        commit->getPrevNode()->setAttr("wcet.output", builder.getUnitAttr());
       }
     });
 
