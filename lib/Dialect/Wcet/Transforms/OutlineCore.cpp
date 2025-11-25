@@ -43,6 +43,7 @@ struct OutlineCorePass : public impl::OutlineCorePassBase<OutlineCorePass> {
 public:
   void runOnOperation() override {
     auto mod = getOperation();
+    OpBuilder builder = OpBuilder(&getContext());
 
     /**************************************************************************
      * Get the speculative Task                                               *
@@ -61,11 +62,17 @@ public:
     }
 
     /**************************************************************************
+     * Give an unique number to each delayOp in the speculativeTask-          *
+     *************************************************************************/
+    int delaysNumber = 0;
+    speculativeTask->walk(
+        [&](spechls::DelayOp delays) { delays->setAttr("wcet.num", builder.getI32IntegerAttr(delaysNumber++)); });
+
+    /**************************************************************************
      * Retrieve core input's types, fetch and attributes                      *
      *************************************************************************/
     bool isResultsPacked = !speculativeTask.getOps<spechls::PackOp>().empty();
 
-    OpBuilder builder = OpBuilder(&getContext());
     SmallVector<Type> funInputsTypes = SmallVector<Type>(speculativeTask.getOperandTypes());
     SmallVector<Type> funOutputsTypes;
     SmallVector<std::string> funOutputsNames;
@@ -88,7 +95,13 @@ public:
       auto opName = op->getName().getStringRef();
       if (opName == spechls::DelayOp::getOperationName().str()) {
         auto delay = cast<spechls::DelayOp>(op);
-        inputsAttrs.push_back(DictionaryAttr());
+        auto *predOp = delay->getPrevNode();
+        if (predOp->getName().getStringRef() == spechls::DelayOp::getOperationName().str()) {
+          auto delNumber = llvm::dyn_cast_or_null<IntegerAttr>(predOp->getAttr("wcet.num"));
+          inputsAttrs.push_back(builder.getDictionaryAttr(builder.getNamedAttr("wcet.pred", delNumber)));
+        } else {
+          inputsAttrs.push_back(DictionaryAttr());
+        }
         op->setAttr("wcet.toReplace", builder.getI64IntegerAttr(funInputsTypes.size()));
         delay.getInput().getDefiningOp()->setAttr("wcet.output", builder.getUnitAttr());
         funOutputsTypes.push_back(delay.getInput().getType());

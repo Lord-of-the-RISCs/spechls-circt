@@ -32,8 +32,13 @@ def RemoveIntraRAWPass : Pass<"remove-intra-raw", "ModuleOp"> {
 
 def ExposeMemorySpeculationPass : Pass<"expose-memory-speculation", "ModuleOp"> {
     let summary = "";
-    let dependentDialects = ["::spechls::SpecHLSDialect", "::circt::comb::CombDialect", "::circt::hw::HWDialect", "::mlir::pdl::PDLDialect", 
-    "::mlir::pdl_interp::PDLInterpDialect"];
+    let dependentDialects = [
+      "::spechls::SpecHLSDialect", 
+      "::circt::comb::CombDialect", 
+      "::circt::hw::HWDialect", 
+      "::mlir::pdl::PDLDialect", 
+      "::mlir::pdl_interp::PDLInterpDialect"
+      ];
 }
 
 def InferLSQPass : Pass<"infer-LSQ", "ModuleOp"> {
