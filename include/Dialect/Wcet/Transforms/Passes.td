@@ -38,12 +38,27 @@ def OutlineCorePass : Pass<"outline-core", "ModuleOp"> {
     ];
   }
 
+def LUTToMuxPass : Pass<"LUT-to-mux", "ModuleOp"> {
+    let summary = "Transform LUT to mux tree";
+    let description = [{
+      TODO
+    }];
+
+    let dependentDialects = [
+      "spechls::SpecHLSDialect",
+      "::circt::comb::CombDialect",
+      "::circt::hw::HWDialect",
+      "::mlir::pdl::PDLDialect",
+      "::mlir::pdl_interp::PDLInterpDialect"
+    ];
+}
+
 def UnrollInstrPass : Pass<"unroll-instr", "spechls::KernelOp"> {
     let summary = "Unroll the spechls kernel with the given instructions";
     let description = [{ TODO }];
 
     let dependentDialects = [
-      "circt::hw::HWDialect",
+      "::circt::hw::HWDialect",
       "spechls::SpecHLSDialect",
       "wcet::WcetDialect",
     ];
@@ -76,7 +91,7 @@ def LongestPathPass : Pass<"longest-path", "spechls::KernelOp"> {
     let description = [{ TODO }];
 
     let dependentDialects = [
-      "circt::hw::HWDialect",
+      "::circt::hw::HWDialect",
       "spechls::SpecHLSDialect",
       "wcet::WcetDialect"
       ];
@@ -87,7 +102,7 @@ def WcetAnalysisPass : Pass<"wcet-analysis", "spechls::KernelOp"> {
     let description = [{ TODO }];
 
     let dependentDialects = [
-      "circt::hw::HWDialect",
+      "::circt::hw::HWDialect",
       "spechls::SpecHLSDialect",
       "wcet::WcetDialect"
       ];
