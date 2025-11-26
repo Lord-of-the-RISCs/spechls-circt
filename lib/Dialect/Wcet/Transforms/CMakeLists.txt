@@ -13,6 +13,11 @@ add_mlir_pdll_library(WcetLUTToMuxPatternsIncGen
   LUTToMux.h.inc
 )
 
+add_mlir_pdll_library(WcetGammaBinarizationPatternsIncGen
+  GammaBinarization.pdll
+  GammaBinarization.h.inc
+)
+
 add_circt_dialect_library(WcetTransforms
     UnrollInstr.cpp
     LongestPath.cpp
@@ -22,12 +27,14 @@ add_circt_dialect_library(WcetTransforms
     InsertDummy.cpp
     OutlineCore.cpp
     LUTToMux.cpp
+    GammaBinarization.cpp
 
     DEPENDS
     WcetTransformsIncGen
     WcetSplitDelaysPatternsIncGen
     WcetInsertDummyPatternsIncGen
     WcetLUTToMuxPatternsIncGen
+    WcetGammaBinarizationPatternsIncGen
 )
 target_include_directories(WcetTransforms
   PRIVATE

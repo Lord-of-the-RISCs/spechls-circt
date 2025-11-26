@@ -1,0 +1,21 @@
+//
+// This file is part of the SpecHLS project.
+// This file is licensed under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
+//
+
+
+#include "circt/Dialect/Comb/Comb.td"
+#include "Dialect/SpecHLS/IR/SpecHLS.td"
+
+Constraint IsMuxTree(root : Op);
+
+Rewrite GamBinarization(root: Op) -> Op;
+
+Pattern GammaCtrlByMux {
+  let mux = op<comb.mux>;
+  let root = op<spechls.gamma>(mux, _:ValueRange);
+  IsMuxTree(mux);
+  replace root with GamBinarization(root);
+  }

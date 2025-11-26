@@ -53,6 +53,17 @@ def LUTToMuxPass : Pass<"LUT-to-mux", "ModuleOp"> {
     ];
 }
 
+def GammaBinarizationPass : Pass<"gamma-binarization", "ModuleOp"> {
+  let summary = "Transform a gamma n-aire to a tree of binary gammas";
+
+  let dependentDialects = [
+    "spechls::SpecHLSDialect",
+    "::circt::comb::CombDialect",
+    "::mlir::pdl::PDLDialect",
+    "::mlir::pdl_interp::PDLInterpDialect"
+  ];
+}
+
 def UnrollInstrPass : Pass<"unroll-instr", "spechls::KernelOp"> {
     let summary = "Unroll the spechls kernel with the given instructions";
     let description = [{ TODO }];
