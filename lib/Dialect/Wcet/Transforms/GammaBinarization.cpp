@@ -108,10 +108,6 @@ private:
 
   static Value binarizationRec(PatternRewriter &rewriter, spechls::GammaOp gamma, Operation *currentOp,
                                DenseMap<Operation *, Value> &visited) {
-    // if (llvm::any_of(visited, [currentOp](std::pair<Operation *, Value> p) { return p.first == currentOp; })) {
-    //   return visited.lookup(currentOp);
-    // }
-
     auto result = visited.lookup_or(currentOp, nullptr);
     if (result) {
       return result;
