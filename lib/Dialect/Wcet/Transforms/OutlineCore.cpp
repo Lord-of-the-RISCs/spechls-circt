@@ -5,31 +5,23 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "Dialect/SpecHLS/IR/SpecHLSTypes.h"
 #include "circt/Support/LLVM.h"
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/BuiltinOps.h"
-#include "mlir/IR/IRMapping.h"
 #include "mlir/IR/PatternMatch.h"
 #include "mlir/IR/Value.h"
-#include "mlir/IR/ValueRange.h"
 #include "mlir/Pass/PassManager.h"
 #include "mlir/Support/LLVM.h"
 #include "mlir/Transforms/InliningUtils.h"
 #include "mlir/Transforms/Passes.h"
-#include "llvm/ADT/ArrayRef.h"
-#include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/SmallVector.h"
-#include "llvm/Support/Casting.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/DebugLog.h"
 #include "llvm/Support/raw_ostream.h"
 
 #include <Dialect/SpecHLS/IR/SpecHLSOps.h>
 #include <Dialect/Wcet/IR/WcetOps.h>
-#include <cstdint>
 #include <string>
-#include <utility>
 
 #define DEBUG_TYPE "OutlineCore"
 
