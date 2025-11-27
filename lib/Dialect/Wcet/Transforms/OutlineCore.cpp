@@ -6,15 +6,19 @@
 //===----------------------------------------------------------------------===//
 
 #include "Dialect/SpecHLS/IR/SpecHLSTypes.h"
-#include "circt/Dialect/HW/HWOps.h"
 #include "circt/Support/LLVM.h"
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/BuiltinOps.h"
 #include "mlir/IR/IRMapping.h"
+#include "mlir/IR/PatternMatch.h"
+#include "mlir/IR/Value.h"
+#include "mlir/IR/ValueRange.h"
 #include "mlir/Pass/PassManager.h"
 #include "mlir/Support/LLVM.h"
 #include "mlir/Transforms/InliningUtils.h"
 #include "mlir/Transforms/Passes.h"
+#include "llvm/ADT/ArrayRef.h"
+#include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/Support/Casting.h"
 #include "llvm/Support/Debug.h"
@@ -23,7 +27,9 @@
 
 #include <Dialect/SpecHLS/IR/SpecHLSOps.h>
 #include <Dialect/Wcet/IR/WcetOps.h>
+#include <cstdint>
 #include <string>
+#include <utility>
 
 #define DEBUG_TYPE "OutlineCore"
 
@@ -43,7 +49,7 @@ struct OutlineCorePass : public impl::OutlineCorePassBase<OutlineCorePass> {
 public:
   void runOnOperation() override {
     auto mod = getOperation();
-    OpBuilder builder = OpBuilder(&getContext());
+    IRRewriter rewriter(&getContext());
 
     /**************************************************************************
      * Get the speculative Task                                               *
@@ -61,125 +67,190 @@ public:
       signalPassFailure();
     }
 
-    /**************************************************************************
-     * Give an unique number to each delayOp in the speculativeTask-          *
-     *************************************************************************/
-    int delaysNumber = 0;
-    speculativeTask->walk(
-        [&](spechls::DelayOp delays) { delays->setAttr("wcet.num", builder.getI32IntegerAttr(delaysNumber++)); });
-
-    /**************************************************************************
-     * Retrieve core input's types, fetch and attributes                      *
-     *************************************************************************/
-    bool isResultsPacked = !speculativeTask.getOps<spechls::PackOp>().empty();
-
-    SmallVector<Type> funInputsTypes = SmallVector<Type>(speculativeTask.getOperandTypes());
-    SmallVector<Type> funOutputsTypes;
-    SmallVector<std::string> funOutputsNames;
-    SmallVector<DictionaryAttr> inputsAttrs;
-    for (size_t i = 0; i < funInputsTypes.size(); ++i) {
-      inputsAttrs.push_back(DictionaryAttr());
+    if (!speculativeTask->getOpOperands().empty()) {
+      LLVM_DEBUG({ LDBG() << "speculative task must have no inputs"; });
     }
-    bool fetchFound = false;
-    int delCount = 0;
-    int muCount = 0;
-    int packCount = 0;
+
+    /**************************************************************************
+     * Build inputs/outputs of the wcet.core                                  *
+     *************************************************************************/
+    SmallVector<spechls::DelayOp> firstsDelay;
+    getNbDelayPred(rewriter, speculativeTask, firstsDelay);
+
+    SmallVector<Type> coreInputsTypes;
+    SmallVector<DictionaryAttr> coreInputsAttrs;
+    SmallVector<Type> coreOutputsTypes;
+    SmallVector<Value> coreInputs;
+    SmallVector<Operation *> coreOutputs;
+    SmallVector<Operation *> toRemove;
+
+    //============= Retrieve instructions types ===============================
     speculativeTask->walk([&](Operation *op) {
-      if (op->getAttr("wcet.fetch")) {
-        op->setAttr("wcet.toReplace", builder.getI64IntegerAttr(funInputsTypes.size()));
-        funInputsTypes.push_back(op->getResultTypes().front());
-        inputsAttrs.push_back(builder.getDictionaryAttr(builder.getNamedAttr("wcet.instrs", builder.getUnitAttr())));
-        fetchFound = true;
+      auto fetch = op->getAttr("wcet.fetch");
+      if (!fetch)
         return;
+      coreInputsTypes.push_back(op->getResultTypes().front());
+      auto fetchNumber = dyn_cast_or_null<IntegerAttr>(fetch);
+      if (!fetchNumber) {
+        fetchNumber = rewriter.getI32IntegerAttr(0);
       }
-      auto opName = op->getName().getStringRef();
-      if (opName == spechls::DelayOp::getOperationName().str()) {
-        auto delay = cast<spechls::DelayOp>(op);
-        auto *predOp = delay->getPrevNode();
-        if (predOp->getName().getStringRef() == spechls::DelayOp::getOperationName().str()) {
-          auto delNumber = llvm::dyn_cast_or_null<IntegerAttr>(predOp->getAttr("wcet.num"));
-          inputsAttrs.push_back(builder.getDictionaryAttr(builder.getNamedAttr("wcet.pred", delNumber)));
-        } else {
-          inputsAttrs.push_back(DictionaryAttr());
-        }
-        op->setAttr("wcet.toReplace", builder.getI64IntegerAttr(funInputsTypes.size()));
-        delay.getInput().getDefiningOp()->setAttr("wcet.output", builder.getUnitAttr());
-        funOutputsTypes.push_back(delay.getInput().getType());
-        funOutputsNames.push_back("delay_" + std::to_string(delCount++));
-        funInputsTypes.push_back(op->getResultTypes().front());
-      }
-      if (opName == spechls::MuOp::getOperationName().str()) {
-        auto mu = cast<spechls::MuOp>(op);
-        inputsAttrs.push_back(DictionaryAttr());
-        op->setAttr("wcet.toReplace", builder.getI64IntegerAttr(funInputsTypes.size()));
-        mu.getLoopValue().getDefiningOp()->setAttr("wcet.output", builder.getUnitAttr());
-        funOutputsTypes.push_back(mu.getType());
-        funOutputsNames.push_back("mu_" + std::to_string(muCount++));
-        funInputsTypes.push_back(op->getResultTypes().front());
-      }
-      if (opName == spechls::PackOp::getOperationName().str()) {
-        auto pack = cast<spechls::PackOp>(op);
-        for (auto v : pack.getInputs()) {
-          v.getDefiningOp()->setAttr("wcet.output", builder.getUnitAttr());
-          funOutputsNames.push_back("pack_" + std::to_string(packCount++));
-          funOutputsTypes.push_back(v.getType());
-        }
-      }
-      if (opName == spechls::CommitOp::getOperationName().str() && !isResultsPacked) {
-        auto commit = cast<spechls::CommitOp>(op);
-        funOutputsNames.push_back("result");
-        funOutputsTypes.push_back(commit.getValue().front().getType());
-        commit->getPrevNode()->setAttr("wcet.output", builder.getUnitAttr());
-      }
+      coreInputsAttrs.push_back(rewriter.getDictionaryAttr(rewriter.getNamedAttr("wcet.instrNb", fetchNumber)));
+      coreInputs.push_back(op->getResult(0));
+      toRemove.push_back(op);
     });
 
-    if (!fetchFound) {
-      LLVM_DEBUG({ LDBG() << "No fetch found"; });
-      signalPassFailure();
+    //============= Retrieve Mu ===============================================
+    speculativeTask->walk([&](spechls::MuOp mu) {
+      coreInputsTypes.push_back(mu.getType());
+      coreOutputsTypes.push_back(mu.getType());
+      coreInputsAttrs.push_back(rewriter.getDictionaryAttr({}));
+      coreInputs.push_back(mu);
+      coreOutputs.push_back(mu.getLoopValue().getDefiningOp());
+      toRemove.push_back(mu);
+    });
+
+    //============= Retrieve Delays ===========================================
+    for (auto d : firstsDelay) {
+      coreInputs.push_back(d);
+      coreInputsTypes.push_back(d.getType());
+      coreOutputsTypes.push_back(d.getType());
+      coreInputsAttrs.push_back(
+          rewriter.getDictionaryAttr(rewriter.getNamedAttr("wcet.nbPred", rewriter.getI32IntegerAttr(0))));
+      coreOutputs.push_back(d.getInput().getDefiningOp());
+      toRemove.push_back(d);
+      spechls::DelayOp nextDelay = nullptr;
+      for (auto *op : d->getUsers()) {
+        auto nd = dyn_cast_or_null<spechls::DelayOp>(op);
+        if (nd) {
+          nextDelay = nd;
+          break;
+        }
+      }
+      int nbPred = 0;
+      while (nextDelay) {
+        coreInputs.push_back(nextDelay);
+        coreInputsTypes.push_back(nextDelay.getType());
+        coreOutputsTypes.push_back(nextDelay.getType());
+        coreInputsAttrs.push_back(
+            rewriter.getDictionaryAttr(rewriter.getNamedAttr("wcet.nbPred", rewriter.getI32IntegerAttr(++nbPred))));
+        coreOutputs.push_back(nextDelay.getInput().getDefiningOp());
+        toRemove.push_back(nextDelay);
+        auto nextUsers = nextDelay->getUsers();
+        nextDelay = nullptr;
+        for (auto *op : nextUsers) {
+          auto nd = dyn_cast_or_null<spechls::DelayOp>(op);
+          if (nd) {
+            nextDelay = nd;
+            break;
+          }
+        }
+      }
     }
 
     /**************************************************************************
-     * Create the core Operation                                              *
+     * Create the wcet.core                                                   *
      *************************************************************************/
-    builder.setInsertionPointToStart(mod.getBody());
-    auto funType = builder.getFunctionType(
-        funInputsTypes, builder.getType<spechls::StructType>("out", funOutputsNames, funOutputsTypes));
+    rewriter.setInsertionPointToStart(mod.getBody());
+    auto funType = rewriter.getFunctionType(coreInputsTypes, coreOutputsTypes);
     auto core =
-        builder.create<wcet::CoreOp>(builder.getUnknownLoc(), funType,
-                                     builder.getStringAttr(std::string("core_" + speculativeTask.getSymName().str())),
-                                     ArrayRef<DictionaryAttr>(inputsAttrs));
+        rewriter.create<wcet::CoreOp>(rewriter.getUnknownLoc(), funType,
+                                      rewriter.getStringAttr(std::string("core_" + speculativeTask.getSymName().str())),
+                                      ArrayRef<DictionaryAttr>(coreInputsAttrs));
 
-    builder.setInsertionPointToStart(&core.getBody().getBlocks().front());
-    IRMapping mapper;
-    for (const auto &it : llvm::enumerate(speculativeTask.getBody().getArguments())) {
-      mapper.map(it.value(), core.getBody().getArgument(it.index()));
-    }
+    Block &coreBody = core.getBody().front();
 
-    SmallVector<Value> outputsValue;
+    /**************************************************************************
+     *  Populate core                                                         *
+     **************************************************************************/
+    DenseMap<Operation *, Operation *> cloneMap;
+
     speculativeTask->walk([&](Operation *op) {
+      rewriter.setInsertionPointToEnd(&coreBody);
       auto opName = op->getName().getStringRef();
       if (opName == spechls::TaskOp::getOperationName().str() ||
-          opName == spechls::CommitOp::getOperationName().str() ||
-          opName == spechls::PackOp::getOperationName().str()) {
+          opName == spechls::CommitOp::getOperationName().str()) {
         return;
       }
-      auto *newOp = builder.clone(*op, mapper);
-      if (newOp->getAttr("wcet.output")) {
-        outputsValue.push_back(newOp->getResult(0));
+      auto *newOp = rewriter.clone(*op);
+      cloneMap.try_emplace(op, newOp);
+    });
+
+    /**************************************************************************
+     *  Handle Inputs/Outputs                                                 *
+     **************************************************************************/
+    speculativeTask->walk([&](Operation *op) {
+      auto opName = op->getName().getStringRef();
+      if (opName == spechls::CommitOp::getOperationName().str() ||
+          opName == spechls::TaskOp::getOperationName().str()) {
+        return;
+      }
+      for (size_t i = 0; i < op->getNumOperands(); i++) {
+        auto operand = op->getOperand(i);
+        auto *opOperand = operand.getDefiningOp();
+        for (size_t j = 0; j < opOperand->getNumResults(); j++) {
+          if (opOperand->getResult(j) == operand) {
+            cloneMap[op]->setOperand(i, cloneMap[opOperand]->getResult(j));
+          }
+        }
       }
     });
 
-    auto pack = builder.create<spechls::PackOp>(builder.getUnknownLoc(), funType.getResults(), outputsValue);
-    builder.create<wcet::CommitOp>(builder.getUnknownLoc(), pack);
-
-    core->walk([&](Operation *op) {
-      auto attr = dyn_cast_or_null<IntegerAttr>(op->getAttr("wcet.toReplace"));
-      if (attr) {
-        int64_t idx = attr.getInt();
-        op->getResult(0).replaceAllUsesWith(core.getBody().getArgument(idx));
-        op->erase();
+    SmallVector<Value> outs;
+    for (size_t i = 0; i < coreOutputs.size(); i++) {
+      auto *op = cloneMap[coreOutputs[i]];
+      for (size_t j = 0; j < op->getNumResults(); j++) {
+        outs.push_back(op->getResult(j));
       }
-    });
+    }
+
+    auto commitOp = rewriter.create<wcet::CommitOp>(rewriter.getUnknownLoc(), outs);
+
+    for (size_t i = 0; i < coreInputs.size(); i++) {
+      speculativeTask->walk([&](Operation *op) {
+        for (size_t j = 0; j < op->getNumOperands(); j++) {
+          if (op->getOperand(j) == coreInputs[i]) {
+            cloneMap[op]->setOperand(j, core.getBody().getArgument(i));
+          }
+        }
+      });
+    }
+
+    for (size_t i = 0; i < commitOp->getNumOperands(); i++) {
+      auto operand = commitOp.getOperand(i);
+      auto *opOperand = operand.getDefiningOp();
+      size_t operandNum = 0;
+      for (size_t j = 0; j < opOperand->getNumResults(); j++) {
+        if (opOperand->getResult(j) == operand) {
+          operandNum = j;
+          break;
+        }
+      }
+      speculativeTask->walk([&](Operation *op) {
+        if (cloneMap[op] == opOperand) {
+          auto taskOperand = op->getResult(operandNum);
+          for (size_t j = 0; j < coreInputs.size(); j++) {
+            if (coreInputs[j] == taskOperand) {
+              commitOp.setOperand(i, core.getBody().getArgument(j));
+            }
+          }
+        }
+      });
+    }
+
+    for (auto *p : toRemove) {
+      rewriter.eraseOp(cloneMap[p]);
+    }
+  }
+
+private:
+  void getNbDelayPred(OpBuilder &builder, spechls::TaskOp top, SmallVector<spechls::DelayOp> &firstsDelay) {
+    for (auto d : top.getOps<spechls::DelayOp>()) {
+      if (dyn_cast_or_null<spechls::DelayOp>(d.getInput().getDefiningOp())) {
+        continue;
+      }
+
+      firstsDelay.push_back(d);
+    }
   }
 };
 

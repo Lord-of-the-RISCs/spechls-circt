@@ -157,9 +157,13 @@ def Wcet_CommitOp : WcetOp<"commit", [Pure, HasParent<"CoreOp">, Terminator]> {
   let summary = "Commit the ouput of the core";
   let description = [{}];
 
-  let arguments = (ins AnyType:$input);
+  let arguments = (ins Variadic<AnyType>:$inputs);
 
-  let assemblyFormat = "$input `:` type($input) attr-dict";
+  //let builders = [OpBuilder<(ins), [{
+  //    build($_builder, $_state, {});
+  //  }]>];
+
+  let assemblyFormat = "attr-dict ($inputs^ `:` type($inputs))?";
 
 }
 
