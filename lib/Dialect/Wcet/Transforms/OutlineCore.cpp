@@ -21,6 +21,7 @@
 
 #include <Dialect/SpecHLS/IR/SpecHLSOps.h>
 #include <Dialect/Wcet/IR/WcetOps.h>
+#include <cstddef>
 #include <string>
 
 #define DEBUG_TYPE "OutlineCore"
@@ -77,6 +78,7 @@ public:
     SmallVector<Operation *> toRemove;
 
     //============= Retrieve instructions types ===============================
+    size_t numInstrs = 0;
     speculativeTask->walk([&](Operation *op) {
       auto fetch = op->getAttr("wcet.fetch");
       if (!fetch)
@@ -89,6 +91,7 @@ public:
       coreInputsAttrs.push_back(rewriter.getDictionaryAttr(rewriter.getNamedAttr("wcet.instrNb", fetchNumber)));
       coreInputs.push_back(op->getResult(0));
       toRemove.push_back(op);
+      numInstrs++;
     });
 
     //============= Retrieve Mu ===============================================
@@ -232,6 +235,9 @@ public:
     for (auto *p : toRemove) {
       rewriter.eraseOp(cloneMap[p]);
     }
+
+    core->setAttr("wcet.cpuCore", rewriter.getUnitAttr());
+    core->setAttr("wcet.numInstrs", rewriter.getUI32IntegerAttr(numInstrs));
   }
 
 private:

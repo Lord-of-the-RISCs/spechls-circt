@@ -64,8 +64,8 @@ def GammaBinarizationPass : Pass<"gamma-binarization", "ModuleOp"> {
   ];
 }
 
-def UnrollInstrPass : Pass<"unroll-instr", "spechls::KernelOp"> {
-    let summary = "Unroll the spechls kernel with the given instructions";
+def InsertInstrPass : Pass<"insert-instr", "ModuleOp"> {
+    let summary = "";
     let description = [{ TODO }];
 
     let dependentDialects = [
@@ -85,17 +85,6 @@ def InlineCorePass : Pass<"inline-core", "mlir::ModuleOp"> {
     }];
   }
 
-def InsertDummyPass : Pass<"insert-dummy", "spechls::KernelOp"> {
-    let summary = "replace pack-unpack pair with dummy nodes";
-    let description = [{ TODO }];
-
-    let dependentDialects = [
-      "spechls::SpecHLSDialect",
-      "wcet::WcetDialect",
-      "::mlir::pdl::PDLDialect",
-      "::mlir::pdl_interp::PDLInterpDialect",
-      ];
-  }
 
 def LongestPathPass : Pass<"longest-path", "spechls::KernelOp"> {
     let summary = "Find the longest wcet path";
@@ -106,19 +95,5 @@ def LongestPathPass : Pass<"longest-path", "spechls::KernelOp"> {
       "spechls::SpecHLSDialect",
       "wcet::WcetDialect"
       ];
-  }
-
-def WcetAnalysisPass : Pass<"wcet-analysis", "spechls::KernelOp"> {
-    let summary = "Make a wcet analysis";
-    let description = [{ TODO }];
-
-    let dependentDialects = [
-      "::circt::hw::HWDialect",
-      "spechls::SpecHLSDialect",
-      "wcet::WcetDialect"
-      ];
-    let options = [
-      ListOption<"instrs", "instrs", "uint32_t", "The basic block to analyse">
-    ];
   }
 #endif // SPECHLS_INCLUDED_DIALECT_WCET_TRANSFORMS_PASSES_TD

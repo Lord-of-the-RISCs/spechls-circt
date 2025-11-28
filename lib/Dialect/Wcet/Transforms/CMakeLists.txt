@@ -3,11 +3,6 @@ add_mlir_pdll_library(WcetSplitDelaysPatternsIncGen
   SplitDelays.h.inc
 )
 
-add_mlir_pdll_library(WcetInsertDummyPatternsIncGen
-  InsertDummy.pdll
-  InsertDummy.h.inc
-)
-
 add_mlir_pdll_library(WcetLUTToMuxPatternsIncGen
   LUTToMux.pdll
   LUTToMux.h.inc
@@ -19,12 +14,10 @@ add_mlir_pdll_library(WcetGammaBinarizationPatternsIncGen
 )
 
 add_circt_dialect_library(WcetTransforms
-    UnrollInstr.cpp
+    InsertInstr.cpp
     LongestPath.cpp
     SplitDelays.cpp
-    WcetAnalysis.cpp
     InlineCore.cpp
-    InsertDummy.cpp
     OutlineCore.cpp
     LUTToMux.cpp
     GammaBinarization.cpp
@@ -32,7 +25,6 @@ add_circt_dialect_library(WcetTransforms
     DEPENDS
     WcetTransformsIncGen
     WcetSplitDelaysPatternsIncGen
-    WcetInsertDummyPatternsIncGen
     WcetLUTToMuxPatternsIncGen
     WcetGammaBinarizationPatternsIncGen
 )

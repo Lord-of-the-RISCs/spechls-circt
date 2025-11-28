@@ -76,6 +76,12 @@ def Wcet_InitOp : WcetOp<"init", []> {
      }];
 }
 
+def Wcet_DontCare : WcetOp<"dontCare", [Pure]> {
+    let summary = "An invalid valid that can be throw aways";
+    let arguments = (ins);
+    let results = (outs AnyType:$result);
+  }
+
 def Wcet_PenaltyOp : WcetOp<"penalty",
         [AttrSizedOperandSegments,
          TypesMatchWith<"Delay input and output types must match", "input", "result", "$_self">,
