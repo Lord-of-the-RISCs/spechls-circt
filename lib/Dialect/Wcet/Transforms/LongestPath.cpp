@@ -20,10 +20,8 @@
 #include "Dialect/Wcet/Transforms/Passes.h"
 #include "mlir/IR/PatternMatch.h"
 #include "mlir/IR/Verifier.h"
-#include "mlir/Pass/Pass.h"
 #include "mlir/Pass/PassManager.h"
 #include "mlir/Transforms/DialectConversion.h"
-#include "mlir/Transforms/Passes.h"
 
 using namespace mlir;
 
