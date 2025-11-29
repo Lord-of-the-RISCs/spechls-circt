@@ -9,15 +9,9 @@
 #include "CAPI/Dialect/SpecHLS.h"
 #include "CAPI/Dialect/Wcet.h"
 #include "Dialect/Schedule/Transforms/Passes.h" // IWYU pragma: keep
-#include "Dialect/SpecHLS/IR/SpecHLSOps.h"
-#include "Dialect/SpecHLS/IR/SpecHLSTypes.h"
-#include "Dialect/SpecHLS/Transforms/Passes.h"
-#include "Dialect/SpecHLS/Transforms/TopologicalSort.h"
-#include "Dialect/Wcet/IR/WcetOps.h"
 #include "Dialect/Wcet/Transforms/Passes.h"
 #include "circt/Support/LLVM.h"
 #include "mlir/IR/Operation.h"
-#include "mlir/IR/PatternMatch.h"
 #include "mlir/IR/Verifier.h"
 
 #include <circt-c/Dialect/Comb.h>
@@ -172,14 +166,14 @@ size_t mlirWcetAnalysis(MlirModule module, mlir::SmallVector<size_t> instrs) {
   });
 
   //==== Clean up
-  mlir::Operation *core;
+  mlir::Operation *analysisCore;
   mod->walk([&](mlir::Operation *c) {
     if (c->hasAttr("wcet.analysis")) {
-      core = c;
+      analysisCore = c;
       return;
     }
   });
-  core->erase();
+  analysisCore->erase();
 
   return wcet;
 }

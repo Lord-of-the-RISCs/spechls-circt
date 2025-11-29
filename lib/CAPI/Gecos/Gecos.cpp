@@ -11,7 +11,6 @@
 #include "Dialect/SpecHLS/IR/SpecHLSOps.h"
 #include "Dialect/SpecHLS/IR/SpecHLSTypes.h"
 #include "Dialect/SpecHLS/Transforms/Passes.h"
-#include "Dialect/SpecHLS/Transforms/TopologicalSort.h"
 
 #include <circt-c/Dialect/Comb.h>
 #include <circt-c/Dialect/Debug.h>
