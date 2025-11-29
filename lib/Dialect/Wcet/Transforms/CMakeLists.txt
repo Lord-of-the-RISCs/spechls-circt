@@ -21,6 +21,7 @@ add_circt_dialect_library(WcetTransforms
     OutlineCore.cpp
     LUTToMux.cpp
     GammaBinarization.cpp
+    SetupAnalysis.cpp
 
     DEPENDS
     WcetTransformsIncGen

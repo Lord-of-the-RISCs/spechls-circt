@@ -14,27 +14,18 @@
 #include <cstdio>
 #include <llvm/ADT/ArrayRef.h>
 #include <llvm/ADT/SmallVector.h>
-#include <map>
 #include <stack>
 
-#include "Dialect/SpecHLS/IR/SpecHLS.h"
-#include "Dialect/SpecHLS/IR/SpecHLSOps.h"
 #include "Dialect/Wcet/IR/WcetOps.h"
 #include "Dialect/Wcet/Transforms/Passes.h"
-#include "circt/Dialect/HW/HWOpInterfaces.h"
-#include "circt/Dialect/HW/HWOps.h"
 #include "mlir/IR/PatternMatch.h"
 #include "mlir/IR/Verifier.h"
+#include "mlir/Pass/Pass.h"
 #include "mlir/Pass/PassManager.h"
 #include "mlir/Transforms/DialectConversion.h"
-#include "mlir/Transforms/GreedyPatternRewriteDriver.h"
 #include "mlir/Transforms/Passes.h"
-#include "llvm/Support/Errc.h"
-#include "llvm/Support/LogicalResult.h"
 
 using namespace mlir;
-using namespace circt;
-using namespace spechls;
 
 namespace wcet {
 #define GEN_PASS_DEF_LONGESTPATHPASS
@@ -56,23 +47,39 @@ struct LongestPathPass : public impl::LongestPathPassBase<LongestPathPass> {
 
 public:
   void runOnOperation() override {
-    spechls::KernelOp top = getOperation();
-    wcet::DummyOp entry = nullptr;
-    top->walk([&](wcet::DummyOp dum) {
-      if (dum->hasAttr("wcet.entry")) {
-        entry = dum;
+    auto top = getOperation();
+    wcet::CoreOp core = nullptr;
+    top->walk([&](wcet::CoreOp c) {
+      if (c->hasAttr("wcet.analysis")) {
+        core = c;
         return;
       }
     });
-    if (!entry) {
-      llvm::errs() << "failed finding entry\n";
+
+    wcet::DummyOp startPoint = nullptr;
+    wcet::DummyOp endPoint = nullptr;
+    core->walk([&](wcet::DummyOp dum) {
+      if (dum->hasAttr("wcet.current")) {
+        startPoint = dum;
+        return;
+      }
+      if (dum->hasAttr("wcet.next")) {
+        endPoint = dum;
+        return;
+      }
+    });
+    if (!startPoint || !endPoint) {
       signalPassFailure();
+      return;
     }
 
     auto *ctx = &getContext();
     PatternRewriter rewriter(ctx);
 
-    longestPath(entry, rewriter, rewriter.getStringAttr("wcet.dist"));
+    longestPath(startPoint, rewriter, rewriter.getStringAttr("wcet.dists"));
+
+    startPoint->removeAttr("wcet.current");
+    endPoint->setAttr("wcet.penalties", endPoint->getAttr("wcet.dists"));
   }
 };
 
@@ -147,7 +154,6 @@ void longestPath(wcet::DummyOp startingPoint, PatternRewriter &rewriter, StringA
       maxDist = dists[op];
     op->setAttr(distName, rewriter.getI32IntegerAttr(dists[op]));
   }
-  llvm::errs() << "WCET: " << maxDist << "\n";
 }
 
 void visitedOps(Operation *op, SmallVector<Operation *> &visited) {
@@ -156,6 +162,11 @@ void visitedOps(Operation *op, SmallVector<Operation *> &visited) {
   }
 
   visited.push_back(op);
+
+  if (op->getName().getStringRef() == wcet::DummyOp::getOperationName().str()) {
+    if (op->hasAttr("wcet.next"))
+      return;
+  }
 
   for (Value result : op->getResults()) {
     for (Operation *user : result.getUsers()) {

@@ -17,7 +17,6 @@
 #include "circt/Support/LLVM.h"
 #include "mlir/IR/PatternMatch.h"
 #include "mlir/Support/LLVM.h"
-#include "llvm/Support/raw_ostream.h"
 #include <cstdint>
 
 using namespace mlir;
@@ -127,7 +126,8 @@ public:
         rewriter.create<wcet::DummyOp>(rewriter.getUnknownLoc(), nextCore->getResultTypes(), nextCore->getResults());
 
     nextDummy->setAttr("wcet.next", rewriter.getUnitAttr());
-    currentDum->setAttr("wcet.curent", rewriter.getUnitAttr());
+    nextDummy->setAttr("wcet.penalties", rewriter.getI32IntegerAttr(0));
+    currentDum->setAttr("wcet.current", rewriter.getUnitAttr());
     currentDum->removeAttr("wcet.next");
   }
 };

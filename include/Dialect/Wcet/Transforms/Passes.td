@@ -64,6 +64,12 @@ def GammaBinarizationPass : Pass<"gamma-binarization", "ModuleOp"> {
   ];
 }
 
+def SetupAnalysisPass : Pass<"setup-analysis", "ModuleOp"> {
+    let dependentDialects = [
+    "wcet::WcetDialect"
+    ];
+  }
+
 def InsertInstrPass : Pass<"insert-instr", "ModuleOp"> {
     let summary = "";
     let description = [{ TODO }];
@@ -86,13 +92,11 @@ def InlineCorePass : Pass<"inline-core", "mlir::ModuleOp"> {
   }
 
 
-def LongestPathPass : Pass<"longest-path", "spechls::KernelOp"> {
-    let summary = "Find the longest wcet path";
+def LongestPathPass : Pass<"longest-path", "ModuleOp"> {
+    let summary = "Find the path between two dummyOp with the most penalties";
     let description = [{ TODO }];
 
     let dependentDialects = [
-      "::circt::hw::HWDialect",
-      "spechls::SpecHLSDialect",
       "wcet::WcetDialect"
       ];
   }
