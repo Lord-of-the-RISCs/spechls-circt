@@ -37,8 +37,8 @@ spechls.kernel @gamma(%cond: i1, %x: i32, %y: i32) -> i32 {
 // CHECK-LABEL: @nary_gamma
 spechls.kernel @nary_gamma(%cond: i2, %x: i32, %y: i32, %z: i32) -> i32 {
   %true = hw.constant 1 : i1
-  // CHECK: %[[array:.+]] = hw.array_create %arg3, %arg2, %arg1 : i32
-  // CHECK: hw.array_get %[[array]][%arg0] : !hw.array<3xi32>, i2
+  // CHECK: %[[array:.+]] = hw.array_create %arg3, %arg3, %arg2, %arg1 : i32
+  // CHECK: hw.array_get %[[array]][%arg0] : !hw.array<4xi32>, i2
   %0 = spechls.gamma<"x">(%cond, %x, %y, %z) : i2, i32
   spechls.exit if %true with %0 : i32
 }
