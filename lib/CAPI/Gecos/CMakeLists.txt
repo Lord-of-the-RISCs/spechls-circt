@@ -7,6 +7,7 @@ target_link_libraries(gecosapi PUBLIC
     ScheduleToSSP
     SpecHLSTransforms
     SpecHLSToHW
+    SpecHLSAnalysis
     CIRCT
     MLIR
     MLIR-C
