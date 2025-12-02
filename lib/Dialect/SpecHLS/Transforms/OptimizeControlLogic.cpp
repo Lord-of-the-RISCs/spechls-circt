@@ -10,8 +10,6 @@
 #include "Dialect/SpecHLS/Transforms/Outlining.h"
 #include "Dialect/SpecHLS/Transforms/Passes.h"
 #include "Dialect/SpecHLS/Transforms/YosysSetup.h"
-#include "mlir/IR/Attributes.h"
-#include "llvm/ADT/APInt.h"
 
 #include <circt/Conversion/CombToSynth.h>
 #include <circt/Conversion/ExportVerilog.h>
@@ -36,6 +34,7 @@
 #include <circt/Dialect/Synth/SynthOps.h>
 #include <circt/Dialect/Synth/Transforms/SynthPasses.h>
 #include <circt/Dialect/Verif/VerifDialect.h>
+#include <llvm/ADT/APInt.h>
 #include <llvm/ADT/SmallPtrSet.h>
 #include <llvm/ADT/SmallVector.h>
 #include <llvm/ADT/UniqueVector.h>
@@ -46,6 +45,7 @@
 #include <mlir/Dialect/Func/IR/FuncOps.h>
 #include <mlir/Dialect/Math/IR/Math.h>
 #include <mlir/Dialect/SCF/IR/SCF.h>
+#include <mlir/IR/Attributes.h>
 #include <mlir/IR/Builders.h>
 #include <mlir/IR/BuiltinAttributes.h>
 #include <mlir/IR/BuiltinOps.h>
