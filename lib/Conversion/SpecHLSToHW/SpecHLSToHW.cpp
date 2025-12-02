@@ -73,7 +73,7 @@ struct TaskConversion : OpConversionPattern<spechls::TaskOp> {
   LogicalResult matchAndRewrite(spechls::TaskOp task, OpAdaptor adaptor,
                                 ConversionPatternRewriter &rewriter) const override {
     auto insertionPoint = rewriter.saveInsertionPoint();
-    rewriter.setInsertionPointAfter(task->getParentOp());
+    rewriter.setInsertionPointToEnd(task->getParentOfType<mlir::ModuleOp>().getBody(0));
 
     SmallVector<circt::hw::PortInfo> hwInputInfo;
     // TODO: Deconstruct struct types.
