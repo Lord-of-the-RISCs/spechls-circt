@@ -42,35 +42,37 @@
 #include <mlir/Pass/PassManager.h>
 #include <mlir/Transforms/Passes.h>
 
+#include "CAPI/Heptane/Heptane.h"
+
 extern "C" {
 
 //===--------------------------------------------------------------------------------------------------------------===//
 // Utility functions
 //===--------------------------------------------------------------------------------------------------------------===//
 
-const char *getCStringDataFromMlirStringRef(MlirStringRef str) { return str.data; }
-
-size_t getCStringSizeFromMlirStringRef(MlirStringRef str) { return str.length; }
-
-const char *getCStringDataFromMlirIdentifier(MlirIdentifier identifier) {
-  MlirStringRef str = mlirIdentifierStr(identifier);
-  return str.data;
-}
-
-size_t getCStringSizeFromMlirIdentifier(MlirIdentifier identifier) {
-  MlirStringRef str = mlirIdentifierStr(identifier);
-  return str.length;
-}
-
-char getCharAt(const char *v, int offset) { return v[offset]; }
-
-MlirIdentifier mlirOperationGetAttributeNameAt(MlirOperation op, int64_t pos) {
-  return mlirOperationGetAttribute(op, pos).name;
-}
-
-MlirAttribute mlirOperationGetAttributeAt(MlirOperation op, int64_t pos) {
-  return mlirOperationGetAttribute(op, pos).attribute;
-}
+// const char *getCStringDataFromMlirStringRef(MlirStringRef str) { return str.data; }
+//
+// size_t getCStringSizeFromMlirStringRef(MlirStringRef str) { return str.length; }
+//
+// const char *getCStringDataFromMlirIdentifier(MlirIdentifier identifier) {
+//   MlirStringRef str = mlirIdentifierStr(identifier);
+//   return str.data;
+// }
+//
+// size_t getCStringSizeFromMlirIdentifier(MlirIdentifier identifier) {
+//   MlirStringRef str = mlirIdentifierStr(identifier);
+//   return str.length;
+// }
+//
+// char getCharAt(const char *v, int offset) { return v[offset]; }
+//
+// MlirIdentifier mlirOperationGetAttributeNameAt(MlirOperation op, int64_t pos) {
+//   return mlirOperationGetAttribute(op, pos).name;
+// }
+//
+// MlirAttribute mlirOperationGetAttributeAt(MlirOperation op, int64_t pos) {
+//   return mlirOperationGetAttribute(op, pos).attribute;
+// }
 
 //===--------------------------------------------------------------------------------------------------------------===//
 // Passes
@@ -121,19 +123,8 @@ void destroyMLIR(MlirModule module) {
     return wrap(module);                                                                                               \
   }
 
-// DEFINE_GECOS_API_PASS(configurationExcluderMLIR, schedule, ConfigurationExcluderPass)
-// DEFINE_GECOS_API_PASS(mobilityMLIR, schedule, MobilityPass)
-// DEFINE_GECOS_API_PASS(scheduleMLIR, schedule, SchedulePass)
-
-bool mlirModuleCanonicalize(MlirModule module) {
-  auto mod = unwrap(module);
-  auto pm = mlir::PassManager::on<mlir::ModuleOp>(mod->getContext());
-  pm.addPass(mlir::createCanonicalizerPass());
-  return failed(pm.run(mod));
-}
-
 void mlirDumpModule(MlirModule module) { unwrap(module)->dump(); }
-size_t mlirWcetAnalysis(MlirModule module, mlir::SmallVector<size_t> instrs) {
+size_t mlirWcetAnalysis(MlirModule module, mlir::SmallVector<size_t> &instrs) {
   //==== Setup module
   auto mod = unwrap(module);
   auto pm = mlir::PassManager::on<mlir::ModuleOp>(mod->getContext());
