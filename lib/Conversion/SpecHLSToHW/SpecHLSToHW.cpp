@@ -113,26 +113,35 @@ struct GammaConversion : OpConversionPattern<spechls::GammaOp> {
 
   LogicalResult matchAndRewrite(spechls::GammaOp gamma, OpAdaptor adaptor,
                                 ConversionPatternRewriter &rewriter) const override {
+    auto ctrl = gamma.getSelect();
     if (gamma.getInputs().size() == 2) {
-      auto ctrl = gamma.getSelect();
+      mlir::Value ctrlTypeless;
       auto ctrlType = llvm::dyn_cast<mlir::IntegerType>(ctrl.getType());
-      auto zero = rewriter.create<circt::hw::ConstantOp>(ctrl.getLoc(), llvm::APInt(ctrlType.getWidth(), 0, false));
-      auto ctrlTypeless =
-          rewriter.create<circt::hw::BitcastOp>(ctrl.getLoc(), rewriter.getIntegerType(ctrlType.getWidth()), ctrl);
+      if (ctrlType.getWidth() != 1) {
+        ctrlTypeless = rewriter.create<circt::comb::ExtractOp>(ctrl.getLoc(), ctrl, 0, 1);
+      } else {
+        ctrlTypeless =
+            rewriter.create<circt::hw::BitcastOp>(ctrl.getLoc(), rewriter.getIntegerType(ctrlType.getWidth()), ctrl);
+      }
+      auto zero = rewriter.create<circt::hw::ConstantOp>(ctrl.getLoc(), llvm::APInt(1, 0, false));
       auto ne = rewriter.create<circt::comb::ICmpOp>(ctrl.getLoc(), circt::comb::ICmpPredicate::ne, ctrlTypeless, zero);
       rewriter.replaceOpWithNewOp<circt::comb::MuxOp>(gamma, gamma.getType(), ne, gamma.getInputs()[1],
                                                       gamma.getInputs()[0]);
       return success();
     }
+    auto ctrlBw = ctrl.getType().getWidth();
+    mlir::Value castedCtrl = rewriter.create<circt::hw::BitcastOp>(
+        ctrl.getLoc(), mlir::IntegerType::get(rewriter.getContext(), ctrlBw), ctrl);
+    unsigned numInput = 1u << ctrlBw;
+    unsigned missingInputs = numInput - gamma.getInputs().size();
     llvm::SmallVector<mlir::Value> inputs;
+    for (unsigned i = 0; i < missingInputs; ++i)
+      inputs.push_back(gamma.getInputs().back());
     for (auto in : llvm::reverse(gamma.getInputs()))
       inputs.push_back(in);
     // See https://circt.llvm.org/docs/Dialects/Comb/RationaleComb/#no-multibit-mux-operations
     auto array = rewriter.create<circt::hw::ArrayCreateOp>(gamma.getLoc(), inputs);
-    auto select = gamma.getSelect();
-    auto selectType = rewriter.getIntegerType(select.getType().getWidth());
-    auto castedSelect = rewriter.create<circt::hw::BitcastOp>(select.getLoc(), selectType, select);
-    rewriter.replaceOpWithNewOp<circt::hw::ArrayGetOp>(gamma, array, castedSelect);
+    rewriter.replaceOpWithNewOp<circt::hw::ArrayGetOp>(gamma, array, castedCtrl);
     return success();
   }
 };
