@@ -9,8 +9,8 @@
 #include "Dialect/SpecHLS/IR/SpecHLS.h"
 #include "Dialect/SpecHLS/IR/SpecHLSOps.h"
 #include "Dialect/SpecHLS/IR/SpecHLSTypes.h"
-#include "circt/Dialect/Comb/CombDialect.h"
 
+#include <circt/Dialect/Comb/CombDialect.h>
 #include <circt/Dialect/Comb/CombOps.h>
 #include <circt/Dialect/HW/HWOps.h>
 #include <circt/Dialect/HW/HWTypes.h>
