@@ -14,13 +14,13 @@ add_mlir_pdll_library(SpecHLSRemoveIntraRAWPatternsIncGen
 )
 
 add_mlir_pdll_library(SpecHLSExposeMemorySpeculationPatternsIncGen
-  ExposeMemorySpeculation.pdll
-  ExposeMemorySpeculation.h.inc
+    ExposeMemorySpeculation.pdll
+    ExposeMemorySpeculation.h.inc
 )
 
 add_mlir_pdll_library(SpecHLSInferLSQPatternsIncGen
-  InferLSQ.pdll
-  InferLSQ.h.inc
+    InferLSQ.pdll
+    InferLSQ.h.inc
 )
 
 add_circt_dialect_library(SpecHLSTransforms
@@ -34,6 +34,7 @@ add_circt_dialect_library(SpecHLSTransforms
     SpecHLSTopoSort.cpp
     SimplifyComb.cpp
     InferLSQ.cpp
+    SpeculationExplorationPass.cpp
 
     DEPENDS
     SpecHLSTransformsIncGen
@@ -42,6 +43,9 @@ add_circt_dialect_library(SpecHLSTransforms
     SpecHLSRemoveIntraRAWPatternsIncGen
     SpecHLSExposeMemorySpeculationPatternsIncGen
     SpecHLSInferLSQPatternsIncGen
+
+    LINK_LIBS PUBLIC
+    SpecHLSAnalysis
 )
 target_include_directories(SpecHLSTransforms
     PRIVATE

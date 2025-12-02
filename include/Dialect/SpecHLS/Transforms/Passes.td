@@ -73,4 +73,17 @@ def SimplifyCombPass: Pass<"simplify-comb", "::ModuleOp"> {
   let dependentDialects = ["::circt::comb::CombDialect", "::circt::hw::HWDialect"];
 }
 
+
+
+def SpeculationExplorationPass: Pass<"speculation-exploration", "spechls::KernelOp"> {
+  let summary = "Exploration configuration configuration and mark it with attributes";
+  let dependentDialects = ["::spechls::SpecHLSDialect", "::circt::hw::HWDialect", "::circt::comb::CombDialect", "::circt::ssp::SSPDialect"];
+  let options = [
+    Option<"targetTask", "targetTask", "std::string", "", "Name of task to inline">,
+    Option<"targetClock", "targetClock", "double", "10.0", "Target clock for scheduling.">,
+    Option<"probabilityThreshold", "probabilityThreshold", "double", "0.0", "Minimum probability of speculation configurations">,
+    Option<"traceFileName", "traceFileName", "std::string", "", "Profiling trace file.">
+  ];
+}
+
 #endif // SPECHLS_INCLUDED_DIALECT_SPECHLS_TRANSFORMS_PASSES_TD
