@@ -24,6 +24,7 @@
 #include "Dialect/SpecHLS/IR/SpecHLSDialect.cpp.inc"
 #include "Dialect/SpecHLS/IR/SpecHLSTypes.h"
 #include "Utils.h"
+#include "llvm/Support/LogicalResult.h"
 
 using namespace mlir;
 
@@ -482,8 +483,8 @@ ParseResult spechls::CancellableDelayOp::parse(OpAsmParser &parser, OperationSta
   uint32_t delay, offset;
 
   if (parser.parseOperand(input) || parser.parseKeyword("by") || parser.parseInteger(delay) ||
-      parser.parseKeyword("cancel") || parser.parseKeyword("by") || parser.parseOperand(cancel) ||
-      parser.parseKeyword("at") || parser.parseInteger(offset))
+      parser.parseKeyword("cancel") || parser.parseOperand(cancel) || parser.parseKeyword("at") ||
+      parser.parseInteger(offset))
     return failure();
   result.addAttribute(getDepthAttrName(result.name), builder.getUI32IntegerAttr(delay));
   result.addAttribute(getOffsetAttrName(result.name), builder.getUI32IntegerAttr(offset));
@@ -501,10 +502,12 @@ ParseResult spechls::CancellableDelayOp::parse(OpAsmParser &parser, OperationSta
     hasInit = true;
   }
   result.addAttribute(getOperandSegmentSizesAttrName(result.name),
-                      builder.getDenseI32ArrayAttr({1, hasEnable, hasInit}));
+                      builder.getDenseI32ArrayAttr({1, 1, hasEnable, hasInit}));
 
   if (parser.parseOptionalAttrDict(result.attributes) || parser.parseColonType(type) ||
       parser.resolveOperand(input, type, result.operands) || parser.addTypeToList(type, result.types))
+    return failure();
+  if (parser.resolveOperand(cancel, builder.getI1Type(), result.operands))
     return failure();
   if (hasEnable && parser.resolveOperand(enable, builder.getI1Type(), result.operands))
     return failure();
@@ -516,7 +519,7 @@ ParseResult spechls::CancellableDelayOp::parse(OpAsmParser &parser, OperationSta
 
 void spechls::CancellableDelayOp::print(OpAsmPrinter &printer) {
   printer << ' ' << getInput() << " by " << getDepth();
-  printer << " cancel by " << getCancel() << " at " << getOffset();
+  printer << " cancel " << getCancel() << " at " << getOffset();
   if (getEnable())
     printer << " if " << getEnable();
   if (getInit())
@@ -531,8 +534,8 @@ ParseResult spechls::RollbackableDelayOp::parse(OpAsmParser &parser, OperationSt
   uint32_t delay, offset;
 
   if (parser.parseOperand(input) || parser.parseKeyword("by") || parser.parseInteger(delay) ||
-      parser.parseKeyword("cancel") || parser.parseKeyword("by") || parser.parseOperand(rollback) ||
-      parser.parseKeyword("at") || parser.parseInteger(offset))
+      parser.parseKeyword("rollback") || parser.parseOperand(rollback) || parser.parseKeyword("at") ||
+      parser.parseInteger(offset))
     return failure();
   result.addAttribute(getDepthAttrName(result.name), builder.getUI32IntegerAttr(delay));
   result.addAttribute(getOffsetAttrName(result.name), builder.getUI32IntegerAttr(offset));
@@ -550,10 +553,12 @@ ParseResult spechls::RollbackableDelayOp::parse(OpAsmParser &parser, OperationSt
     hasInit = true;
   }
   result.addAttribute(getOperandSegmentSizesAttrName(result.name),
-                      builder.getDenseI32ArrayAttr({1, hasEnable, hasInit}));
+                      builder.getDenseI32ArrayAttr({1, 1, hasEnable, hasInit}));
 
   if (parser.parseOptionalAttrDict(result.attributes) || parser.parseColonType(type) ||
       parser.resolveOperand(input, type, result.operands) || parser.addTypeToList(type, result.types))
+    return failure();
+  if (parser.resolveOperand(rollback, builder.getI1Type(), result.operands))
     return failure();
   if (hasEnable && parser.resolveOperand(enable, builder.getI1Type(), result.operands))
     return failure();
@@ -564,7 +569,7 @@ ParseResult spechls::RollbackableDelayOp::parse(OpAsmParser &parser, OperationSt
 }
 void spechls::RollbackableDelayOp::print(OpAsmPrinter &printer) {
   printer << ' ' << getInput() << " by " << getDepth();
-  printer << " rollback by " << getRollback() << " at " << getOffset();
+  printer << " rollback " << getRollback() << " at " << getOffset();
   if (getEnable())
     printer << " if " << getEnable();
   if (getInit())

@@ -292,7 +292,7 @@ def SpecHLS_DelayOp : SpecHLSOp<"delay",
     let hasCustomAssemblyFormat = 1;
 }
 
-def SpecHLS_CancellableDelayOp : SpecHLSOp<"CancellableDelay",
+def SpecHLS_CancellableDelayOp : SpecHLSOp<"cancellableDelay",
         [AttrSizedOperandSegments]> {
     let arguments = (ins
         I1:$input,
@@ -307,7 +307,7 @@ def SpecHLS_CancellableDelayOp : SpecHLSOp<"CancellableDelay",
     let hasCustomAssemblyFormat = 1;
 }
 
-def SpecHLS_RollbackableDelayOp : SpecHLSOp<"RollbackableDelay",
+def SpecHLS_RollbackableDelayOp : SpecHLSOp<"rollbackableDelay",
         [AttrSizedOperandSegments,
          TypesMatchWith<"Delay input and output types must match", "input", "result", "$_self">,
          OptionalTypesMatchWith<"Delay input and initialization value must have the same type",
