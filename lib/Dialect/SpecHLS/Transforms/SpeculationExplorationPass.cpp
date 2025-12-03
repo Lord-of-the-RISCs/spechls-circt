@@ -46,7 +46,7 @@ public:
     task.getBodyBlock()->walk([&](spechls::GammaOp gamma) {
       if (gamma->hasAttrOfType<mlir::IntegerAttr>("spechls.profilingId")) {
         unsigned id = gamma->getAttrOfType<mlir::IntegerAttr>("spechls.profilingId").getInt();
-        int speculation = analysis.configuration[analysis.pidToEid[id]] + 1;
+        int speculation = analysis.configuration[analysis.pidToEid[id]];
         if (speculation != 0) {
           gamma->setAttr("spechls.speculation",
                          mlir::IntegerAttr::get(mlir::IntegerType::get(&getContext(), 32), speculation));

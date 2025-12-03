@@ -87,18 +87,18 @@ ConfigurationExcluderAnalysis::ConfigurationExcluderAnalysis(spechls::TaskOp tas
                               .Case([](spechls::MuOp &) { return 1; })
                               .Default([](mlir::Operation *) { return 0; });
       bool isGamma = llvm::isa<spechls::GammaOp>(op);
-      int forcedEntry = -1;
+      int forcedEntry = 0;
       if (isGamma) {
         forcedEntry = mapConfiguration[llvm::cast<spechls::GammaOp>(op)];
-        if (forcedEntry != -1)
+        if (forcedEntry != 0)
           isGamma = false;
       }
       bool isMu = llvm::isa<spechls::MuOp>(op);
       uint64_t nextCycle = isGamma ? std::numeric_limits<uint64_t>::max() : 0;
       double nextTimeInCycle = 0.0;
 
-      unsigned from = (forcedEntry == -1) ? (isGamma ? 1 : 0) : forcedEntry;
-      unsigned to = (forcedEntry == -1) ? op->getNumOperands() : (forcedEntry + 1);
+      unsigned from = (forcedEntry == 0) ? (isGamma ? 1 : 0) : forcedEntry;
+      unsigned to = (forcedEntry == 0) ? op->getNumOperands() : (forcedEntry + 1);
 
       for (unsigned predIndex = from; predIndex < to; ++predIndex) {
         if (iteration < distance) {
