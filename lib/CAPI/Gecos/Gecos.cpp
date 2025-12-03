@@ -252,4 +252,9 @@ MlirOperation spechlsGetFsmFromFsmCmd(MlirOperation op) {
 MlirType spechlsKernelGetArgumentType(MlirOperation op, int index) {
   return wrap(llvm::cast<spechls::KernelOp>(unwrap(op)).getArgumentTypes()[index]);
 }
+
+MlirType spechlsGetCommitType(MlirOperation op) {
+  auto task = unwrap(op)->getParentOfType<spechls::TaskOp>();
+  return wrap(task->getResultTypes().front());
+}
 }
