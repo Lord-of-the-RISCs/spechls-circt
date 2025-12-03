@@ -154,14 +154,14 @@ bool hasUnitII(llvm::ArrayRef<int> configuration, mlir::Operation *terminator,
     auto gamma = gammas[i];
     auto sspOp = association[gamma];
     llvm::SmallVector<mlir::Value> operands;
-    if (configuration[i] == -1) {
+    if (configuration[i] == 0) {
       for (auto operand : gamma->getOperands()) {
         if (auto *op = operand.getDefiningOp()) {
           operands.push_back(association[op].getResult(0));
         }
       }
     } else {
-      if (auto *op = gamma->getOperand(configuration[i] + 1).getDefiningOp()) {
+      if (auto *op = gamma->getOperand(configuration[i]).getDefiningOp()) {
         operands.push_back(association[op].getResult(0));
       }
     }
@@ -229,7 +229,7 @@ SpeculationExplorationAnalysis::SpeculationExplorationAnalysis(spechls::TaskOp t
     }
     double getProbability(llvm::ArrayRef<int> configuration, llvm::ArrayRef<bool> memspecGammas) {
       if (numConfiguration == 0)
-        return 0.0;
+        return 1.0;
       unsigned count = 0;
       for (auto &[k, v] : configurations) {
         if (areCompatibleConfig(k, configuration, memspecGammas))
@@ -249,7 +249,7 @@ SpeculationExplorationAnalysis::SpeculationExplorationAnalysis(spechls::TaskOp t
       std::string assoc;
       std::stringstream lineStream(traceLine);
       while (std::getline(lineStream, assoc, ',')) {
-        config.push_back(std::stoul(assoc));
+        config.push_back(std::stoul(assoc) + 1);
       }
       probaInfo.addConfiguration(config, numGamma, eidToPid);
     }
@@ -263,12 +263,11 @@ SpeculationExplorationAnalysis::SpeculationExplorationAnalysis(spechls::TaskOp t
   auto baseSchedulingProblem = constructBaseProblem(task, targetClock, builder, graph, ctx, association);
 
   // We create a default configuration. We force to speculate on memspec gammas.
-  llvm::SmallVector<int> defaultConfiguration(numGamma, -1);
+  llvm::SmallVector<int> defaultConfiguration(numGamma, 0);
   for (unsigned index = 0; index < numGamma; ++index) {
     auto &gamma = gammas[index];
     if (gamma->hasAttr("spechls.memspec")) {
-      defaultConfiguration[index] =
-          gamma->getNumOperands() - 2; // -1 to get the last of the list; -1 because of the condition
+      defaultConfiguration[index] = gamma->getNumOperands() - 1;
     }
   }
 
@@ -298,8 +297,8 @@ SpeculationExplorationAnalysis::SpeculationExplorationAnalysis(spechls::TaskOp t
       resultConfigs;
 
   for (unsigned index = 0; index < numGamma; ++index) {
-    if (defaultConfiguration[index] == -1) {
-      for (unsigned input = 0; input < gammas[index]->getNumOperands() - 1; ++input) {
+    if (defaultConfiguration[index] == 0) {
+      for (unsigned input = 1; input < gammas[index]->getNumOperands(); ++input) {
         llvm::SmallVector<int> config(defaultConfiguration.begin(), defaultConfiguration.end());
         config[index] = input;
         double proba = probaInfo.getProbability(config, memspecGammas);
@@ -328,9 +327,9 @@ SpeculationExplorationAnalysis::SpeculationExplorationAnalysis(spechls::TaskOp t
     configs.pop();
 
     for (unsigned index = config.lastGamma + 1; index < numGamma; ++index) {
-      if (defaultConfiguration[index] == -1) {
+      if (defaultConfiguration[index] == 0) {
         llvm::SmallVector<int> newConfig(config.config);
-        for (unsigned input = 0; input < gammas[index].getNumOperands() - 1; ++input) {
+        for (unsigned input = 1; input < gammas[index].getNumOperands(); ++input) {
           newConfig[index] = input;
           double proba = probaInfo.getProbability(newConfig, memspecGammas);
           if (proba >= probabilityThreshold) {

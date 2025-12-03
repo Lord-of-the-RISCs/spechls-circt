@@ -109,7 +109,7 @@ MobilityAnalysis::MobilityAnalysis(spechls::TaskOp task, double targetClock) {
 
       for (unsigned predIndex = (isGamma ? 1 : 0); predIndex < op->getNumOperands(); ++predIndex) {
         auto operand = op->getOperand(predIndex);
-        if (iteration - distance < 0) {
+        if (iteration < distance) {
           nextCycleAsap = 0;
           nextTimeInCyclesAsap = 0.0;
         } else {
