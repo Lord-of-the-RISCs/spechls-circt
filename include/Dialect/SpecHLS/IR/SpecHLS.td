@@ -292,6 +292,39 @@ def SpecHLS_DelayOp : SpecHLSOp<"delay",
     let hasCustomAssemblyFormat = 1;
 }
 
+def SpecHLS_CancellableDelayOp : SpecHLSOp<"CancellableDelay",
+        [AttrSizedOperandSegments]> {
+    let arguments = (ins
+        I1:$input,
+        UI32Attr:$depth,
+        I1:$cancel,
+        UI32Attr:$offset,
+        Optional<I1>:$enable,
+        Optional<I1>:$init
+    );
+    let results = (outs I1:$result);
+
+    let hasCustomAssemblyFormat = 1;
+}
+
+def SpecHLS_RollbackableDelayOp : SpecHLSOp<"RollbackableDelay",
+        [AttrSizedOperandSegments,
+         TypesMatchWith<"Delay input and output types must match", "input", "result", "$_self">,
+         OptionalTypesMatchWith<"Delay input and initialization value must have the same type",
+                                "input", "init", "$_self">]> {
+    let arguments = (ins
+        AnyType:$input,
+        UI32Attr:$depth,
+        I1:$rollback,
+        UI32Attr:$offset,
+        Optional<I1>:$enable,
+        Optional<AnyType>:$init
+    );
+    let results = (outs AnyType:$result);
+
+    let hasCustomAssemblyFormat = 1;
+}
+
 def SpecHLS_FIFOOp : SpecHLSOp<"fifo", [DeclareOpInterfaceMethods<OpAsmOpInterface, ["getAsmResultNames"]>, AllTypesMatch<["input", "result"]>]> {
     let arguments = (ins SpecHLS_StructType:$input, UI32Attr:$depth);
     let results = (outs SpecHLS_StructType:$result);

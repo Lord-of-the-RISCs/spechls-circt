@@ -475,6 +475,103 @@ void spechls::DelayOp::print(OpAsmPrinter &printer) {
   printer << " " << (*this)->getDiscardableAttrDictionary() << " : " << getType();
 }
 
+ParseResult spechls::CancellableDelayOp::parse(OpAsmParser &parser, OperationState &result) {
+  auto &builder = parser.getBuilder();
+  OpAsmParser::UnresolvedOperand input, enable, init, cancel;
+  Type type;
+  uint32_t delay, offset;
+
+  if (parser.parseOperand(input) || parser.parseKeyword("by") || parser.parseInteger(delay) ||
+      parser.parseKeyword("cancel") || parser.parseKeyword("by") || parser.parseOperand(cancel) ||
+      parser.parseKeyword("at") || parser.parseInteger(offset))
+    return failure();
+  result.addAttribute(getDepthAttrName(result.name), builder.getUI32IntegerAttr(delay));
+  result.addAttribute(getOffsetAttrName(result.name), builder.getUI32IntegerAttr(offset));
+
+  bool hasEnable = false;
+  if (parser.parseOptionalKeyword("if").succeeded()) {
+    if (parser.parseOperand(enable))
+      return failure();
+    hasEnable = true;
+  }
+  bool hasInit = false;
+  if (parser.parseOptionalKeyword("init").succeeded()) {
+    if (parser.parseOperand(init))
+      return failure();
+    hasInit = true;
+  }
+  result.addAttribute(getOperandSegmentSizesAttrName(result.name),
+                      builder.getDenseI32ArrayAttr({1, hasEnable, hasInit}));
+
+  if (parser.parseOptionalAttrDict(result.attributes) || parser.parseColonType(type) ||
+      parser.resolveOperand(input, type, result.operands) || parser.addTypeToList(type, result.types))
+    return failure();
+  if (hasEnable && parser.resolveOperand(enable, builder.getI1Type(), result.operands))
+    return failure();
+  if (hasInit && parser.resolveOperand(init, type, result.operands))
+    return failure();
+
+  return success();
+}
+
+void spechls::CancellableDelayOp::print(OpAsmPrinter &printer) {
+  printer << ' ' << getInput() << " by " << getDepth();
+  printer << " cancel by " << getCancel() << " at " << getOffset();
+  if (getEnable())
+    printer << " if " << getEnable();
+  if (getInit())
+    printer << " init " << getInit();
+  printer << " " << (*this)->getDiscardableAttrDictionary() << " : " << getType();
+}
+
+ParseResult spechls::RollbackableDelayOp::parse(OpAsmParser &parser, OperationState &result) {
+  auto &builder = parser.getBuilder();
+  OpAsmParser::UnresolvedOperand input, enable, init, rollback;
+  Type type;
+  uint32_t delay, offset;
+
+  if (parser.parseOperand(input) || parser.parseKeyword("by") || parser.parseInteger(delay) ||
+      parser.parseKeyword("cancel") || parser.parseKeyword("by") || parser.parseOperand(rollback) ||
+      parser.parseKeyword("at") || parser.parseInteger(offset))
+    return failure();
+  result.addAttribute(getDepthAttrName(result.name), builder.getUI32IntegerAttr(delay));
+  result.addAttribute(getOffsetAttrName(result.name), builder.getUI32IntegerAttr(offset));
+
+  bool hasEnable = false;
+  if (parser.parseOptionalKeyword("if").succeeded()) {
+    if (parser.parseOperand(enable))
+      return failure();
+    hasEnable = true;
+  }
+  bool hasInit = false;
+  if (parser.parseOptionalKeyword("init").succeeded()) {
+    if (parser.parseOperand(init))
+      return failure();
+    hasInit = true;
+  }
+  result.addAttribute(getOperandSegmentSizesAttrName(result.name),
+                      builder.getDenseI32ArrayAttr({1, hasEnable, hasInit}));
+
+  if (parser.parseOptionalAttrDict(result.attributes) || parser.parseColonType(type) ||
+      parser.resolveOperand(input, type, result.operands) || parser.addTypeToList(type, result.types))
+    return failure();
+  if (hasEnable && parser.resolveOperand(enable, builder.getI1Type(), result.operands))
+    return failure();
+  if (hasInit && parser.resolveOperand(init, type, result.operands))
+    return failure();
+
+  return success();
+}
+void spechls::RollbackableDelayOp::print(OpAsmPrinter &printer) {
+  printer << ' ' << getInput() << " by " << getDepth();
+  printer << " rollback by " << getRollback() << " at " << getOffset();
+  if (getEnable())
+    printer << " if " << getEnable();
+  if (getInit())
+    printer << " init " << getInit();
+  printer << " " << (*this)->getDiscardableAttrDictionary() << " : " << getType();
+}
+
 LogicalResult spechls::FIFOOp::verify() {
   StructType structType = getInput().getType();
   auto fields = structType.getFieldTypes();
