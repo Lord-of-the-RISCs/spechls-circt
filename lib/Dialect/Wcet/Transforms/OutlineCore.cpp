@@ -15,6 +15,7 @@
 #include "mlir/Transforms/InliningUtils.h"
 #include "mlir/Transforms/Passes.h"
 #include "llvm/ADT/SmallVector.h"
+#include "llvm/ADT/TypeSwitch.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/DebugLog.h"
 #include "llvm/Support/raw_ostream.h"
@@ -67,7 +68,7 @@ public:
     /**************************************************************************
      * Build inputs/outputs of the wcet.core                                  *
      *************************************************************************/
-    SmallVector<spechls::DelayOp> firstsDelay;
+    SmallVector<Operation *> firstsDelay;
     getNbDelayPred(rewriter, speculativeTask, firstsDelay);
 
     SmallVector<Type> coreInputsTypes;
@@ -105,13 +106,13 @@ public:
     });
 
     //============= Retrieve Delays ===========================================
-    for (auto d : firstsDelay) {
-      coreInputs.push_back(d);
-      coreInputsTypes.push_back(d.getType());
-      coreOutputsTypes.push_back(d.getType());
+    for (auto *d : firstsDelay) {
+      coreInputs.push_back(d->getResult(0));
+      coreInputsTypes.push_back(d->getResult(0).getType());
+      coreOutputsTypes.push_back(d->getResult(0).getType());
       coreInputsAttrs.push_back(
           rewriter.getDictionaryAttr(rewriter.getNamedAttr("wcet.nbPred", rewriter.getI32IntegerAttr(0))));
-      coreOutputs.push_back(d.getInput().getDefiningOp());
+      coreOutputs.push_back(d->getOperand(0).getDefiningOp());
       toRemove.push_back(d);
       spechls::DelayOp nextDelay = nullptr;
       for (auto *op : d->getUsers()) {
@@ -241,9 +242,35 @@ public:
   }
 
 private:
-  void getNbDelayPred(OpBuilder &builder, spechls::TaskOp top, SmallVector<spechls::DelayOp> &firstsDelay) {
+  void getNbDelayPred(OpBuilder &builder, spechls::TaskOp top, SmallVector<Operation *> &firstsDelay) {
     for (auto d : top.getOps<spechls::DelayOp>()) {
-      if (dyn_cast_or_null<spechls::DelayOp>(d.getInput().getDefiningOp())) {
+      bool isDelaySucc = llvm::TypeSwitch<Operation *, bool>(d.getInput().getDefiningOp())
+                             .Case<spechls::DelayOp, spechls::RollbackableDelayOp, spechls::CancellableDelayOp>(
+                                 [&](auto d) { return true; })
+                             .Default(false);
+      if (isDelaySucc) {
+        continue;
+      }
+
+      firstsDelay.push_back(d);
+    }
+    for (auto d : top.getOps<spechls::CancellableDelayOp>()) {
+      bool isDelaySucc = llvm::TypeSwitch<Operation *, bool>(d.getInput().getDefiningOp())
+                             .Case<spechls::DelayOp, spechls::RollbackableDelayOp, spechls::CancellableDelayOp>(
+                                 [&](auto d) { return true; })
+                             .Default(false);
+      if (isDelaySucc) {
+        continue;
+      }
+
+      firstsDelay.push_back(d);
+    }
+    for (auto d : top.getOps<spechls::RollbackableDelayOp>()) {
+      bool isDelaySucc = llvm::TypeSwitch<Operation *, bool>(d.getInput().getDefiningOp())
+                             .Case<spechls::DelayOp, spechls::RollbackableDelayOp, spechls::CancellableDelayOp>(
+                                 [&](auto d) { return true; })
+                             .Default(false);
+      if (isDelaySucc) {
         continue;
       }
 
