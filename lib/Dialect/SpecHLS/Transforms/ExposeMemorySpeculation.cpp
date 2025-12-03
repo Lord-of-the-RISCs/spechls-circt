@@ -31,8 +31,11 @@ namespace spechls {
 #include "ExposeMemorySpeculation.h.inc"
 
 namespace {
+
+enum DelayType { Base, Cancellable, Rollbackable };
+
 static SmallVector<SmallVector<Value>> delayValues(PatternRewriter &rewritter, SmallVector<Value> values, int depth,
-                                                   std::string delayType, Value initDelay, Attribute scn);
+                                                   DelayType delayType, Value ctrl, Value initDelay, Attribute scn);
 
 struct ExposeMemorySpeculationPass
     : public spechls::impl::ExposeMemorySpeculationPassBase<ExposeMemorySpeculationPass> {
@@ -72,9 +75,10 @@ private:
     SmallVector<spechls::LoadOp> loads;
     SmallVector<Value> loadsAddresses;
     auto delayEnable = rewritter.create<circt::hw::ConstantOp>(rewritter.getUnknownLoc(), rewritter.getI1Type(), 1);
-    auto muDelay = rewritter.create<spechls::DelayOp>(rewritter.getUnknownLoc(), mu.getLoopValue(), 1, delayEnable,
-                                                      mu.getInitValue());
-    muDelay->setAttr("spechls.rollbackable", rewritter.getI32IntegerAttr(0));
+    auto delayCancelRollback =
+        rewritter.create<circt::hw::ConstantOp>(rewritter.getUnknownLoc(), rewritter.getI1Type(), 0);
+    auto muDelay = rewritter.create<spechls::RollbackableDelayOp>(
+        rewritter.getUnknownLoc(), mu.getLoopValue(), 1, delayCancelRollback, 0, delayEnable, mu.getInitValue());
     muDelay->setAttr("spechls.memspec", rewritter.getUnitAttr());
     muDelay->setAttr("spechls.scn", scn);
     for (auto *succ : mu.getResult().getUsers()) {
@@ -134,8 +138,10 @@ private:
     // Delayed Write addresses and WE
     auto initDelay = rewritter.create<circt::hw::ConstantOp>(rewritter.getUnknownLoc(), rewritter.getI1Type(), 0);
     initDelay->setAttr("spechls.scn", scn);
-    auto delayedWritesAddresses = delayValues(rewritter, writeAddresses, dependencyDistance, "", nullptr, scn);
-    auto delayedWE = delayValues(rewritter, writeEnables, dependencyDistance, "spechls.cancellable", initDelay, scn);
+    auto delayedWritesAddresses =
+        delayValues(rewritter, writeAddresses, dependencyDistance, DelayType::Base, nullptr, nullptr, scn);
+    auto delayedWE = delayValues(rewritter, writeEnables, dependencyDistance, DelayType::Cancellable,
+                                 delayCancelRollback, initDelay, scn);
 
     // build the comparaison logic ((@Read = @Write) && WE) for:
     //    Each dependencies distances for:
@@ -227,9 +233,9 @@ private:
     Value lastInputs = muDelay.getResult();
     gammaInputs.push_back(lastInputs);
     for (int i = 0; i < dependencyDistance; i++) {
-      auto input = rewritter.create<spechls::DelayOp>(rewritter.getUnknownLoc(), lastInputs.getType(), lastInputs, 1,
-                                                      delayEnable, mu.getInitValue());
-      input->setAttr("spechls.rollbackable", rewritter.getI32IntegerAttr(i + 1));
+      auto input =
+          rewritter.create<spechls::RollbackableDelayOp>(rewritter.getUnknownLoc(), lastInputs.getType(), lastInputs, 1,
+                                                         delayCancelRollback, i + 1, delayEnable, mu.getInitValue());
       input->setAttr("spechls.memspec", rewritter.getUnitAttr());
       input->setAttr("spechls.scn", scn);
       gammaInputs.push_back(input.getResult());
@@ -261,7 +267,7 @@ private:
 };
 
 SmallVector<SmallVector<Value>> delayValues(PatternRewriter &rewritter, SmallVector<Value> values, int depth,
-                                            std::string delayType, Value initDelay, Attribute scn) {
+                                            DelayType delayType, Value ctrl, Value initDelay, Attribute scn) {
   SmallVector<SmallVector<Value>> result;
   if (values.empty())
     return result;
@@ -270,16 +276,29 @@ SmallVector<SmallVector<Value>> delayValues(PatternRewriter &rewritter, SmallVec
   for (int i = 1; i <= depth; i++) {
     SmallVector<Value> newVals;
     for (auto val : values) {
-      auto newDel =
-          rewritter.create<spechls::DelayOp>(rewritter.getUnknownLoc(), val.getType(), val, i, enable, initDelay);
-      if (!delayType.empty())
-        newDel->setAttr(delayType, rewritter.getI32IntegerAttr(depth - i + 1));
-      // newDel->setAttr("spechls.memspec", rewritter.getUnitAttr());
-      newDel->setAttr("spechls.scn", scn);
-      newVals.push_back(newDel);
+      Value newVal;
+      switch (delayType) {
+      case DelayType::Base:
+        newVal = rewritter.create<spechls::DelayOp>(rewritter.getUnknownLoc(), val.getType(), val, i, enable, initDelay)
+                     .getResult();
+        break;
+      case DelayType::Cancellable:
+        newVal = rewritter
+                     .create<spechls::CancellableDelayOp>(rewritter.getUnknownLoc(), val.getType(), val, i, ctrl,
+                                                          (depth - i + 1), enable, initDelay)
+                     .getResult();
+        break;
+      case DelayType::Rollbackable:
+        newVal = rewritter
+                     .create<spechls::RollbackableDelayOp>(rewritter.getUnknownLoc(), val.getType(), val, i, ctrl,
+                                                           (depth - i + 1), enable, initDelay)
+                     .getResult();
+        break;
+      }
+      newVal.getDefiningOp()->setAttr("spechls.scn", scn);
+      newVals.push_back(newVal);
     }
     result.push_back(newVals);
-    // values = newVals;
   }
 
   return result;
