@@ -50,20 +50,42 @@ struct SplitDelaysPass : public wcet::impl::SplitDelaysPassBase<SplitDelaysPass>
   }
 
   void registerNativeRewrite(RewritePatternSet &patterns) {
-    patterns.getPDLPatterns().registerRewriteFunction("SplitDelays", splitDelaysImp);
+    patterns.getPDLPatterns().registerRewriteFunction("SplitDelay", splitDelayImp);
+    patterns.getPDLPatterns().registerRewriteFunction("SplitRollbackableDelay", splitRollbackableDelayImp);
+    patterns.getPDLPatterns().registerRewriteFunction("SplitCancellableDelay", splitCancellableDelayImp);
   }
 
   void runOnOperation() override { (void)applyPatternsGreedily(getOperation(), patterns); }
 
 private:
-  static Operation *splitDelaysImp(PatternRewriter &rewriter, Operation *op) {
+  static Operation *splitDelayImp(PatternRewriter &rewriter, Operation *op) {
     spechls::DelayOp root = cast<spechls::DelayOp>(op);
-    auto oneDelay = rewriter.create<spechls::DelayOp>(rewriter.getUnknownLoc(), root.getType(), root.getInput(), 1,
-                                                      root.getEnable(), root.getInit());
-    auto rootMinusOne =
-        rewriter.create<spechls::DelayOp>(rewriter.getUnknownLoc(), root.getType(), oneDelay.getResult(),
-                                          root.getDepth() - 1, root.getEnable(), root.getInit());
-    return rootMinusOne;
+    auto rootMinusOne = rewriter.create<spechls::DelayOp>(rewriter.getUnknownLoc(), root.getType(), root.getInput(),
+                                                          root.getDepth() - 1, root.getEnable(), root.getInit());
+    auto oneDelay = rewriter.create<spechls::DelayOp>(rewriter.getUnknownLoc(), root.getType(),
+                                                      rootMinusOne.getResult(), 1, root.getEnable(), root.getInit());
+    return oneDelay;
+  }
+
+  static Operation *splitRollbackableDelayImp(PatternRewriter &rewriter, Operation *op) {
+    spechls::RollbackableDelayOp root = cast<spechls::RollbackableDelayOp>(op);
+    auto rootMinusOne = rewriter.create<spechls::RollbackableDelayOp>(
+        rewriter.getUnknownLoc(), root.getType(), root.getInput(), root.getDepth() - 1, root.getRollback(),
+        root.getOffset() + 1, root.getEnable(), root.getInit());
+    auto oneDelay = rewriter.create<spechls::RollbackableDelayOp>(rewriter.getUnknownLoc(), root.getType(),
+                                                                  rootMinusOne.getResult(), 1, root.getRollback(),
+                                                                  root.getOffset(), root.getEnable(), root.getInit());
+    return oneDelay;
+  }
+  static Operation *splitCancellableDelayImp(PatternRewriter &rewriter, Operation *op) {
+    spechls::CancellableDelayOp root = cast<spechls::CancellableDelayOp>(op);
+    auto rootMinusOne = rewriter.create<spechls::CancellableDelayOp>(
+        rewriter.getUnknownLoc(), root.getType(), root.getInput(), root.getDepth() - 1, root.getCancel(),
+        root.getOffset() + 1, root.getEnable(), root.getInit());
+    auto oneDelay = rewriter.create<spechls::CancellableDelayOp>(rewriter.getUnknownLoc(), root.getType(),
+                                                                 rootMinusOne.getResult(), 1, root.getCancel(),
+                                                                 root.getOffset(), root.getEnable(), root.getInit());
+    return oneDelay;
   }
 };
 } // namespace

@@ -14,10 +14,26 @@ Constraint IsGreaterThanOne(attr: Attr) [{
     return success(value > 1);
   }];
 
-Rewrite SplitDelays(root : Op ) -> Op;
+Rewrite SplitDelay(root : Op ) -> Op;
+
+Rewrite SplitRollbackableDelay(root : Op) -> Op;
+
+Rewrite SplitCancellableDelay(root : Op) -> Op;
 
 Pattern SplitDelayOneIn {
   let root = op<spechls.delay> {depth = dist : Attr};
   IsGreaterThanOne(dist);
-  replace root with SplitDelays(root);
+  replace root with SplitDelay(root);
+}
+
+Pattern SplitRollbackableDelayOneIn {
+  let root = op<spechls.rollbackableDelay> {depth = dist : Attr};
+  IsGreaterThanOne(dist);
+  replace root with SplitRollbackableDelay(root);
+}
+
+Pattern SplitCancellableDelayOneIn {
+  let root = op<spechls.cancellableDelay> {depth = dist : Attr};
+  IsGreaterThanOne(dist);
+  replace root with SplitCancellableDelay(root);
 }
