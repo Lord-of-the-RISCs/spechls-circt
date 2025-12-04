@@ -23,11 +23,11 @@ spechls.kernel @rollbackable(%in1 : i32, %in2 : i1, %rollback : i1) -> i32 {
 
 //CHECK-LABEL: @cancel
 spechls.kernel @cancel(%in1 : i1, %in2 : i1, %cancel : i1) -> i1 {
-  //CHECK: %0 = spechls.cancellableDelay %arg0 by 1 cancel %arg2 at 2 if %true {} : i1
-  //CHECK: %1 = spechls.cancellableDelay %0 by 1 cancel %arg2 at 1 if %true {} : i1
-  //CHECK: %2 = spechls.cancellableDelay %1 by 1 cancel %arg2 at 0 if %true {} : i1
+  //CHECK: %0 = spechls.cancellableDelay %arg0 by 1 cancel %arg2 at 2 %true if %true {} : i1
+  //CHECK: %1 = spechls.cancellableDelay %0 by 1 cancel %arg2 at 1 %true if %true {} : i1
+  //CHECK: %2 = spechls.cancellableDelay %1 by 1 cancel %arg2 at 0 %true if %true {} : i1
   %true = hw.constant 1 : i1
-  %d0 = spechls.cancellableDelay %in1 by 3 cancel %cancel at 0 if %true : i1
+  %d0 = spechls.cancellableDelay %in1 by 3 cancel %cancel at 0 %true if %true : i1
   spechls.exit if %in2 with %d0 : i1
 }
 

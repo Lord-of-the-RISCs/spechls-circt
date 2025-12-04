@@ -478,13 +478,13 @@ void spechls::DelayOp::print(OpAsmPrinter &printer) {
 
 ParseResult spechls::CancellableDelayOp::parse(OpAsmParser &parser, OperationState &result) {
   auto &builder = parser.getBuilder();
-  OpAsmParser::UnresolvedOperand input, enable, init, cancel;
+  OpAsmParser::UnresolvedOperand input, enable, init, cancel, cancelWe;
   Type type;
   uint32_t delay, offset;
 
   if (parser.parseOperand(input) || parser.parseKeyword("by") || parser.parseInteger(delay) ||
       parser.parseKeyword("cancel") || parser.parseOperand(cancel) || parser.parseKeyword("at") ||
-      parser.parseInteger(offset))
+      parser.parseInteger(offset) || parser.parseOperand(cancelWe))
     return failure();
   result.addAttribute(getDepthAttrName(result.name), builder.getUI32IntegerAttr(delay));
   result.addAttribute(getOffsetAttrName(result.name), builder.getUI32IntegerAttr(offset));
@@ -502,12 +502,14 @@ ParseResult spechls::CancellableDelayOp::parse(OpAsmParser &parser, OperationSta
     hasInit = true;
   }
   result.addAttribute(getOperandSegmentSizesAttrName(result.name),
-                      builder.getDenseI32ArrayAttr({1, 1, hasEnable, hasInit}));
+                      builder.getDenseI32ArrayAttr({1, 1, 1, hasEnable, hasInit}));
 
   if (parser.parseOptionalAttrDict(result.attributes) || parser.parseColonType(type) ||
       parser.resolveOperand(input, type, result.operands) || parser.addTypeToList(type, result.types))
     return failure();
   if (parser.resolveOperand(cancel, builder.getI1Type(), result.operands))
+    return failure();
+  if (parser.resolveOperand(cancelWe, builder.getI1Type(), result.operands))
     return failure();
   if (hasEnable && parser.resolveOperand(enable, builder.getI1Type(), result.operands))
     return failure();
@@ -519,7 +521,7 @@ ParseResult spechls::CancellableDelayOp::parse(OpAsmParser &parser, OperationSta
 
 void spechls::CancellableDelayOp::print(OpAsmPrinter &printer) {
   printer << ' ' << getInput() << " by " << getDepth();
-  printer << " cancel " << getCancel() << " at " << getOffset();
+  printer << " cancel " << getCancel() << " at " << getOffset() << " " << getCancelWe();
   if (getEnable())
     printer << " if " << getEnable();
   if (getInit())

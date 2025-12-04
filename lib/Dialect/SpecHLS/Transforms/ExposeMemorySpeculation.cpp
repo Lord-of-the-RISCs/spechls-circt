@@ -284,13 +284,15 @@ SmallVector<SmallVector<Value>> delayValues(PatternRewriter &rewritter, SmallVec
         newVal = rewritter.create<spechls::DelayOp>(rewritter.getUnknownLoc(), val.getType(), val, i, enable, initDelay)
                      .getResult();
         break;
-      case DelayType::Cancellable:
+      case DelayType::Cancellable: {
+        auto falseCst = rewritter.create<circt::hw::ConstantOp>(rewritter.getUnknownLoc(), rewritter.getI1Type(), 0);
         newVal = rewritter
                      .create<spechls::CancellableDelayOp>(rewritter.getUnknownLoc(), val.getType(), val, i, ctrl,
-                                                          (depth - i + 1), enable, initDelay)
+                                                          (depth - i + 1), falseCst, enable, initDelay)
                      .getResult();
         break;
-      case DelayType::Rollbackable:
+      }
+      case DelayType::Rollbackable: {
         auto falseCst = rewritter.create<circt::hw::ConstantOp>(rewritter.getUnknownLoc(), rewritter.getI1Type(), 0);
         newVal = rewritter
                      .create<spechls::RollbackableDelayOp>(rewritter.getUnknownLoc(), val.getType(), val, i, ctrl,
@@ -298,6 +300,7 @@ SmallVector<SmallVector<Value>> delayValues(PatternRewriter &rewritter, SmallVec
                                                            enable, initDelay)
                      .getResult();
         break;
+      }
       }
       newVal.getDefiningOp()->setAttr("spechls.scn", scn);
       newVals.push_back(newVal);

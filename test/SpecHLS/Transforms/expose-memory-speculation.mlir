@@ -8,7 +8,7 @@ spechls.kernel @simple(%arr : !spechls.array<i32, 16>, %idxRead : i32, %idxWrite
     //CHECK: %0 = spechls.rollbackableDelay %8 by 1 rollback %false at 0 %false [] if %true init %arg0 {spechls.memspec, spechls.scn = 0 : i32} : !spechls.array<i32, 16>
     //CHECK: %1 = spechls.load %gamma[%arg1 : i32] {spechls.scn = 0 : i32} : <i32, 16>
     //CHECK: %2 = spechls.delay %arg2 by 1 if %true {spechls.scn = 0 : i32} : i32
-    //CHECK: %3 = spechls.cancellableDelay %arg4 by 1 cancel %false at 1 if %true init %false {spechls.scn = 0 : i32} : i1
+    //CHECK: %3 = spechls.cancellableDelay %arg4 by 1 cancel %false at 1 %false if %true init %false {spechls.scn = 0 : i32} : i1
     //CHECK: %4 = comb.icmp eq %2, %arg1 {spechls.scn = 0 : i32} : i32
     //CHECK: %5 = comb.and %4, %3 {spechls.scn = 0 : i32} : i1
     //CHECK: %6 = comb.mux %5, %c0_i32, %c1_i32 {spechls.scn = 0 : i32} : i32
@@ -26,8 +26,8 @@ spechls.kernel @simpleD3(%arr : !spechls.array<i32, 16>, %idxRead : i32, %idxWri
     //CHECK: %1 = spechls.load %gamma[%arg1 : i32] {spechls.scn = 0 : i32} : <i32, 16>
     //CHECK: %2 = spechls.delay %arg2 by 1 if %true {spechls.scn = 0 : i32} : i32
     //CHECK: %3 = spechls.delay %arg2 by 2 if %true {spechls.scn = 0 : i32} : i32
-    //CHECK: %4 = spechls.cancellableDelay %arg4 by 1 cancel %false at 2 if %true init %false {spechls.scn = 0 : i32} : i1
-    //CHECK: %5 = spechls.cancellableDelay %arg4 by 2 cancel %false at 1 if %true init %false {spechls.scn = 0 : i32} : i1
+    //CHECK: %4 = spechls.cancellableDelay %arg4 by 1 cancel %false at 2 %false if %true init %false {spechls.scn = 0 : i32} : i1
+    //CHECK: %5 = spechls.cancellableDelay %arg4 by 2 cancel %false at 1 %false if %true init %false {spechls.scn = 0 : i32} : i1
     //CHECK: %6 = comb.icmp eq %3, %arg1 {spechls.scn = 0 : i32} : i32
     //CHECK: %7 = comb.and %6, %5 {spechls.scn = 0 : i32} : i1
     //CHECK: %8 = comb.mux %7, %c1_i32, %c2_i32 {spechls.scn = 0 : i32} : i32
@@ -52,7 +52,7 @@ spechls.kernel @twoRead(%arr : !spechls.array<i32, 16>, %idxRead1 : i32, %idxRea
     //CHECK: %1 = spechls.load %gamma[%arg2 : i32] {spechls.scn = 0 : i32} : <i32, 16>
     //CHECK: %2 = spechls.load %gamma[%arg1 : i32] {spechls.scn = 0 : i32} : <i32, 16>
     //CHECK: %3 = spechls.delay %arg3 by 1 if %true {spechls.scn = 0 : i32} : i32
-    //CHECK: %4 = spechls.cancellableDelay %arg5 by 1 cancel %false at 1 if %true init %false {spechls.scn = 0 : i32} : i1
+    //CHECK: %4 = spechls.cancellableDelay %arg5 by 1 cancel %false at 1 %false if %true init %false {spechls.scn = 0 : i32} : i1
     //CHECK: %5 = comb.icmp eq %3, %arg2 {spechls.scn = 0 : i32} : i32
     //CHECK: %6 = comb.and %5, %4 {spechls.scn = 0 : i32} : i1
     //CHECK: %7 = comb.icmp eq %3, %arg1 {spechls.scn = 0 : i32} : i32
@@ -83,8 +83,8 @@ spechls.kernel @twoWrite(
     //CHECK: %1 = spechls.load %gamma[%arg1 : i32] {spechls.scn = 0 : i32} : <i32, 16>
     //CHECK: %2 = spechls.delay %arg2 by 1 if %true {spechls.scn = 0 : i32} : i32
     //CHECK: %3 = spechls.delay %arg3 by 1 if %true {spechls.scn = 0 : i32} : i32
-    //CHECK: %4 = spechls.cancellableDelay %arg6 by 1 cancel %false at 1 if %true init %false {spechls.scn = 0 : i32} : i1
-    //CHECK: %5 = spechls.cancellableDelay %arg7 by 1 cancel %false at 1 if %true init %false {spechls.scn = 0 : i32} : i1
+    //CHECK: %4 = spechls.cancellableDelay %arg6 by 1 cancel %false at 1 %false if %true init %false {spechls.scn = 0 : i32} : i1
+    //CHECK: %5 = spechls.cancellableDelay %arg7 by 1 cancel %false at 1 %false if %true init %false {spechls.scn = 0 : i32} : i1
     //CHECK: %6 = comb.icmp eq %2, %arg1 {spechls.scn = 0 : i32} : i32
     //CHECK: %7 = comb.and %6, %4 {spechls.scn = 0 : i32} : i1
     //CHECK: %8 = comb.icmp eq %3, %arg1 {spechls.scn = 0 : i32} : i32
@@ -120,10 +120,10 @@ spechls.kernel @twoReadsTwoWritesD3(
     //CHECK: %4 = spechls.delay %arg4 by 1 if %true {spechls.scn = 0 : i32} : i32
     //CHECK: %5 = spechls.delay %arg3 by 2 if %true {spechls.scn = 0 : i32} : i32
     //CHECK: %6 = spechls.delay %arg4 by 2 if %true {spechls.scn = 0 : i32} : i32
-    //CHECK: %7 = spechls.cancellableDelay %arg7 by 1 cancel %false at 2 if %true init %false {spechls.scn = 0 : i32} : i1
-    //CHECK: %8 = spechls.cancellableDelay %arg8 by 1 cancel %false at 2 if %true init %false {spechls.scn = 0 : i32} : i1
-    //CHECK: %9 = spechls.cancellableDelay %arg7 by 2 cancel %false at 1 if %true init %false {spechls.scn = 0 : i32} : i1
-    //CHECK: %10 = spechls.cancellableDelay %arg8 by 2 cancel %false at 1 if %true init %false {spechls.scn = 0 : i32} : i1
+    //CHECK: %7 = spechls.cancellableDelay %arg7 by 1 cancel %false at 2 %false if %true init %false {spechls.scn = 0 : i32} : i1
+    //CHECK: %8 = spechls.cancellableDelay %arg8 by 1 cancel %false at 2 %false if %true init %false {spechls.scn = 0 : i32} : i1
+    //CHECK: %9 = spechls.cancellableDelay %arg7 by 2 cancel %false at 1 %false if %true init %false {spechls.scn = 0 : i32} : i1
+    //CHECK: %10 = spechls.cancellableDelay %arg8 by 2 cancel %false at 1 %false if %true init %false {spechls.scn = 0 : i32} : i1
     //CHECK: %11 = comb.icmp eq %5, %arg2 {spechls.scn = 0 : i32} : i32
     //CHECK: %12 = comb.and %11, %9 {spechls.scn = 0 : i32} : i1
     //CHECK: %13 = comb.icmp eq %6, %arg2 {spechls.scn = 0 : i32} : i32
@@ -177,8 +177,8 @@ spechls.kernel @twoMemSpecD3D2(
   //CHECK: %1 = spechls.load %gamma[%arg2 : i32] {spechls.scn = 1 : i32} : <i32, 16>
   //CHECK: %2 = spechls.delay %arg4 by 1 if %true {spechls.scn = 1 : i32} : i32
   //CHECK: %3 = spechls.delay %arg4 by 2 if %true {spechls.scn = 1 : i32} : i32
-  //CHECK: %4 = spechls.cancellableDelay %arg8 by 1 cancel %false at 2 if %true init %false {spechls.scn = 1 : i32} : i1
-  //CHECK: %5 = spechls.cancellableDelay %arg8 by 2 cancel %false at 1 if %true init %false {spechls.scn = 1 : i32} : i1
+  //CHECK: %4 = spechls.cancellableDelay %arg8 by 1 cancel %false at 2 %false if %true init %false {spechls.scn = 1 : i32} : i1
+  //CHECK: %5 = spechls.cancellableDelay %arg8 by 2 cancel %false at 1 %false if %true init %false {spechls.scn = 1 : i32} : i1
   //CHECK: %6 = comb.icmp eq %3, %arg2 {spechls.scn = 1 : i32} : i32
   //CHECK: %7 = comb.and %6, %5 {spechls.scn = 1 : i32} : i1
   //CHECK: %8 = comb.mux %7, %c1_i32, %c2_i32 {spechls.scn = 1 : i32} : i32
@@ -192,7 +192,7 @@ spechls.kernel @twoMemSpecD3D2(
   //CHECK: %14 = spechls.rollbackableDelay %23 by 1 rollback %false at 0 %false [] if %true init %arg1 {spechls.memspec, spechls.scn = 0 : i32} : !spechls.array<i32, 16>
   //CHECK: %15 = spechls.load %gamma_0[%arg3 : i32] {spechls.scn = 0 : i32} : <i32, 16>
   //CHECK: %16 = spechls.delay %arg5 by 1 if %true {spechls.scn = 0 : i32} : i32
-  //CHECK: %17 = spechls.cancellableDelay %arg9 by 1 cancel %false at 1 if %true init %false {spechls.scn = 0 : i32} : i1
+  //CHECK: %17 = spechls.cancellableDelay %arg9 by 1 cancel %false at 1 %false if %true init %false {spechls.scn = 0 : i32} : i1
   //CHECK: %18 = comb.icmp eq %16, %arg3 {spechls.scn = 0 : i32} : i32
   //CHECK: %19 = comb.and %18, %17 {spechls.scn = 0 : i32} : i1
   //CHECK: %20 = comb.mux %19, %c0_i32, %c1_i32 {spechls.scn = 0 : i32} : i32
@@ -219,7 +219,7 @@ spechls.kernel @simpleWithDiffType(%arr : !spechls.array<i32, 16>, %idxRead : si
     //CHECK: %2 = hw.bitcast %arg1 {spechls.scn = 0 : i32} : (si32) -> i32
     //CHECK: %3 = hw.bitcast %arg2 {spechls.scn = 0 : i32} : (si32) -> i32
     //CHECK: %4 = spechls.delay %3 by 1 if %true {spechls.scn = 0 : i32} : i32
-    //CHECK: %5 = spechls.cancellableDelay %arg4 by 1 cancel %false at 1 if %true init %false {spechls.scn = 0 : i32} : i1
+    //CHECK: %5 = spechls.cancellableDelay %arg4 by 1 cancel %false at 1 %false if %true init %false {spechls.scn = 0 : i32} : i1
     //CHECK: %6 = comb.icmp eq %4, %2 {spechls.scn = 0 : i32} : i32
     //CHECK: %7 = comb.and %6, %5 {spechls.scn = 0 : i32} : i1
     //CHECK: %8 = comb.mux %7, %c0_i32, %c1_i32 {spechls.scn = 0 : i32} : i32
@@ -239,7 +239,7 @@ spechls.kernel @simpleDoubleRead(%arr : !spechls.array<i32, 16>, %idxRead1 : i32
     //CHECK: %1 = spechls.load %gamma[%arg1 : i32] {spechls.scn = 0 : i32} : <i32, 16>
     //CHECK: %2 = spechls.load %gamma[%arg2 : i32] {spechls.scn = 0 : i32} : <i32, 16>
     //CHECK: %3 = spechls.delay %arg3 by 1 if %true {spechls.scn = 0 : i32} : i32
-    //CHECK: %4 = spechls.cancellableDelay %arg5 by 1 cancel %false at 1 if %true init %false {spechls.scn = 0 : i32} : i1
+    //CHECK: %4 = spechls.cancellableDelay %arg5 by 1 cancel %false at 1 %false if %true init %false {spechls.scn = 0 : i32} : i1
     //CHECK: %5 = comb.icmp eq %3, %arg1 {spechls.scn = 0 : i32} : i32
     //CHECK: %6 = comb.and %5, %4 {spechls.scn = 0 : i32} : i1
     //CHECK: %7 = comb.icmp eq %3, %arg2 {spechls.scn = 0 : i32} : i32
@@ -272,7 +272,7 @@ spechls.kernel @simpleUnsigned(%arr : !spechls.array<i32, 16>, %idxRead : ui8,
     //CHECK: %2 = hw.bitcast %arg1 {spechls.scn = 0 : i32} : (ui8) -> i8
     //CHECK: %3 = hw.bitcast %arg2 {spechls.scn = 0 : i32} : (ui8) -> i8
     //CHECK: %4 = spechls.delay %3 by 1 if %true {spechls.scn = 0 : i32} : i8
-    //CHECK: %5 = spechls.cancellableDelay %arg4 by 1 cancel %false at 1 if %true init %false {spechls.scn = 0 : i32} : i1
+    //CHECK: %5 = spechls.cancellableDelay %arg4 by 1 cancel %false at 1 %false if %true init %false {spechls.scn = 0 : i32} : i1
     //CHECK: %6 = comb.icmp eq %4, %2 {spechls.scn = 0 : i32} : i8
     //CHECK: %7 = comb.and %6, %5 {spechls.scn = 0 : i32} : i1
     //CHECK: %8 = comb.mux %7, %c0_i32, %c1_i32 {spechls.scn = 0 : i32} : i32
@@ -297,8 +297,8 @@ spechls.kernel @withFields(%arr : !spechls.array<i32, 16>, %in : !spechls.struct
   //CHECK: %3 = hw.bitcast %16 {spechls.scn = 0 : i32} : (ui8) -> i8
   //CHECK: %4 = spechls.delay %3 by 1 if %true {spechls.scn = 0 : i32} : i8
   //CHECK: %5 = spechls.delay %3 by 2 if %true {spechls.scn = 0 : i32} : i8
-  //CHECK: %6 = spechls.cancellableDelay %17 by 1 cancel %false at 2 if %true init %false {spechls.scn = 0 : i32} : i1
-  //CHECK: %7 = spechls.cancellableDelay %17 by 2 cancel %false at 1 if %true init %false {spechls.scn = 0 : i32} : i1
+  //CHECK: %6 = spechls.cancellableDelay %17 by 1 cancel %false at 2 %false if %true init %false {spechls.scn = 0 : i32} : i1
+  //CHECK: %7 = spechls.cancellableDelay %17 by 2 cancel %false at 1 %false if %true init %false {spechls.scn = 0 : i32} : i1
   //CHECK: %8 = comb.icmp eq %5, %2 {spechls.scn = 0 : i32} : i8
   //CHECK: %9 = comb.and %8, %7 {spechls.scn = 0 : i32} : i1
   //CHECK: %10 = comb.mux %9, %c1_i32, %c2_i32 {spechls.scn = 0 : i32} : i32

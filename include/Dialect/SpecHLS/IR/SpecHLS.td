@@ -299,6 +299,7 @@ def SpecHLS_CancellableDelayOp : SpecHLSOp<"cancellableDelay",
         UI32Attr:$depth,
         I1:$cancel,
         UI32Attr:$offset,
+        I1:$cancelWe,
         Optional<I1>:$enable,
         Optional<I1>:$init
     );

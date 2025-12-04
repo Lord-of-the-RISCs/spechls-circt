@@ -81,10 +81,10 @@ private:
     spechls::CancellableDelayOp root = cast<spechls::CancellableDelayOp>(op);
     auto rootMinusOne = rewriter.create<spechls::CancellableDelayOp>(
         rewriter.getUnknownLoc(), root.getType(), root.getInput(), root.getDepth() - 1, root.getCancel(),
-        root.getOffset() + 1, root.getEnable(), root.getInit());
-    auto oneDelay = rewriter.create<spechls::CancellableDelayOp>(rewriter.getUnknownLoc(), root.getType(),
-                                                                 rootMinusOne.getResult(), 1, root.getCancel(),
-                                                                 root.getOffset(), root.getEnable(), root.getInit());
+        root.getOffset() + 1, root.getCancelWe(), root.getEnable(), root.getInit());
+    auto oneDelay = rewriter.create<spechls::CancellableDelayOp>(
+        rewriter.getUnknownLoc(), root.getType(), rootMinusOne.getResult(), 1, root.getCancel(), root.getOffset(),
+        root.getCancelWe(), root.getEnable(), root.getInit());
     return oneDelay;
   }
 };
