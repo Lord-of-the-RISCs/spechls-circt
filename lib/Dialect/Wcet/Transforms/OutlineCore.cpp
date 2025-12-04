@@ -50,7 +50,7 @@ public:
      *************************************************************************/
     spechls::TaskOp speculativeTask = nullptr;
     mod->walk([&](spechls::TaskOp t) {
-      if (t->getAttr("spechls.speculative")) {
+      if (t->hasAttr("spechls.speculative")) {
         speculativeTask = t;
         return;
       }
@@ -174,6 +174,7 @@ public:
     /**************************************************************************
      *  Handle Inputs/Outputs                                                 *
      **************************************************************************/
+    rewriter.setInsertionPointToStart(&core.getBody().front());
     speculativeTask->walk([&](Operation *op) {
       auto opName = op->getName().getStringRef();
       if (opName == spechls::CommitOp::getOperationName().str() ||
@@ -183,6 +184,12 @@ public:
       for (size_t i = 0; i < op->getNumOperands(); i++) {
         auto operand = op->getOperand(i);
         auto *opOperand = operand.getDefiningOp();
+        if (!opOperand) {
+          auto init = rewriter.create<wcet::InitOp>(rewriter.getUnknownLoc(), operand.getType(),
+                                                    rewriter.getStringAttr("init"));
+          cloneMap[op]->setOperand(i, init);
+          continue;
+        }
         for (size_t j = 0; j < opOperand->getNumResults(); j++) {
           if (opOperand->getResult(j) == operand) {
             cloneMap[op]->setOperand(i, cloneMap[opOperand]->getResult(j));
@@ -199,6 +206,7 @@ public:
       }
     }
 
+    rewriter.setInsertionPointToEnd(&core.getBody().front());
     auto commitOp = rewriter.create<wcet::CommitOp>(rewriter.getUnknownLoc(), outs);
 
     for (size_t i = 0; i < coreInputs.size(); i++) {
