@@ -5,14 +5,14 @@ spechls.kernel @simple(%arr : !spechls.array<i32, 16>, %idxRead : i32, %idxWrite
     %true = hw.constant 1 : i1
     %mu = spechls.mu<"x">(%arr, %next_arr) {spechls.memspec = 2} : !spechls.array<i32, 16>
     %next_arr = spechls.alpha %mu[%idxWrite : i32], %valWrite if %we : !spechls.array<i32, 16> 
-    //CHECK: %0 = spechls.rollbackableDelay %8 by 1 rollback %false at 0 [] if %true init %arg0 {spechls.memspec, spechls.scn = 0 : i32} : !spechls.array<i32, 16>
+    //CHECK: %0 = spechls.rollbackableDelay %8 by 1 rollback %false at 0 %false [] if %true init %arg0 {spechls.memspec, spechls.scn = 0 : i32} : !spechls.array<i32, 16>
     //CHECK: %1 = spechls.load %gamma[%arg1 : i32] {spechls.scn = 0 : i32} : <i32, 16>
     //CHECK: %2 = spechls.delay %arg2 by 1 if %true {spechls.scn = 0 : i32} : i32
     //CHECK: %3 = spechls.cancellableDelay %arg4 by 1 cancel %false at 1 if %true init %false {spechls.scn = 0 : i32} : i1
     //CHECK: %4 = comb.icmp eq %2, %arg1 {spechls.scn = 0 : i32} : i32
     //CHECK: %5 = comb.and %4, %3 {spechls.scn = 0 : i32} : i1
     //CHECK: %6 = comb.mux %5, %c0_i32, %c1_i32 {spechls.scn = 0 : i32} : i32
-    //CHECK: %7 = spechls.rollbackableDelay %0 by 1 rollback %false at 1 [] if %true init %arg0 {spechls.memspec, spechls.scn = 0 : i32} : !spechls.array<i32, 16>
+    //CHECK: %7 = spechls.rollbackableDelay %0 by 1 rollback %false at 1 %false [] if %true init %arg0 {spechls.memspec, spechls.scn = 0 : i32} : !spechls.array<i32, 16>
     //CHECK: %gamma = spechls.gamma<"memory_speculation_x">(%6, %0, %7) {spechls.memspec, spechls.scn = 0 : i32}: i32, !spechls.array<i32, 16>
     //CHECK: %mu = spechls.mu<"x">(%arg0, %8) {spechls.scn = 0 : i32}: !spechls.array<i32, 16>
     //CHECK: %8 = spechls.alpha %mu[%arg2: i32], %arg3 if %arg4 {spechls.memspec, spechls.scn = 0 : i32} : !spechls.array<i32, 16>
@@ -22,7 +22,7 @@ spechls.kernel @simple(%arr : !spechls.array<i32, 16>, %idxRead : i32, %idxWrite
 
 // CHECK-LABEL: @simpleD3
 spechls.kernel @simpleD3(%arr : !spechls.array<i32, 16>, %idxRead : i32, %idxWrite : i32, %valWrite : i32, %we : i1) -> i32 {
-    //CHECK: %0 = spechls.rollbackableDelay %14 by 1 rollback %false at 0 [] if %true init %arg0 {spechls.memspec, spechls.scn = 0 : i32} : !spechls.array<i32, 16>
+    //CHECK: %0 = spechls.rollbackableDelay %14 by 1 rollback %false at 0 %false [] if %true init %arg0 {spechls.memspec, spechls.scn = 0 : i32} : !spechls.array<i32, 16>
     //CHECK: %1 = spechls.load %gamma[%arg1 : i32] {spechls.scn = 0 : i32} : <i32, 16>
     //CHECK: %2 = spechls.delay %arg2 by 1 if %true {spechls.scn = 0 : i32} : i32
     //CHECK: %3 = spechls.delay %arg2 by 2 if %true {spechls.scn = 0 : i32} : i32
@@ -34,8 +34,8 @@ spechls.kernel @simpleD3(%arr : !spechls.array<i32, 16>, %idxRead : i32, %idxWri
     //CHECK: %9 = comb.icmp eq %2, %arg1 {spechls.scn = 0 : i32} : i32
     //CHECK: %10 = comb.and %9, %4 {spechls.scn = 0 : i32} : i1
     //CHECK: %11 = comb.mux %10, %c0_i32, %8 {spechls.scn = 0 : i32} : i32
-    //CHECK: %12 = spechls.rollbackableDelay %0 by 1 rollback %false at 1 [] if %true init %arg0 {spechls.memspec, spechls.scn = 0 : i32} : !spechls.array<i32, 16>
-    //CHECK: %13 = spechls.rollbackableDelay %12 by 1 rollback %false at 2 [] if %true init %arg0 {spechls.memspec, spechls.scn = 0 : i32} : !spechls.array<i32, 16>
+    //CHECK: %12 = spechls.rollbackableDelay %0 by 1 rollback %false at 1 %false [] if %true init %arg0 {spechls.memspec, spechls.scn = 0 : i32} : !spechls.array<i32, 16>
+    //CHECK: %13 = spechls.rollbackableDelay %12 by 1 rollback %false at 2 %false [] if %true init %arg0 {spechls.memspec, spechls.scn = 0 : i32} : !spechls.array<i32, 16>
     //CHECK: %gamma = spechls.gamma<"memory_speculation_x">(%11, %0, %12, %13) {spechls.memspec, spechls.scn = 0 : i32}: i32, !spechls.array<i32, 16>
     //CHECK: %mu = spechls.mu<"x">(%arg0, %14) {spechls.scn = 0 : i32}: !spechls.array<i32, 16>
     //CHECK: %14 = spechls.alpha %mu[%arg2: i32], %arg3 if %arg4 {spechls.memspec, spechls.scn = 0 : i32} : !spechls.array<i32, 16>
@@ -48,7 +48,7 @@ spechls.kernel @simpleD3(%arr : !spechls.array<i32, 16>, %idxRead : i32, %idxWri
 
 // CHECK-LABEL: @twoRead
 spechls.kernel @twoRead(%arr : !spechls.array<i32, 16>, %idxRead1 : i32, %idxRead2 : i32, %idxWrite : i32, %valWrite : i32, %we : i1) -> i32 {
-    //CHECK: %0 = spechls.rollbackableDelay %12 by 1 rollback %false at 0 [] if %true init %arg0 {spechls.memspec, spechls.scn = 0 : i32} : !spechls.array<i32, 16>
+    //CHECK: %0 = spechls.rollbackableDelay %12 by 1 rollback %false at 0 %false [] if %true init %arg0 {spechls.memspec, spechls.scn = 0 : i32} : !spechls.array<i32, 16>
     //CHECK: %1 = spechls.load %gamma[%arg2 : i32] {spechls.scn = 0 : i32} : <i32, 16>
     //CHECK: %2 = spechls.load %gamma[%arg1 : i32] {spechls.scn = 0 : i32} : <i32, 16>
     //CHECK: %3 = spechls.delay %arg3 by 1 if %true {spechls.scn = 0 : i32} : i32
@@ -59,7 +59,7 @@ spechls.kernel @twoRead(%arr : !spechls.array<i32, 16>, %idxRead1 : i32, %idxRea
     //CHECK: %8 = comb.and %7, %4 {spechls.scn = 0 : i32} : i1
     //CHECK: %9 = comb.or %8, %6 {spechls.scn = 0 : i32} : i1
     //CHECK: %10 = comb.mux %9, %c0_i32, %c1_i32 {spechls.scn = 0 : i32} : i32
-    //CHECK: %11 = spechls.rollbackableDelay %0 by 1 rollback %false at 1 [] if %true init %arg0 {spechls.memspec, spechls.scn = 0 : i32} : !spechls.array<i32, 16>
+    //CHECK: %11 = spechls.rollbackableDelay %0 by 1 rollback %false at 1 %false [] if %true init %arg0 {spechls.memspec, spechls.scn = 0 : i32} : !spechls.array<i32, 16>
     //CHECK: %gamma = spechls.gamma<"memory_speculation_x">(%10, %0, %11) {spechls.memspec, spechls.scn = 0 : i32}: i32, !spechls.array<i32, 16>
     //CHECK: %mu = spechls.mu<"x">(%arg0, %12) {spechls.scn = 0 : i32}: !spechls.array<i32, 16>
     //CHECK: %12 = spechls.alpha %mu[%arg3: i32], %arg4 if %arg5 {spechls.memspec, spechls.scn = 0 : i32} : !spechls.array<i32, 16>
@@ -79,7 +79,7 @@ spechls.kernel @twoWrite(
     %valWrite1 : i32, %valWrite2 : i32,
     %we1 : i1, %we2 : i1) -> i32 
 {
-    //CHECK: %0 = spechls.rollbackableDelay %14 by 1 rollback %false at 0 [] if %true init %arg0 {spechls.memspec, spechls.scn = 0 : i32} : !spechls.array<i32, 16>
+    //CHECK: %0 = spechls.rollbackableDelay %14 by 1 rollback %false at 0 %false [] if %true init %arg0 {spechls.memspec, spechls.scn = 0 : i32} : !spechls.array<i32, 16>
     //CHECK: %1 = spechls.load %gamma[%arg1 : i32] {spechls.scn = 0 : i32} : <i32, 16>
     //CHECK: %2 = spechls.delay %arg2 by 1 if %true {spechls.scn = 0 : i32} : i32
     //CHECK: %3 = spechls.delay %arg3 by 1 if %true {spechls.scn = 0 : i32} : i32
@@ -91,7 +91,7 @@ spechls.kernel @twoWrite(
     //CHECK: %9 = comb.and %8, %5 {spechls.scn = 0 : i32} : i1
     //CHECK: %10 = comb.or %7, %9 {spechls.scn = 0 : i32} : i1
     //CHECK: %11 = comb.mux %10, %c0_i32, %c1_i32 {spechls.scn = 0 : i32} : i32
-    //CHECK: %12 = spechls.rollbackableDelay %0 by 1 rollback %false at 1 [] if %true init %arg0 {spechls.memspec, spechls.scn = 0 : i32} : !spechls.array<i32, 16>
+    //CHECK: %12 = spechls.rollbackableDelay %0 by 1 rollback %false at 1 %false [] if %true init %arg0 {spechls.memspec, spechls.scn = 0 : i32} : !spechls.array<i32, 16>
     //CHECK: %gamma = spechls.gamma<"memory_speculation_x">(%11, %0, %12) {spechls.memspec, spechls.scn = 0 : i32}: i32, !spechls.array<i32, 16>
     //CHECK: %mu = spechls.mu<"x">(%arg0, %14) {spechls.scn = 0 : i32}: !spechls.array<i32, 16>
     //CHECK: %13 = spechls.alpha %mu[%arg2: i32], %arg4 if %arg6 {spechls.memspec, spechls.scn = 0 : i32} : !spechls.array<i32, 16>
@@ -113,7 +113,7 @@ spechls.kernel @twoReadsTwoWritesD3(
     %valWrite1 : i32, %valWrite2 : i32,
     %we1 : i1, %we2 : i1) -> i32 
 {
-    //CHECK: %0 = spechls.rollbackableDelay %38 by 1 rollback %false at 0 [] if %true init %arg0 {spechls.memspec, spechls.scn = 0 : i32} : !spechls.array<i32, 16>
+    //CHECK: %0 = spechls.rollbackableDelay %38 by 1 rollback %false at 0 %false [] if %true init %arg0 {spechls.memspec, spechls.scn = 0 : i32} : !spechls.array<i32, 16>
     //CHECK: %1 = spechls.load %gamma[%arg2 : i32] {spechls.scn = 0 : i32} : <i32, 16>
     //CHECK: %2 = spechls.load %gamma[%arg1 : i32] {spechls.scn = 0 : i32} : <i32, 16>
     //CHECK: %3 = spechls.delay %arg3 by 1 if %true {spechls.scn = 0 : i32} : i32
@@ -148,8 +148,8 @@ spechls.kernel @twoReadsTwoWritesD3(
     //CHECK: %32 = comb.or %29, %31 {spechls.scn = 0 : i32} : i1
     //CHECK: %33 = comb.or %32, %27 {spechls.scn = 0 : i32} : i1
     //CHECK: %34 = comb.mux %33, %c0_i32, %22 {spechls.scn = 0 : i32} : i32
-    //CHECK: %35 = spechls.rollbackableDelay %0 by 1 rollback %false at 1 [] if %true init %arg0 {spechls.memspec, spechls.scn = 0 : i32} : !spechls.array<i32, 16>
-    //CHECK: %36 = spechls.rollbackableDelay %35 by 1 rollback %false at 2 [] if %true init %arg0 {spechls.memspec, spechls.scn = 0 : i32} : !spechls.array<i32, 16>
+    //CHECK: %35 = spechls.rollbackableDelay %0 by 1 rollback %false at 1 %false [] if %true init %arg0 {spechls.memspec, spechls.scn = 0 : i32} : !spechls.array<i32, 16>
+    //CHECK: %36 = spechls.rollbackableDelay %35 by 1 rollback %false at 2 %false [] if %true init %arg0 {spechls.memspec, spechls.scn = 0 : i32} : !spechls.array<i32, 16>
     //CHECK: %gamma = spechls.gamma<"memory_speculation_x">(%34, %0, %35, %36) {spechls.memspec, spechls.scn = 0 : i32}: i32, !spechls.array<i32, 16>
     //CHECK: %mu = spechls.mu<"x">(%arg0, %38) {spechls.scn = 0 : i32}: !spechls.array<i32, 16>
     //CHECK: %37 = spechls.alpha %mu[%arg3: i32], %arg5 if %arg7 {spechls.memspec, spechls.scn = 0 : i32} : !spechls.array<i32, 16>
@@ -173,7 +173,7 @@ spechls.kernel @twoMemSpecD3D2(
     %valWrite1 : i32, %valWrite2 : i32,
     %we1 : i1, %we2 : i1) -> i32 
 {
-  //CHECK: %0 = spechls.rollbackableDelay %22 by 1 rollback %false at 0 [] if %true init %arg0 {spechls.memspec, spechls.scn = 1 : i32} : !spechls.array<i32, 16>
+  //CHECK: %0 = spechls.rollbackableDelay %22 by 1 rollback %false at 0 %false [] if %true init %arg0 {spechls.memspec, spechls.scn = 1 : i32} : !spechls.array<i32, 16>
   //CHECK: %1 = spechls.load %gamma[%arg2 : i32] {spechls.scn = 1 : i32} : <i32, 16>
   //CHECK: %2 = spechls.delay %arg4 by 1 if %true {spechls.scn = 1 : i32} : i32
   //CHECK: %3 = spechls.delay %arg4 by 2 if %true {spechls.scn = 1 : i32} : i32
@@ -185,18 +185,18 @@ spechls.kernel @twoMemSpecD3D2(
   //CHECK: %9 = comb.icmp eq %2, %arg2 {spechls.scn = 1 : i32} : i32
   //CHECK: %10 = comb.and %9, %4 {spechls.scn = 1 : i32} : i1
   //CHECK: %11 = comb.mux %10, %c0_i32, %8 {spechls.scn = 1 : i32} : i32
-  //CHECK: %12 = spechls.rollbackableDelay %0 by 1 rollback %false at 1 [] if %true init %arg0 {spechls.memspec, spechls.scn = 1 : i32} : !spechls.array<i32, 16>
-  //CHECK: %13 = spechls.rollbackableDelay %12 by 1 rollback %false at 2 [] if %true init %arg0 {spechls.memspec, spechls.scn = 1 : i32} : !spechls.array<i32, 16>
+  //CHECK: %12 = spechls.rollbackableDelay %0 by 1 rollback %false at 1 %false [] if %true init %arg0 {spechls.memspec, spechls.scn = 1 : i32} : !spechls.array<i32, 16>
+  //CHECK: %13 = spechls.rollbackableDelay %12 by 1 rollback %false at 2 %false [] if %true init %arg0 {spechls.memspec, spechls.scn = 1 : i32} : !spechls.array<i32, 16>
   //CHECK: %gamma = spechls.gamma<"memory_speculation_x">(%11, %0, %12, %13) {spechls.memspec, spechls.scn = 1 : i32}: i32, !spechls.array<i32, 16>
   //CHECK: %mu = spechls.mu<"x">(%arg0, %22) {spechls.scn = 1 : i32}: !spechls.array<i32, 16>
-  //CHECK: %14 = spechls.rollbackableDelay %23 by 1 rollback %false at 0 [] if %true init %arg1 {spechls.memspec, spechls.scn = 0 : i32} : !spechls.array<i32, 16>
+  //CHECK: %14 = spechls.rollbackableDelay %23 by 1 rollback %false at 0 %false [] if %true init %arg1 {spechls.memspec, spechls.scn = 0 : i32} : !spechls.array<i32, 16>
   //CHECK: %15 = spechls.load %gamma_0[%arg3 : i32] {spechls.scn = 0 : i32} : <i32, 16>
   //CHECK: %16 = spechls.delay %arg5 by 1 if %true {spechls.scn = 0 : i32} : i32
   //CHECK: %17 = spechls.cancellableDelay %arg9 by 1 cancel %false at 1 if %true init %false {spechls.scn = 0 : i32} : i1
   //CHECK: %18 = comb.icmp eq %16, %arg3 {spechls.scn = 0 : i32} : i32
   //CHECK: %19 = comb.and %18, %17 {spechls.scn = 0 : i32} : i1
   //CHECK: %20 = comb.mux %19, %c0_i32, %c1_i32 {spechls.scn = 0 : i32} : i32
-  //CHECK: %21 = spechls.rollbackableDelay %14 by 1 rollback %false at 1 [] if %true init %arg1 {spechls.memspec, spechls.scn = 0 : i32} : !spechls.array<i32, 16>
+  //CHECK: %21 = spechls.rollbackableDelay %14 by 1 rollback %false at 1 %false [] if %true init %arg1 {spechls.memspec, spechls.scn = 0 : i32} : !spechls.array<i32, 16>
   //CHECK: %gamma_0 = spechls.gamma<"memory_speculation_y">(%20, %14, %21) {spechls.memspec, spechls.scn = 0 : i32}: i32, !spechls.array<i32, 16>
   //CHECK: %mu_1 = spechls.mu<"y">(%arg1, %23) {spechls.scn = 0 : i32}: !spechls.array<i32, 16>
   //CHECK: %22 = spechls.alpha %mu[%arg4: i32], %arg6 if %arg8 {spechls.memspec, spechls.scn = 1 : i32} : !spechls.array<i32, 16>
@@ -214,7 +214,7 @@ spechls.kernel @twoMemSpecD3D2(
 
 // CHECK-LABEL: @simpleWithDiffType
 spechls.kernel @simpleWithDiffType(%arr : !spechls.array<i32, 16>, %idxRead : si32, %idxWrite : si32, %valWrite : i32, %we : i1) -> i32 {
-    //CHECK: %0 = spechls.rollbackableDelay %10 by 1 rollback %false at 0 [] if %true init %arg0 {spechls.memspec, spechls.scn = 0 : i32} : !spechls.array<i32, 16>
+    //CHECK: %0 = spechls.rollbackableDelay %10 by 1 rollback %false at 0 %false [] if %true init %arg0 {spechls.memspec, spechls.scn = 0 : i32} : !spechls.array<i32, 16>
     //CHECK: %1 = spechls.load %gamma[%arg1 : si32] {spechls.scn = 0 : i32} : <i32, 16>
     //CHECK: %2 = hw.bitcast %arg1 {spechls.scn = 0 : i32} : (si32) -> i32
     //CHECK: %3 = hw.bitcast %arg2 {spechls.scn = 0 : i32} : (si32) -> i32
@@ -223,7 +223,7 @@ spechls.kernel @simpleWithDiffType(%arr : !spechls.array<i32, 16>, %idxRead : si
     //CHECK: %6 = comb.icmp eq %4, %2 {spechls.scn = 0 : i32} : i32
     //CHECK: %7 = comb.and %6, %5 {spechls.scn = 0 : i32} : i1
     //CHECK: %8 = comb.mux %7, %c0_i32, %c1_i32 {spechls.scn = 0 : i32} : i32
-    //CHECK: %9 = spechls.rollbackableDelay %0 by 1 rollback %false at 1 [] if %true init %arg0 {spechls.memspec, spechls.scn = 0 : i32} : !spechls.array<i32, 16>
+    //CHECK: %9 = spechls.rollbackableDelay %0 by 1 rollback %false at 1 %false [] if %true init %arg0 {spechls.memspec, spechls.scn = 0 : i32} : !spechls.array<i32, 16>
     //CHECK: %gamma = spechls.gamma<"memory_speculation_x">(%8, %0, %9) {spechls.memspec, spechls.scn = 0 : i32}: i32, !spechls.array<i32, 16>
     //CHECK: %mu = spechls.mu<"x">(%arg0, %10) {spechls.scn = 0 : i32}: !spechls.array<i32, 16>
     //CHECK: %10 = spechls.alpha %mu[%arg2: si32], %arg3 if %arg4 {spechls.memspec, spechls.scn = 0 : i32} : !spechls.array<i32, 16>
@@ -235,7 +235,7 @@ spechls.kernel @simpleWithDiffType(%arr : !spechls.array<i32, 16>, %idxRead : si
 }
 
 spechls.kernel @simpleDoubleRead(%arr : !spechls.array<i32, 16>, %idxRead1 : i32, %idxRead2 : i32,
-    //CHECK: %0 = spechls.rollbackableDelay %12 by 1 rollback %false at 0 [] if %true init %arg0 {spechls.memspec, spechls.scn = 0 : i32} : !spechls.array<i32, 16>
+    //CHECK: %0 = spechls.rollbackableDelay %12 by 1 rollback %false at 0 %false [] if %true init %arg0 {spechls.memspec, spechls.scn = 0 : i32} : !spechls.array<i32, 16>
     //CHECK: %1 = spechls.load %gamma[%arg1 : i32] {spechls.scn = 0 : i32} : <i32, 16>
     //CHECK: %2 = spechls.load %gamma[%arg2 : i32] {spechls.scn = 0 : i32} : <i32, 16>
     //CHECK: %3 = spechls.delay %arg3 by 1 if %true {spechls.scn = 0 : i32} : i32
@@ -246,7 +246,7 @@ spechls.kernel @simpleDoubleRead(%arr : !spechls.array<i32, 16>, %idxRead1 : i32
     //CHECK: %8 = comb.and %7, %4 {spechls.scn = 0 : i32} : i1
     //CHECK: %9 = comb.or %8, %6 {spechls.scn = 0 : i32} : i1
     //CHECK: %10 = comb.mux %9, %c0_i32, %c1_i32 {spechls.scn = 0 : i32} : i32
-    //CHECK: %11 = spechls.rollbackableDelay %0 by 1 rollback %false at 1 [] if %true init %arg0 {spechls.memspec, spechls.scn = 0 : i32} : !spechls.array<i32, 16>
+    //CHECK: %11 = spechls.rollbackableDelay %0 by 1 rollback %false at 1 %false [] if %true init %arg0 {spechls.memspec, spechls.scn = 0 : i32} : !spechls.array<i32, 16>
     //CHECK: %gamma = spechls.gamma<"memory_speculation_x">(%10, %0, %11) {spechls.memspec, spechls.scn = 0 : i32}: i32, !spechls.array<i32, 16>
     //CHECK: %mu = spechls.mu<"x">(%arg0, %12) {spechls.scn = 0 : i32}: !spechls.array<i32, 16>
     //CHECK: %12 = spechls.alpha %mu[%arg3: i32], %arg4 if %arg5 {spechls.memspec, spechls.scn = 0 : i32} : !spechls.array<i32, 16>
@@ -267,7 +267,7 @@ spechls.kernel @simpleDoubleRead(%arr : !spechls.array<i32, 16>, %idxRead1 : i32
 }
 
 spechls.kernel @simpleUnsigned(%arr : !spechls.array<i32, 16>, %idxRead : ui8,
-    //CHECK: %0 = spechls.rollbackableDelay %10 by 1 rollback %false at 0 [] if %true init %arg0 {spechls.memspec, spechls.scn = 0 : i32} : !spechls.array<i32, 16>
+    //CHECK: %0 = spechls.rollbackableDelay %10 by 1 rollback %false at 0 %false [] if %true init %arg0 {spechls.memspec, spechls.scn = 0 : i32} : !spechls.array<i32, 16>
     //CHECK: %1 = spechls.load %gamma[%arg1 : ui8] {spechls.scn = 0 : i32} : <i32, 16>
     //CHECK: %2 = hw.bitcast %arg1 {spechls.scn = 0 : i32} : (ui8) -> i8
     //CHECK: %3 = hw.bitcast %arg2 {spechls.scn = 0 : i32} : (ui8) -> i8
@@ -276,7 +276,7 @@ spechls.kernel @simpleUnsigned(%arr : !spechls.array<i32, 16>, %idxRead : ui8,
     //CHECK: %6 = comb.icmp eq %4, %2 {spechls.scn = 0 : i32} : i8
     //CHECK: %7 = comb.and %6, %5 {spechls.scn = 0 : i32} : i1
     //CHECK: %8 = comb.mux %7, %c0_i32, %c1_i32 {spechls.scn = 0 : i32} : i32
-    //CHECK: %9 = spechls.rollbackableDelay %0 by 1 rollback %false at 1 [] if %true init %arg0 {spechls.memspec, spechls.scn = 0 : i32} : !spechls.array<i32, 16>
+    //CHECK: %9 = spechls.rollbackableDelay %0 by 1 rollback %false at 1 %false [] if %true init %arg0 {spechls.memspec, spechls.scn = 0 : i32} : !spechls.array<i32, 16>
     //CHECK: %gamma = spechls.gamma<"memory_speculation_x">(%8, %0, %9) {spechls.memspec, spechls.scn = 0 : i32}: i32, !spechls.array<i32, 16>
     //CHECK: %mu = spechls.mu<"x">(%arg0, %10) {spechls.scn = 0 : i32}: !spechls.array<i32, 16>
     //CHECK: %10 = spechls.alpha %mu[%arg2: ui8], %arg3 if %arg4 {spechls.memspec, spechls.scn = 0 : i32} : !spechls.array<i32, 16>
@@ -291,7 +291,7 @@ spechls.kernel @simpleUnsigned(%arr : !spechls.array<i32, 16>, %idxRead : ui8,
 
 spechls.kernel @withFields(%arr : !spechls.array<i32, 16>, %in : !spechls.struct<"in" { "val" : i32,  "wAddr" : ui8, "we" : i1, 
 "rdAddr" : ui8 }>) -> i32 {
-  //CHECK: %0 = spechls.rollbackableDelay %19 by 1 rollback %false at 0 [] if %true init %arg0 {spechls.memspec, spechls.scn = 0 : i32} : !spechls.array<i32, 16>
+  //CHECK: %0 = spechls.rollbackableDelay %19 by 1 rollback %false at 0 %false [] if %true init %arg0 {spechls.memspec, spechls.scn = 0 : i32} : !spechls.array<i32, 16>
   //CHECK: %1 = spechls.load %gamma[%20 : ui8] {spechls.scn = 0 : i32} : <i32, 16>
   //CHECK: %2 = hw.bitcast %20 {spechls.scn = 0 : i32} : (ui8) -> i8
   //CHECK: %3 = hw.bitcast %16 {spechls.scn = 0 : i32} : (ui8) -> i8
@@ -305,8 +305,8 @@ spechls.kernel @withFields(%arr : !spechls.array<i32, 16>, %in : !spechls.struct
   //CHECK: %11 = comb.icmp eq %4, %2 {spechls.scn = 0 : i32} : i8
   //CHECK: %12 = comb.and %11, %6 {spechls.scn = 0 : i32} : i1
   //CHECK: %13 = comb.mux %12, %c0_i32, %10 {spechls.scn = 0 : i32} : i32
-  //CHECK: %14 = spechls.rollbackableDelay %0 by 1 rollback %false at 1 [] if %true init %arg0 {spechls.memspec, spechls.scn = 0 : i32} : !spechls.array<i32, 16>
-  //CHECK: %15 = spechls.rollbackableDelay %14 by 1 rollback %false at 2 [] if %true init %arg0 {spechls.memspec, spechls.scn = 0 : i32} : !spechls.array<i32, 16>
+  //CHECK: %14 = spechls.rollbackableDelay %0 by 1 rollback %false at 1 %false [] if %true init %arg0 {spechls.memspec, spechls.scn = 0 : i32} : !spechls.array<i32, 16>
+  //CHECK: %15 = spechls.rollbackableDelay %14 by 1 rollback %false at 2 %false [] if %true init %arg0 {spechls.memspec, spechls.scn = 0 : i32} : !spechls.array<i32, 16>
   //CHECK: %gamma = spechls.gamma<"memory_speculation_arr">(%13, %0, %14, %15) {spechls.memspec, spechls.scn = 0 : i32}: i32, !spechls.array<i32, 16>
   //CHECK: %mu = spechls.mu<"arr">(%arg0, %19) {spechls.scn = 0 : i32}: !spechls.array<i32, 16>
   //CHECK: %16 = spechls.field<"wAddr"> %arg1 : <"in" { "val" : i32, "wAddr" : ui8, "we" : i1, "rdAddr" : ui8 }>

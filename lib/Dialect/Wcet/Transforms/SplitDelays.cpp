@@ -71,10 +71,10 @@ private:
     spechls::RollbackableDelayOp root = cast<spechls::RollbackableDelayOp>(op);
     auto rootMinusOne = rewriter.create<spechls::RollbackableDelayOp>(
         rewriter.getUnknownLoc(), root.getType(), root.getInput(), root.getDepth() - 1, root.getRollback(),
-        root.getOffset() + 1, root.getEnable(), root.getInit());
-    auto oneDelay = rewriter.create<spechls::RollbackableDelayOp>(rewriter.getUnknownLoc(), root.getType(),
-                                                                  rootMinusOne.getResult(), 1, root.getRollback(),
-                                                                  root.getOffset(), root.getEnable(), root.getInit());
+        root.getOffset() + 1, root.getRbWe(), root.getRollbackDepths(), root.getEnable(), root.getInit());
+    auto oneDelay = rewriter.create<spechls::RollbackableDelayOp>(
+        rewriter.getUnknownLoc(), root.getType(), rootMinusOne.getResult(), 1, root.getRollback(), root.getOffset(),
+        root.getRbWe(), root.getRollbackDepths(), root.getEnable(), root.getInit());
     return oneDelay;
   }
   static Operation *splitCancellableDelayImp(PatternRewriter &rewriter, Operation *op) {

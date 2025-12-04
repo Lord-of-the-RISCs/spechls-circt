@@ -75,10 +75,12 @@ private:
     SmallVector<spechls::LoadOp> loads;
     SmallVector<Value> loadsAddresses;
     auto delayEnable = rewritter.create<circt::hw::ConstantOp>(rewritter.getUnknownLoc(), rewritter.getI1Type(), 1);
+    auto falseCst = rewritter.create<circt::hw::ConstantOp>(rewritter.getUnknownLoc(), rewritter.getI1Type(), 0);
     auto delayCancelRollback =
         rewritter.create<circt::hw::ConstantOp>(rewritter.getUnknownLoc(), rewritter.getI1Type(), 0);
     auto muDelay = rewritter.create<spechls::RollbackableDelayOp>(
-        rewritter.getUnknownLoc(), mu.getLoopValue(), 1, delayCancelRollback, 0, delayEnable, mu.getInitValue());
+        rewritter.getUnknownLoc(), mu.getLoopValue(), 1, delayCancelRollback, 0, falseCst, llvm::SmallVector<int64_t>(),
+        delayEnable, mu.getInitValue());
     muDelay->setAttr("spechls.memspec", rewritter.getUnitAttr());
     muDelay->setAttr("spechls.scn", scn);
     for (auto *succ : mu.getResult().getUsers()) {
@@ -233,9 +235,9 @@ private:
     Value lastInputs = muDelay.getResult();
     gammaInputs.push_back(lastInputs);
     for (int i = 0; i < dependencyDistance; i++) {
-      auto input =
-          rewritter.create<spechls::RollbackableDelayOp>(rewritter.getUnknownLoc(), lastInputs.getType(), lastInputs, 1,
-                                                         delayCancelRollback, i + 1, delayEnable, mu.getInitValue());
+      auto input = rewritter.create<spechls::RollbackableDelayOp>(
+          rewritter.getUnknownLoc(), lastInputs.getType(), lastInputs, 1, delayCancelRollback, i + 1, falseCst,
+          llvm::SmallVector<int64_t>(), delayEnable, mu.getInitValue());
       input->setAttr("spechls.memspec", rewritter.getUnitAttr());
       input->setAttr("spechls.scn", scn);
       gammaInputs.push_back(input.getResult());
@@ -289,9 +291,11 @@ SmallVector<SmallVector<Value>> delayValues(PatternRewriter &rewritter, SmallVec
                      .getResult();
         break;
       case DelayType::Rollbackable:
+        auto falseCst = rewritter.create<circt::hw::ConstantOp>(rewritter.getUnknownLoc(), rewritter.getI1Type(), 0);
         newVal = rewritter
                      .create<spechls::RollbackableDelayOp>(rewritter.getUnknownLoc(), val.getType(), val, i, ctrl,
-                                                           (depth - i + 1), enable, initDelay)
+                                                           (depth - i + 1), falseCst, llvm::SmallVector<int64_t>(),
+                                                           enable, initDelay)
                      .getResult();
         break;
       }
