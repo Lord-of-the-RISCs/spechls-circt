@@ -1,6 +1,6 @@
 // RUN: spechls-opt -split-input-file --outline-core %s | spechls-opt |FileCheck %s
 
-//CHECK: wcet.core @core_test(%arg0: i32 {wcet.instrNb = 0 : i32}, %arg1: i32, %arg2: i32 {wcet.nbPred = 0 : i32}, %arg3: i32 {wcet.nbPred = 1 : i32}) -> (i32, i32, i32)
+//CHECK: wcet.core @core_test(%arg0: i32 {wcet.instrNb = 0 : i32}, %arg1: i32, %arg2: !spechls.array<i32, 32>, %arg3: i32 {wcet.nbPred = 0 : i32}, %arg4: i32 {wcet.nbPred = 1 : i32}) -> (i32, !spechls.array<i32, 32>, i32, i32)
 //CHECK-NOT: spechls.delay
 //CHECK-NOT: spechls.mu
 //CHECK: wcet.commit
