@@ -317,6 +317,7 @@ def SpecHLS_RollbackableDelayOp : SpecHLSOp<"rollbackableDelay",
         UI32Attr:$depth,
         I1:$rollback,
         UI32Attr:$offset,
+        DenseI64ArrayAttr:$rollbackDepths,
         Optional<I1>:$enable,
         Optional<AnyType>:$init
     );

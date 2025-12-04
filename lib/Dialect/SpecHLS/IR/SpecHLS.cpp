@@ -537,6 +537,17 @@ ParseResult spechls::RollbackableDelayOp::parse(OpAsmParser &parser, OperationSt
       parser.parseKeyword("rollback") || parser.parseOperand(rollback) || parser.parseKeyword("at") ||
       parser.parseInteger(offset))
     return failure();
+  llvm::SmallVector<int64_t> rollbackDepths;
+  if (parser.parseCommaSeparatedList(AsmParser::Delimiter::Square, [&]() {
+        int64_t depth;
+        if (parser.parseInteger(depth))
+          return failure();
+        rollbackDepths.push_back(depth);
+        return success();
+      }))
+    return failure();
+
+  result.addAttribute(getRollbackDepthsAttrName(result.name), builder.getDenseI32ArrayAttr(rollbackDepths));
   result.addAttribute(getDepthAttrName(result.name), builder.getUI32IntegerAttr(delay));
   result.addAttribute(getOffsetAttrName(result.name), builder.getUI32IntegerAttr(offset));
 
@@ -567,9 +578,10 @@ ParseResult spechls::RollbackableDelayOp::parse(OpAsmParser &parser, OperationSt
 
   return success();
 }
+
 void spechls::RollbackableDelayOp::print(OpAsmPrinter &printer) {
   printer << ' ' << getInput() << " by " << getDepth();
-  printer << " rollback " << getRollback() << " at " << getOffset();
+  printer << " rollback " << getRollback() << " at " << getOffset() << " [" << getRollbackDepths() << "]";
   if (getEnable())
     printer << " if " << getEnable();
   if (getInit())
