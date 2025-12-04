@@ -291,6 +291,7 @@ SpeculationExplorationAnalysis::SpeculationExplorationAnalysis(spechls::TaskOp t
   if (hasUnitII(defaultConfiguration, terminator, baseSchedulingProblem, gammas, targetClock, association, graph)) {
     this->proba = probaInfo.getProbability(defaultConfiguration, memspecGammas);
     this->configuration = std::move(defaultConfiguration);
+    graph.erase();
     return;
   }
   std::priority_queue<ConfigurationType, llvm::SmallVector<ConfigurationType>, ConfigurationComparator> configs,
@@ -319,6 +320,7 @@ SpeculationExplorationAnalysis::SpeculationExplorationAnalysis(spechls::TaskOp t
   if (!resultConfigs.empty()) {
     this->proba = resultConfigs.top().proba;
     this->configuration = std::move(resultConfigs.top().config);
+    graph.erase();
     return;
   }
 
@@ -336,6 +338,7 @@ SpeculationExplorationAnalysis::SpeculationExplorationAnalysis(spechls::TaskOp t
             if (hasUnitII(newConfig, terminator, baseSchedulingProblem, gammas, targetClock, association, graph)) {
               this->proba = proba;
               this->configuration = std::move(newConfig);
+              graph.erase();
               return;
             }
 
@@ -352,6 +355,7 @@ SpeculationExplorationAnalysis::SpeculationExplorationAnalysis(spechls::TaskOp t
   llvm::errs() << "No configuration found.\n";
   this->configuration = llvm::SmallVector<int>();
   this->proba = -1.0;
+  graph.erase();
 }
 
 } // namespace spechls
