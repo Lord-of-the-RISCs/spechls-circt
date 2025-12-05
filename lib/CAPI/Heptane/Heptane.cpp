@@ -13,6 +13,7 @@
 #include "circt/Support/LLVM.h"
 #include "mlir/IR/Operation.h"
 #include "mlir/IR/Verifier.h"
+#include "llvm/Support/raw_ostream.h"
 
 #include <circt-c/Dialect/Comb.h>
 #include <circt-c/Dialect/Debug.h>
@@ -129,8 +130,10 @@ size_t mlirWcetAnalysis(MlirModule module, mlir::SmallVector<size_t> &instrs) {
   auto mod = unwrap(module);
   auto pm = mlir::PassManager::on<mlir::ModuleOp>(mod->getContext());
   pm.addPass(wcet::createSetupAnalysisPass());
-  if (failed(pm.run(mod)))
+  if (failed(pm.run(mod))) {
+    llvm::errs() << "setup failed\n";
     return 0;
+  }
   //==== Analyse each instructions
   for (size_t instr : instrs) {
     pm.clear();
@@ -143,8 +146,10 @@ size_t mlirWcetAnalysis(MlirModule module, mlir::SmallVector<size_t> &instrs) {
     }
     pm.addPass(std::move(insertPass));
     pm.addPass(wcet::createInlineCorePass());
+    pm.addPass(mlir::createCanonicalizerPass());
     pm.addPass(wcet::createLongestPathPass());
     if (failed(pm.run(mod))) {
+      llvm::errs() << "pipeline failed\n";
       return 0;
     }
   }
@@ -157,14 +162,14 @@ size_t mlirWcetAnalysis(MlirModule module, mlir::SmallVector<size_t> &instrs) {
   });
 
   //==== Clean up
-  mlir::Operation *analysisCore;
-  mod->walk([&](mlir::Operation *c) {
-    if (c->hasAttr("wcet.analysis")) {
-      analysisCore = c;
-      return;
-    }
-  });
-  analysisCore->erase();
+  //  mlir::Operation *analysisCore;
+  //  mod->walk([&](mlir::Operation *c) {
+  //    if (c->hasAttr("wcet.analysis")) {
+  //      analysisCore = c;
+  //      return;
+  //    }
+  //  });
+  //  analysisCore->erase();
 
   return wcet;
 }

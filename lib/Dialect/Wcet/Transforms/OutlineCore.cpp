@@ -20,6 +20,7 @@
 #include "llvm/Support/DebugLog.h"
 #include "llvm/Support/raw_ostream.h"
 
+#include "Dialect/SpecHLS/Transforms/Passes.h"
 #include <Dialect/SpecHLS/IR/SpecHLSOps.h>
 #include <Dialect/Wcet/IR/WcetOps.h>
 #include <cstddef>
@@ -59,10 +60,7 @@ public:
     if (!speculativeTask) {
       LLVM_DEBUG({ LDBG() << "No speculative spechls.task found"; });
       signalPassFailure();
-    }
-
-    if (!speculativeTask->getOpOperands().empty()) {
-      LLVM_DEBUG({ LDBG() << "speculative task must have no inputs"; });
+      return;
     }
 
     /**************************************************************************
@@ -211,6 +209,11 @@ public:
 
     for (size_t i = 0; i < coreInputs.size(); i++) {
       speculativeTask->walk([&](Operation *op) {
+        auto opName = op->getName().getStringRef().str();
+        if (opName == spechls::CommitOp::getOperationName().str() ||
+            opName == spechls::TaskOp::getOperationName().str()) {
+          return;
+        }
         for (size_t j = 0; j < op->getNumOperands(); j++) {
           if (op->getOperand(j) == coreInputs[i]) {
             cloneMap[op]->setOperand(j, core.getBody().getArgument(i));
@@ -247,11 +250,15 @@ public:
 
     core->setAttr("wcet.cpuCore", rewriter.getUnitAttr());
     core->setAttr("wcet.numInstrs", rewriter.getUI32IntegerAttr(numInstrs));
+
+    speculativeTask->getParentOfType<spechls::KernelOp>()->erase();
   }
 
 private:
   void getNbDelayPred(OpBuilder &builder, spechls::TaskOp top, SmallVector<Operation *> &firstsDelay) {
     for (auto d : top.getOps<spechls::DelayOp>()) {
+      if (!d.getInput().getDefiningOp())
+        break;
       bool isDelaySucc = llvm::TypeSwitch<Operation *, bool>(d.getInput().getDefiningOp())
                              .Case<spechls::DelayOp, spechls::RollbackableDelayOp, spechls::CancellableDelayOp>(
                                  [&](auto d) { return true; })
@@ -263,6 +270,8 @@ private:
       firstsDelay.push_back(d);
     }
     for (auto d : top.getOps<spechls::CancellableDelayOp>()) {
+      if (!d.getInput().getDefiningOp())
+        break;
       bool isDelaySucc = llvm::TypeSwitch<Operation *, bool>(d.getInput().getDefiningOp())
                              .Case<spechls::DelayOp, spechls::RollbackableDelayOp, spechls::CancellableDelayOp>(
                                  [&](auto d) { return true; })
@@ -274,6 +283,8 @@ private:
       firstsDelay.push_back(d);
     }
     for (auto d : top.getOps<spechls::RollbackableDelayOp>()) {
+      if (!d.getInput().getDefiningOp())
+        break;
       bool isDelaySucc = llvm::TypeSwitch<Operation *, bool>(d.getInput().getDefiningOp())
                              .Case<spechls::DelayOp, spechls::RollbackableDelayOp, spechls::CancellableDelayOp>(
                                  [&](auto d) { return true; })

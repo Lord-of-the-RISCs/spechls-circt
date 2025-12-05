@@ -57,6 +57,7 @@ def Wcet_DummyOp : WcetOp<"dummy", []>  {
 
   let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$outputs);
+  let hasCanonicalizeMethod = 1;
   let assemblyFormat = [{
     $inputs `:` type($inputs) `->` qualified(type($outputs)) attr-dict
   }];
@@ -94,7 +95,7 @@ def Wcet_PenaltyOp : WcetOp<"penalty",
         Optional<AnyType>:$init
     );
     let results = (outs AnyType:$result);
-
+    let hasCanonicalizeMethod = 1;
     let hasCustomAssemblyFormat = 1;
 }
 
@@ -113,7 +114,7 @@ def Wcet_CastOp : WcetOp<"cast",
 
 def Wcet_CoreOp : WcetOp<"core", [
   FunctionOpInterface, IsolatedFromAbove,
-  CallableOpInterface
+  CallableOpInterface, RegionKindInterface
 ]> {
   let summary = "TODO";
   let description = [{ TODO }];
@@ -153,6 +154,9 @@ def Wcet_CoreOp : WcetOp<"core", [
     ::mlir::ArrayRef<::mlir::Type> getArgumentTypes() { return getFunctionType().getInputs(); }
     ::mlir::ArrayRef<::mlir::Type> getResultTypes() {return getFunctionType().getResults(); }
     ::mlir::Region *getCallableRegion() {return &getBody(); }
+        static ::mlir::RegionKind getRegionKind(unsigned) {
+            return ::mlir::RegionKind::Graph;
+        }
   }];
 
   let hasCustomAssemblyFormat = 1;
@@ -168,6 +172,7 @@ def Wcet_CommitOp : WcetOp<"commit", [Pure, HasParent<"CoreOp">, Terminator]> {
   //let builders = [OpBuilder<(ins), [{
   //    build($_builder, $_state, {});
   //  }]>];
+
 
   let assemblyFormat = "attr-dict ($inputs^ `:` type($inputs))?";
 

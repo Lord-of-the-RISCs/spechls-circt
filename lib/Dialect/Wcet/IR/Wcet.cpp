@@ -92,48 +92,50 @@ void wcet::WcetDialect::initialize() {
 // DummyOp
 //===--------------------------------------------------------------------------------------------------------------===//
 
-// LogicalResult wcet::DummyOp::canonicalize(wcet::DummyOp op, PatternRewriter &rewriter) {
-//   // patterns and rewrites go here.
-//   auto inputs = op.getInputs();
-//   auto outputs = op.getOutputs();
-//   SmallVector<Value> newIn = SmallVector<Value>();
-//   SmallVector<Type> newInType = SmallVector<Type>();
-//   bool change = false;
-//   for (size_t i = 0; i < inputs.size(); i++) {
-//     newIn.push_back(inputs[i]);
-//     newInType.push_back(inputs[i].getType());
-//     auto *in = inputs[i].getDefiningOp();
-//     if (!in)
-//       continue;
-//     if (in->hasTrait<mlir::OpTrait::ConstantLike>()) {
-//       rewriter.replaceAllUsesWith(outputs[i], inputs[i]);
-//       newIn.pop_back();
-//       newInType.pop_back();
-//       change = true;
-//     }
-//   }
-//   if (!change)
-//     return failure();
-//
-//   op->setOperands(newIn);
-//   return success();
-// }
+LogicalResult wcet::DummyOp::canonicalize(wcet::DummyOp op, PatternRewriter &rewriter) {
+  // patterns and rewrites go here.
+  auto inputs = op.getInputs();
+  auto outputs = op.getOutputs();
+  SmallVector<Value> newIn = SmallVector<Value>();
+  SmallVector<Type> newInType = SmallVector<Type>();
+  bool change = false;
+  for (size_t i = 0; i < inputs.size(); i++) {
+    newIn.push_back(inputs[i]);
+    newInType.push_back(inputs[i].getType());
+    auto *in = inputs[i].getDefiningOp();
+    if (!in)
+      continue;
+    if (in->hasTrait<mlir::OpTrait::ConstantLike>()) {
+      rewriter.replaceAllUsesWith(outputs[i], inputs[i]);
+      newIn.pop_back();
+      newInType.pop_back();
+      change = true;
+    }
+  }
+  if (!change)
+    return failure();
+
+  op->setOperands(newIn);
+  return success();
+}
 
 //===--------------------------------------------------------------------------------------------------------------===//
 // PenaltyOp
 //===--------------------------------------------------------------------------------------------------------------===//
 
-// LogicalResult wcet::PenaltyOp::canonicalize(wcet::PenaltyOp op, PatternRewriter &rewriter) {
-//   if (!op.getInput().getDefiningOp()->hasTrait<mlir::OpTrait::ConstantLike>())
-//     return failure();
-//   for (auto *us : op.getInput().getUsers()) {
-//     llvm::errs() << us->getName() << "\n";
-//     us->setAttr("wcet.delay", rewriter.getI32IntegerAttr(op.getDepth()));
-//   }
-//   rewriter.replaceAllOpUsesWith(op, op.getInput());
-//   rewriter.eraseOp(op);
-//   return success();
-// }
+LogicalResult wcet::PenaltyOp::canonicalize(wcet::PenaltyOp op, PatternRewriter &rewriter) {
+  if (!op.getInput().getDefiningOp())
+    return failure();
+  if (!op.getInput().getDefiningOp()->hasTrait<mlir::OpTrait::ConstantLike>())
+    return failure();
+  for (auto *us : op.getInput().getUsers()) {
+    llvm::errs() << us->getName() << "\n";
+    us->setAttr("wcet.delay", rewriter.getI32IntegerAttr(op.getDepth()));
+  }
+  rewriter.replaceAllOpUsesWith(op, op.getInput());
+  rewriter.eraseOp(op);
+  return success();
+}
 
 //===--------------------------------------------------------------------------------------------------------------===//
 // CastOp
