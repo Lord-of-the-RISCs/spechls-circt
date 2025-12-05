@@ -24,6 +24,7 @@
 #include "mlir/Transforms/Passes.h"
 
 #include "Dialect/Wcet/IR/WcetOps.h"
+#include "llvm/Support/raw_ostream.h"
 #include <string>
 
 #define DEBUG_TYPE "SetupAnalysis"
@@ -55,14 +56,16 @@ public:
 
     if (!analysisedCore) {
       signalPassFailure();
+      llvm::errs() << "analysisedCore not found\n";
       return;
     }
 
     size_t nbInstrs = 0;
-    auto nbInstrsAttr = dyn_cast_or_null<IntegerAttr>(analysisedCore->getAttr("wcet.nbInstrs"));
+    auto nbInstrsAttr = dyn_cast_or_null<IntegerAttr>(analysisedCore->getAttr("wcet.numInstrs"));
     if (nbInstrsAttr) {
-      nbInstrs = nbInstrsAttr.getInt();
+      nbInstrs = nbInstrsAttr.getUInt();
     } else {
+      llvm::errs() << "nb instruction not found\n";
       signalPassFailure();
       return;
     }

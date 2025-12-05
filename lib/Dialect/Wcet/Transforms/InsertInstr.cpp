@@ -54,7 +54,7 @@ public:
       if (attr) {
         auto numIn = circt::dyn_cast_or_null<IntegerAttr>(core->getAttr("wcet.numInstrs"));
         if (numIn)
-          numInstr = numIn.getInt();
+          numInstr = numIn.getUInt();
         coreAnalysed = core;
         return;
       }
