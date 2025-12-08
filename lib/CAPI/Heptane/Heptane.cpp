@@ -9,6 +9,7 @@
 #include "CAPI/Dialect/SpecHLS.h"
 #include "CAPI/Dialect/Wcet.h"
 #include "Dialect/Schedule/Transforms/Passes.h" // IWYU pragma: keep
+#include "Dialect/Wcet/IR/WcetOps.h"
 #include "Dialect/Wcet/Transforms/Passes.h"
 #include "circt/Support/LLVM.h"
 #include "mlir/IR/Operation.h"
@@ -148,6 +149,8 @@ size_t mlirWcetAnalysis(MlirModule module, mlir::SmallVector<size_t> &instrs) {
     pm.addPass(wcet::createInlineCorePass());
     pm.addPass(mlir::createCanonicalizerPass());
     pm.addPass(wcet::createLongestPathPass());
+    mlir::OpPassManager &nested = pm.nest<wcet::CoreOp>();
+    nested.addPass(wcet::createEraseAnalyzedCorePass());
     if (failed(pm.run(mod))) {
       llvm::errs() << "pipeline failed\n";
       return 0;
@@ -162,14 +165,14 @@ size_t mlirWcetAnalysis(MlirModule module, mlir::SmallVector<size_t> &instrs) {
   });
 
   //==== Clean up
-  //  mlir::Operation *analysisCore;
-  //  mod->walk([&](mlir::Operation *c) {
-  //    if (c->hasAttr("wcet.analysis")) {
-  //      analysisCore = c;
-  //      return;
-  //    }
-  //  });
-  //  analysisCore->erase();
+  mlir::Operation *analysisCore;
+  mod->walk([&](mlir::Operation *c) {
+    if (c->hasAttr("wcet.analysis")) {
+      analysisCore = c;
+      return;
+    }
+  });
+  analysisCore->erase();
 
   return wcet;
 }

@@ -73,7 +73,7 @@ public:
     IRRewriter rewriter(&getContext());
     rewriter.setInsertionPointToEnd(getOperation().getBody());
     auto core = rewriter.create<wcet::CoreOp>(rewriter.getUnknownLoc(), rewriter.getFunctionType({}, {}),
-                                              rewriter.getStringAttr("coreAnalysis"));
+                                              rewriter.getStringAttr(CORE_ANALYSIS_NAME));
     core->setAttr("wcet.analysis", rewriter.getUnitAttr());
     rewriter.setInsertionPointToEnd(&core.getBody().front());
     SmallVector<Value> dummyInputs;
