@@ -107,8 +107,8 @@ LogicalResult wcet::DummyOp::canonicalize(wcet::DummyOp op, PatternRewriter &rew
       continue;
     if (in->hasTrait<mlir::OpTrait::ConstantLike>()) {
       rewriter.replaceAllUsesWith(outputs[i], inputs[i]);
-      newIn.pop_back();
-      newInType.pop_back();
+      // newIn.pop_back();
+      // newInType.pop_back();
       change = true;
     }
   }

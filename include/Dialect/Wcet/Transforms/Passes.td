@@ -22,6 +22,13 @@ def SplitDelaysPass : Pass<"split-delays", "ModuleOp"> {
       ];
   }
 
+def ExtractControlPass : Pass<"extract-control", "ModuleOp"> {
+    let dependentDialects = [
+    "spechls::SpecHLSDialect",
+    "wcet::WcetDialect"
+    ];
+  }
+
 def OutlineCorePass : Pass<"outline-core", "ModuleOp"> {
     let summary = "Outline speculative spechls.task into wcet.core";
 
@@ -99,5 +106,13 @@ def LongestPathPass : Pass<"longest-path", "ModuleOp"> {
     let dependentDialects = [
       "wcet::WcetDialect"
       ];
-  }
+}
+
+def EraseAnalyzedCorePass : Pass<"erase-analyzed-core", "wcet::CoreOp"> {
+  let dependentDialects = [
+  "::circt::hw::HWDialect",
+  "wcet::WcetDialect"
+  ];
+}
+
 #endif // SPECHLS_INCLUDED_DIALECT_WCET_TRANSFORMS_PASSES_TD

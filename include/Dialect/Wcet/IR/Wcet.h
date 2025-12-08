@@ -12,4 +12,6 @@
 
 #include "Dialect/Wcet/IR/WcetDialect.h.inc"
 
+#define CORE_ANALYSIS_NAME "coreAnalysis"
+
 #endif // SPECHLS_INCLUDED_DIALECT_WCET_IR_WCET_H
