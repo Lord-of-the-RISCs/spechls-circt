@@ -15,11 +15,13 @@
 #include "Dialect/Wcet/Transforms/Passes.h"
 #include "mlir/IR/OpDefinition.h"
 #include "mlir/IR/PatternMatch.h"
+#include "mlir/IR/Types.h"
 #include "mlir/Support/LLVM.h"
 #include "llvm/Support/raw_ostream.h"
 #include <circt/Dialect/HW/HWOps.h>
 
 #include <deque>
+#include <optional>
 
 using namespace mlir;
 

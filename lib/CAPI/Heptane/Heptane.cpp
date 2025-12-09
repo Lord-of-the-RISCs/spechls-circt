@@ -12,9 +12,15 @@
 #include "Dialect/Wcet/IR/WcetOps.h"
 #include "Dialect/Wcet/Transforms/Passes.h"
 #include "circt/Support/LLVM.h"
+#include "mlir/IR/OpDefinition.h"
 #include "mlir/IR/Operation.h"
+#include "mlir/IR/PatternMatch.h"
 #include "mlir/IR/Verifier.h"
+#include "llvm/ADT/STLExtras.h"
+#include "llvm/ADT/SmallVector.h"
 #include "llvm/Support/raw_ostream.h"
+#include <circt/Dialect/HW/HWOps.h>
+#include <llvm/Support/Format.h>
 
 #include <circt-c/Dialect/Comb.h>
 #include <circt-c/Dialect/Debug.h>
@@ -30,6 +36,7 @@
 #include <circt-c/Dialect/Verif.h>
 #include <circt/Dialect/SSP/SSPDialect.h>
 #include <circt/Dialect/SSP/SSPOps.h>
+#include <ios>
 #include <mlir-c/Dialect/ControlFlow.h>
 #include <mlir-c/Dialect/Func.h>
 #include <mlir-c/Dialect/Math.h>
@@ -46,6 +53,53 @@
 
 #include "CAPI/Heptane/Heptane.h"
 
+using namespace mlir;
+
+namespace {
+
+wcet::CoreOp createAnalyseCore(IRRewriter &rewriter, ModuleOp &top, wcet::CoreOp &analyzedCore,
+                               SmallVector<std::optional<IntegerAttr>> &state, SmallVector<Type> &types,
+                               size_t instrs) {
+
+  rewriter.setInsertionPointToEnd(top.getBody());
+  wcet::CoreOp result = rewriter.create<wcet::CoreOp>(rewriter.getUnknownLoc(), rewriter.getFunctionType({}, {}),
+                                                      rewriter.getStringAttr(CORE_ANALYSIS_NAME));
+  result->setAttr("wcet.analysis", rewriter.getUnitAttr());
+  rewriter.setInsertionPointToEnd(&result.getBody().front());
+
+  SmallVector<Value> coreInputs;
+  auto instr =
+      rewriter.create<circt::hw::ConstantOp>(rewriter.getUnknownLoc(), analyzedCore.getArgumentTypes().front(), instrs);
+  coreInputs.push_back(instr);
+
+  SmallVector<Value> dummyInputs;
+  for (auto st : llvm::enumerate(state)) {
+    if (st.value().has_value()) {
+      dummyInputs.push_back(
+          rewriter.create<circt::hw::ConstantOp>(rewriter.getUnknownLoc(), types[st.index()], st.value().value()));
+    } else {
+      dummyInputs.push_back(rewriter.create<wcet::InitOp>(rewriter.getUnknownLoc(), types[st.index()], "Unknown"));
+    }
+  }
+
+  auto firstDummy = rewriter.create<wcet::DummyOp>(rewriter.getUnknownLoc(), types, dummyInputs);
+  firstDummy->setAttr("wcet.current", rewriter.getUnitAttr());
+  for (auto out : firstDummy.getOutputs()) {
+    coreInputs.push_back(out);
+  }
+
+  auto coreInstance = rewriter.create<wcet::CoreInstanceOp>(rewriter.getUnknownLoc(), analyzedCore, coreInputs);
+
+  auto secondDummy = rewriter.create<wcet::DummyOp>(rewriter.getUnknownLoc(), coreInstance->getResultTypes(),
+                                                    coreInstance->getResults());
+  secondDummy->setAttr("wcet.next", rewriter.getUnitAttr());
+
+  rewriter.create<wcet::CommitOp>(rewriter.getUnknownLoc(), result->getResultTypes(), ValueRange());
+  // result->dumpPretty();
+  return result;
+}
+
+} // namespace
 extern "C" {
 
 //===--------------------------------------------------------------------------------------------------------------===//
@@ -126,54 +180,90 @@ void destroyMLIR(MlirModule module) {
   }
 
 void mlirDumpModule(MlirModule module) { unwrap(module)->dump(); }
+
 size_t mlirWcetAnalysis(MlirModule module, mlir::SmallVector<size_t> &instrs) {
-  //==== Setup module
+  //==== Setup Analysis
+  size_t wcet = 0;
   auto mod = unwrap(module);
-  auto pm = mlir::PassManager::on<mlir::ModuleOp>(mod->getContext());
-  pm.addPass(wcet::createSetupAnalysisPass());
-  if (failed(pm.run(mod))) {
-    llvm::errs() << "setup failed\n";
-    return 0;
+  mlir::IRRewriter rewriter(mod->getContext());
+
+  wcet::CoreOp analyzedCore = nullptr;
+  mod->walk([&](wcet::CoreOp c) {
+    if (c->hasAttr("wcet.cpuCore"))
+      analyzedCore = c;
+  });
+
+  mlir::SmallVector<std::optional<mlir::IntegerAttr>> state;
+  mlir::SmallVector<Type> stateTypes;
+
+  for (auto type : analyzedCore.getResultTypes()) {
+    stateTypes.push_back(type);
+    state.push_back({});
   }
-  //==== Analyse each instructions
-  for (size_t instr : instrs) {
-    pm.clear();
-    auto insertPass = wcet::createInsertInstrPass();
-    if (mlir::failed(insertPass->initializeOptions("instrs=" + std::to_string(instr), [](const mlir::Twine &msg) {
-          llvm::errs() << msg << "\n";
-          return mlir::failure();
-        }))) {
-      return 0;
-    }
-    pm.addPass(std::move(insertPass));
+
+  // llvm::errs() << "begins analysis\n";
+  for (auto instr : instrs) {
+    auto core = createAnalyseCore(rewriter, mod, analyzedCore, state, stateTypes, instr);
+    auto pm = mlir::PassManager::on<mlir::ModuleOp>(mod->getContext());
+
     pm.addPass(wcet::createInlineCorePass());
     pm.addPass(mlir::createCanonicalizerPass());
     pm.addPass(wcet::createLongestPathPass());
-    mlir::OpPassManager &nested = pm.nest<wcet::CoreOp>();
-    nested.addPass(wcet::createEraseAnalyzedCorePass());
     if (failed(pm.run(mod))) {
       llvm::errs() << "pipeline failed\n";
       return 0;
     }
+
+    size_t currentWcet = 0;
+    wcet::DummyOp lastDum = nullptr;
+    for (auto d : core.getOps<wcet::DummyOp>()) {
+      if (!d->hasAttr("wcet.next"))
+        continue;
+      auto wAttr = dyn_cast_or_null<IntegerAttr>(d->getAttr("wcet.dists"));
+      if (wAttr) {
+        currentWcet = wAttr.getInt();
+        lastDum = d;
+        break;
+      }
+    }
+    if (!lastDum) {
+      llvm::errs() << "instruction fail " << instr << "\n";
+      return 0;
+    }
+    // llvm::errs() << "wcet of the instr: " << llvm::format("0x%08x", instr) << " - " << currentWcet << "\n";
+    // core->dumpPretty();
+
+    assert(lastDum->getResultTypes().size() == analyzedCore.getResultTypes().size());
+    SmallVector<std::optional<IntegerAttr>> dumResult;
+    for (auto d : lastDum.getInputs()) {
+      auto lastResultOp = dyn_cast_or_null<circt::hw::ConstantOp>(d.getDefiningOp());
+      if (lastResultOp) {
+        dumResult.push_back(lastResultOp.getValueAttr());
+        continue;
+      }
+      dumResult.push_back({});
+    }
+
+    state.clear();
+    assert(analyzedCore.getResultTypes().size() + 1 == analyzedCore.getArgumentTypes().size());
+    for (size_t i = 0; i < analyzedCore.getResultTypes().size(); i++) {
+      auto nbPred = dyn_cast_or_null<IntegerAttr>(analyzedCore.getArgAttr(i + 1, "wcet.nbPred"));
+      if (!nbPred || nbPred.getInt() == 0) {
+        state.push_back(dumResult[i]);
+      } else if (nbPred.getInt() > (int64_t)currentWcet) {
+        state.push_back(dumResult[i - currentWcet]);
+      } else {
+        IntegerType it = dyn_cast_or_null<IntegerType>(stateTypes[i]);
+        if (it && it.getWidth() == 1) {
+          state.push_back(rewriter.getIntegerAttr(rewriter.getI1Type(), 0));
+        } else {
+          state.push_back({});
+        }
+      }
+    }
+    core->erase();
+    wcet += currentWcet;
   }
-  //==== Retrieve the Wcet
-  size_t wcet = 0;
-  mod->walk([&](mlir::Operation *op) {
-    if (op->hasAttr("wcet.penalties")) {
-      wcet += mlir::cast<mlir::IntegerAttr>(op->getAttr("wcet.penalties")).getInt();
-    }
-  });
-
-  //==== Clean up
-  mlir::Operation *analysisCore;
-  mod->walk([&](mlir::Operation *c) {
-    if (c->hasAttr("wcet.analysis")) {
-      analysisCore = c;
-      return;
-    }
-  });
-  analysisCore->erase();
-
   return wcet;
 }
 }
