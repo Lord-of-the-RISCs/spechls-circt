@@ -7,6 +7,7 @@
 
 #include "Dialect/SpecHLS/IR/SpecHLSOps.h"
 
+#include "circt/Dialect/HW/HWOps.h"
 #include "circt/Support/LLVM.h"
 #include "mlir/IR/OpDefinition.h"
 #include <llvm/ADT/STLExtras.h>
@@ -25,6 +26,7 @@
 #include "Dialect/SpecHLS/IR/SpecHLSTypes.h"
 #include "Utils.h"
 #include "llvm/Support/LogicalResult.h"
+#include "llvm/Support/raw_ostream.h"
 
 using namespace mlir;
 
@@ -305,6 +307,26 @@ LogicalResult spechls::GammaOp::verify() {
   return success();
 }
 
+// LogicalResult spechls::GammaOp::canonicalize(spechls::GammaOp op, PatternRewriter &rewriter) {
+//   auto *selectOp = op.getSelect().getDefiningOp();
+//   if (!selectOp)
+//     return failure();
+//
+//   auto hwCons = dyn_cast_or_null<circt::hw::ConstantOp>(selectOp);
+//   if (!hwCons) {
+//     return failure();
+//   }
+//   auto idxAttr = hwCons.getValueAttr();
+//   auto idx = idxAttr.getInt();
+//   auto sidx = (size_t)(idx & ((idxAttr.getType().getIntOrFloatBitWidth() << 1) - 1));
+//   // llvm::errs() << "gamma: " << op.getSymNameAttrName() << " - " << sidx << "\n";
+//   if (sidx >= op.getInputs().size()) {
+//     return failure();
+//   }
+//   rewriter.replaceAllOpUsesWith(op, op.getInputs()[sidx]);
+//   return success();
+// }
+
 ParseResult spechls::MuOp::parse(OpAsmParser &parser, OperationState &result) {
   // Parse the symbol name specifier.
   StringAttr symbolNameAttr;
@@ -430,6 +452,25 @@ LogicalResult spechls::LUTOp::verify() {
 
   return success();
 }
+
+// LogicalResult spechls::LUTOp::canonicalize(spechls::LUTOp op, PatternRewriter &rewriter) {
+//   auto *selectOp = op.getIndex().getDefiningOp();
+//   if (!selectOp)
+//     return failure();
+//
+//   auto hwCons = dyn_cast_or_null<circt::hw::ConstantOp>(selectOp);
+//   if (!hwCons)
+//     return failure();
+//
+//   auto idxAttr = hwCons.getValueAttr();
+//   auto idx = idxAttr.getInt();
+//
+//   if ((size_t)idx >= op.getContents().size())
+//     return failure();
+//
+//   rewriter.replaceOpWithNewOp<circt::hw::ConstantOp>(op, op.getType(), op.getContents()[idx]);
+//   return success();
+// }
 
 ParseResult spechls::DelayOp::parse(OpAsmParser &parser, OperationState &result) {
   auto &builder = parser.getBuilder();

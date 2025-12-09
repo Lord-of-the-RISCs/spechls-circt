@@ -22,6 +22,7 @@
 #include "mlir/IR/Verifier.h"
 #include "mlir/Pass/PassManager.h"
 #include "mlir/Transforms/DialectConversion.h"
+#include "llvm/Support/raw_ostream.h"
 
 using namespace mlir;
 
@@ -53,6 +54,11 @@ public:
         return;
       }
     });
+    if (!core) {
+      llvm::errs() << "no core to analyse\n";
+      signalPassFailure();
+      return;
+    }
 
     wcet::DummyOp startPoint = nullptr;
     wcet::DummyOp endPoint = nullptr;
@@ -76,8 +82,7 @@ public:
 
     longestPath(startPoint, rewriter, rewriter.getStringAttr("wcet.dists"));
 
-    startPoint->removeAttr("wcet.current");
-    endPoint->setAttr("wcet.penalties", endPoint->getAttr("wcet.dists"));
+    // endPoint->setAttr("wcet.WCET", endPoint->getAttr("wcet.dists"));
   }
 };
 

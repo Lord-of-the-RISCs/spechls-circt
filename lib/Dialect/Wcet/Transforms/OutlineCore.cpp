@@ -112,22 +112,42 @@ public:
           rewriter.getDictionaryAttr(rewriter.getNamedAttr("wcet.nbPred", rewriter.getI32IntegerAttr(0))));
       coreOutputs.push_back(d->getOperand(0).getDefiningOp());
       toRemove.push_back(d);
-      spechls::DelayOp nextDelay = nullptr;
+      Operation *nextDelay = nullptr;
       for (auto *op : d->getUsers()) {
+        if (op == d)
+          continue;
         auto nd = dyn_cast_or_null<spechls::DelayOp>(op);
         if (nd) {
           nextDelay = nd;
           break;
         }
+        auto clnd = dyn_cast_or_null<spechls::CancellableDelayOp>(op);
+        if (clnd) {
+          nextDelay = clnd;
+          break;
+        }
+        auto rbnd = dyn_cast_or_null<spechls::RollbackableDelayOp>(op);
+        if (rbnd) {
+          d->dumpPretty();
+          llvm::errs() << "------------\n";
+          rbnd->dumpPretty();
+          nextDelay = rbnd;
+          break;
+        }
       }
       int nbPred = 0;
       while (nextDelay) {
-        coreInputs.push_back(nextDelay);
-        coreInputsTypes.push_back(nextDelay.getType());
-        coreOutputsTypes.push_back(nextDelay.getType());
+        auto rb = dyn_cast_or_null<spechls::RollbackableDelayOp>(nextDelay);
+        if (rb) {
+          llvm::errs() << "here too\n";
+          rb->dumpPretty();
+        }
+        coreInputs.push_back(nextDelay->getResult(0));
+        coreInputsTypes.push_back(nextDelay->getResultTypes().front());
+        coreOutputsTypes.push_back(nextDelay->getResultTypes().front());
         coreInputsAttrs.push_back(
             rewriter.getDictionaryAttr(rewriter.getNamedAttr("wcet.nbPred", rewriter.getI32IntegerAttr(++nbPred))));
-        coreOutputs.push_back(nextDelay.getInput().getDefiningOp());
+        coreOutputs.push_back(nextDelay->getOperand(0).getDefiningOp());
         toRemove.push_back(nextDelay);
         auto nextUsers = nextDelay->getUsers();
         nextDelay = nullptr;
@@ -135,6 +155,19 @@ public:
           auto nd = dyn_cast_or_null<spechls::DelayOp>(op);
           if (nd) {
             nextDelay = nd;
+            break;
+          }
+          auto clnd = dyn_cast_or_null<spechls::CancellableDelayOp>(op);
+          if (clnd) {
+            nextDelay = clnd;
+            break;
+          }
+          auto rbnd = dyn_cast_or_null<spechls::RollbackableDelayOp>(op);
+          if (rbnd) {
+            d->dumpPretty();
+            llvm::errs() << "------------\n";
+            rbnd->dumpPretty();
+            nextDelay = rbnd;
             break;
           }
         }
