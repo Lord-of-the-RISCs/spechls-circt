@@ -86,4 +86,9 @@ def SpeculationExplorationPass: Pass<"speculation-exploration", "spechls::Kernel
   ];
 }
 
+def LowerDelaysPass: Pass<"lower-spechls-delays", "spechls::KernelOp"> {
+  let summary = "Lower special delays into delays and their special nodes.";
+  let dependentDialects = ["::spechls::SpecHLSDialect", "::circt::hw::HWDialect", "::circt::comb::CombDialect"];
+}
+
 #endif // SPECHLS_INCLUDED_DIALECT_SPECHLS_TRANSFORMS_PASSES_TD

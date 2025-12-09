@@ -16,7 +16,8 @@
 namespace spechls {
 
 inline bool topologicalSortCriterion(mlir::Value, mlir::Operation *op) {
-  return mlir::isa<spechls::MuOp>(op) || mlir::isa<spechls::DelayOp>(op);
+  return mlir::isa<spechls::MuOp>(op) || mlir::isa<spechls::DelayOp>(op) ||
+         mlir::isa<spechls::CancellableDelayOp>(op) || mlir::isa<spechls::RollbackableDelayOp>(op);
 }
 
 } // namespace spechls

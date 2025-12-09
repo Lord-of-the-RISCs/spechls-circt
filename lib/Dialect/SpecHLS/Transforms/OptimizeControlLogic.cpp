@@ -95,8 +95,9 @@ public:
 
 llvm::DenseSet<Operation *> OptimizeControlLogicPass::sliceControl(Operation *firstOp) {
   auto isValidForMerging = [](Operation *op) {
-    return !(isa<spechls::MuOp>(op) || isa<spechls::AlphaOp>(op) || isa<spechls::DelayOp>(op) ||
-             isa<spechls::LoadOp>(op) || isa<spechls::CallOp>(op) || isa<spechls::FieldOp>(op));
+    return !(llvm::isa<spechls::MuOp>(op) || llvm::isa<spechls::AlphaOp>(op) || llvm::isa<spechls::DelayOp>(op) ||
+             llvm::isa<spechls::LoadOp>(op) || llvm::isa<spechls::CallOp>(op) || llvm::isa<spechls::FieldOp>(op) ||
+             llvm::isa<spechls::CancellableDelayOp>(op) || llvm::isa<spechls::RollbackableDelayOp>(op));
   };
   llvm::DenseSet<Operation *> result;
   llvm::SmallVector<Operation *> workingList;

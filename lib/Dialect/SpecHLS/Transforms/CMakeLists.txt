@@ -35,6 +35,7 @@ add_circt_dialect_library(SpecHLSTransforms
     SimplifyComb.cpp
     InferLSQ.cpp
     SpeculationExplorationPass.cpp
+    LowerDelays.cpp
 
     DEPENDS
     SpecHLSTransformsIncGen

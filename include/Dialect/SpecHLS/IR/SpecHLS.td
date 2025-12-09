@@ -297,8 +297,9 @@ def SpecHLS_CancellableDelayOp : SpecHLSOp<"cancellableDelay",
     let arguments = (ins
         I1:$input,
         UI32Attr:$depth,
-        I1:$cancel,
+        AnyInteger:$cancel,
         UI32Attr:$offset,
+        I1:$cancelWe,
         Optional<I1>:$enable,
         Optional<I1>:$init
     );
@@ -315,8 +316,10 @@ def SpecHLS_RollbackableDelayOp : SpecHLSOp<"rollbackableDelay",
     let arguments = (ins
         AnyType:$input,
         UI32Attr:$depth,
-        I1:$rollback,
+        AnyInteger:$rollback,
         UI32Attr:$offset,
+        I1:$rbWe,
+        DenseI64ArrayAttr:$rollbackDepths,
         Optional<I1>:$enable,
         Optional<AnyType>:$init
     );
