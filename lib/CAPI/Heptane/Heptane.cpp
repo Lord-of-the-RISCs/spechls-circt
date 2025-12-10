@@ -208,6 +208,8 @@ size_t mlirWcetAnalysis(MlirModule module, mlir::SmallVector<size_t> &instrs) {
 
     pm.addPass(wcet::createInlineCorePass());
     pm.addPass(mlir::createCanonicalizerPass());
+    pm.addPass(wcet::createConstantPropPass());
+    pm.addPass(mlir::createCanonicalizerPass());
     pm.addPass(wcet::createLongestPathPass());
     if (failed(pm.run(mod))) {
       llvm::errs() << "pipeline failed\n";

@@ -98,6 +98,14 @@ def InlineCorePass : Pass<"inline-core", "mlir::ModuleOp"> {
     }];
   }
 
+def ConstantPropPass : Pass<"constant-prop", "mlir::ModuleOp"> {
+    let dependentDialects = [
+    "::mlir::pdl::PDLDialect",
+    "::mlir::pdl_interp::PDLInterpDialect",
+    "::circt::hw::HWDialect",
+    "spechls::SpecHLSDialect"
+    ];
+  }
 
 def LongestPathPass : Pass<"longest-path", "ModuleOp"> {
     let summary = "Find the path between two dummyOp with the most penalties";
