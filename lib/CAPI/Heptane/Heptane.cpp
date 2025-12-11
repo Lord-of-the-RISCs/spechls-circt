@@ -9,9 +9,12 @@
 #include "CAPI/Dialect/SpecHLS.h"
 #include "CAPI/Dialect/Wcet.h"
 #include "Dialect/Schedule/Transforms/Passes.h" // IWYU pragma: keep
+#include "Dialect/SpecHLS/IR/SpecHLSOps.h"
+#include "Dialect/SpecHLS/IR/SpecHLSTypes.h"
 #include "Dialect/Wcet/IR/WcetOps.h"
 #include "Dialect/Wcet/Transforms/Passes.h"
 #include "circt/Support/LLVM.h"
+#include "mlir/IR/BuiltinAttributes.h"
 #include "mlir/IR/OpDefinition.h"
 #include "mlir/IR/Operation.h"
 #include "mlir/IR/PatternMatch.h"
@@ -20,6 +23,7 @@
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/Support/raw_ostream.h"
 #include <circt/Dialect/HW/HWOps.h>
+#include <cstdint>
 #include <llvm/Support/Format.h>
 
 #include <circt-c/Dialect/Comb.h>
@@ -36,7 +40,6 @@
 #include <circt-c/Dialect/Verif.h>
 #include <circt/Dialect/SSP/SSPDialect.h>
 #include <circt/Dialect/SSP/SSPOps.h>
-#include <ios>
 #include <mlir-c/Dialect/ControlFlow.h>
 #include <mlir-c/Dialect/Func.h>
 #include <mlir-c/Dialect/Math.h>
@@ -97,6 +100,35 @@ wcet::CoreOp createAnalyseCore(IRRewriter &rewriter, ModuleOp &top, wcet::CoreOp
   rewriter.create<wcet::CommitOp>(rewriter.getUnknownLoc(), result->getResultTypes(), ValueRange());
   // result->dumpPretty();
   return result;
+}
+
+int64_t retrieveWcet(spechls::FSMOp &fsm) {
+  auto packOp = dyn_cast_or_null<spechls::PackOp>(fsm.getMispec().getDefiningOp());
+  auto penArr = fsm.getInputDelays();
+  if (!packOp)
+    return 0;
+
+  int64_t wcet = 0;
+
+  for (auto in : llvm::enumerate(packOp.getInputs())) {
+    auto inPen = cast<mlir::ArrayAttr>(penArr[in.index()]);
+    auto inOp = in.value().getDefiningOp<circt::hw::ConstantOp>();
+    int64_t max = 0;
+    if (!inOp) {
+      for (auto attr : inPen) {
+        int64_t current = cast<IntegerAttr>(attr).getInt();
+        if (current > max)
+          max = current;
+      }
+    } else {
+      auto idx = inOp.getValueAttr().getInt();
+      max = cast<IntegerAttr>(inPen[idx]).getInt();
+    }
+    if (max > wcet)
+      wcet = max;
+  }
+
+  return wcet;
 }
 
 } // namespace
@@ -210,29 +242,27 @@ size_t mlirWcetAnalysis(MlirModule module, mlir::SmallVector<size_t> &instrs) {
     pm.addPass(mlir::createCanonicalizerPass());
     pm.addPass(wcet::createConstantPropPass());
     pm.addPass(mlir::createCanonicalizerPass());
-    pm.addPass(wcet::createLongestPathPass());
+    // pm.addPass(wcet::createLongestPathPass());
     if (failed(pm.run(mod))) {
       llvm::errs() << "pipeline failed\n";
       return 0;
     }
 
-    size_t currentWcet = 0;
+    spechls::FSMOp fsm;
+    core->walk([&](spechls::FSMOp f) { fsm = f; });
+    size_t currentWcet = (size_t)retrieveWcet(fsm);
     wcet::DummyOp lastDum = nullptr;
     for (auto d : core.getOps<wcet::DummyOp>()) {
       if (!d->hasAttr("wcet.next"))
         continue;
-      auto wAttr = dyn_cast_or_null<IntegerAttr>(d->getAttr("wcet.dists"));
-      if (wAttr) {
-        currentWcet = wAttr.getInt();
-        lastDum = d;
-        break;
-      }
+      lastDum = d;
+      break;
     }
     if (!lastDum) {
       llvm::errs() << "instruction fail " << instr << "\n";
       return 0;
     }
-    // llvm::errs() << "wcet of the instr: " << llvm::format("0x%08x", instr) << " - " << currentWcet << "\n";
+    llvm::errs() << "wcet of the instr: " << llvm::format("0x%08x", instr) << " - " << currentWcet << "\n";
     // core->dumpPretty();
 
     assert(lastDum->getResultTypes().size() == analyzedCore.getResultTypes().size());
@@ -266,6 +296,7 @@ size_t mlirWcetAnalysis(MlirModule module, mlir::SmallVector<size_t> &instrs) {
     core->erase();
     wcet += currentWcet;
   }
+
   return wcet;
 }
 }
