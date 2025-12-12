@@ -7,6 +7,7 @@
 
 #include "Dialect/Wcet/IR/WcetOps.h"
 
+#include "Utils.h"
 #include "mlir/IR/Attributes.h"
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/BuiltinTypes.h"
@@ -21,6 +22,7 @@
 #include "mlir/Interfaces/CallInterfaces.h"
 #include "mlir/Interfaces/FunctionImplementation.h"
 #include "mlir/Transforms/InliningUtils.h"
+#include <circt/Dialect/HW/HWOps.h>
 #include <llvm/ADT/STLExtras.h>
 #include <llvm/ADT/TypeSwitch.h>
 #include <llvm/Support/DebugLog.h>
@@ -32,9 +34,11 @@
 #include <mlir/Interfaces/CallInterfaces.h>
 #include <mlir/Interfaces/FunctionImplementation.h>
 #include <mlir/Support/LLVM.h>
+#include <type_traits>
 
 #include "Dialect/Wcet/IR/WcetDialect.cpp.inc"
 #include "llvm/ADT/ArrayRef.h"
+#include "llvm/Support/LogicalResult.h"
 
 using namespace mlir;
 
@@ -234,6 +238,120 @@ void wcet::PenaltyOp::print(OpAsmPrinter &printer) {
   if (getInit())
     printer << " init " << getInit();
   printer << " : " << getType();
+}
+
+ParseResult wcet::GammaOp::parse(OpAsmParser &parser, OperationState &result) {
+  // Parse the symbol name specifier.
+  StringAttr symbolNameAttr;
+  if (parser.parseLess() || parser.parseAttribute(symbolNameAttr, getSymNameAttrName(result.name), result.attributes) ||
+      parser.parseGreater() || parser.parseLParen())
+    return failure();
+
+  // Parse operands.
+  OpAsmParser::UnresolvedOperand select;
+  if (parser.parseOperand(select))
+    return failure();
+  SmallVector<OpAsmParser::UnresolvedOperand> inputs;
+  SMLoc inputsLoc = parser.getCurrentLocation();
+  if (parser.parseTrailingOperandList(inputs) || parser.parseRParen())
+    return failure();
+
+  // Parse the attribute dictionary.
+  if (parser.parseOptionalAttrDict(result.attributes))
+    return failure();
+
+  // Parse the type specifiers.
+  Type selectType;
+  Type argType;
+  if (parser.parseColon() || parser.parseType(selectType) || parser.parseComma() || parser.parseType(argType))
+    return failure();
+
+  // Resolve operands.
+  SmallVector<Type> inputTypes(inputs.size(), argType);
+  if (parser.resolveOperand(select, selectType, result.operands) ||
+      parser.resolveOperands(inputs, inputTypes, inputsLoc, result.operands) ||
+      parser.addTypeToList(argType, result.types))
+    return failure();
+
+  return success();
+}
+
+void wcet::GammaOp::print(OpAsmPrinter &printer) {
+  auto select = getSelect();
+  auto inputs = getInputs();
+
+  printer << "<\"" << getSymName() << "\">(" << select << ", " << inputs << ") "
+          << (*this)->getDiscardableAttrDictionary() << ": " << select.getType() << ", " << inputs.front().getType();
+}
+
+LogicalResult wcet::GammaOp::verify() {
+  auto inputs = getInputs();
+  if (inputs.size() < 2)
+    return emitOpError("expects at least two data inputs");
+
+  unsigned int selectWidth = getSelect().getType().getWidth();
+  if (selectWidth < utils::getMinBitwidth(inputs.size() - 1))
+    return emitOpError("has a select signal too narrow (")
+           << selectWidth << " bit" << ((selectWidth > 1) ? "s" : "") << ") to select all of its inputs (required "
+           << utils::getMinBitwidth(inputs.size() - 1) << ")";
+
+  return success();
+}
+
+LogicalResult wcet::GammaOp::canonicalize(wcet::GammaOp gamma, PatternRewriter &rewriter) {
+  auto selectOp = dyn_cast<circt::hw::ConstantOp>(gamma.getSelect().getDefiningOp());
+  if (!selectOp)
+    return failure();
+  auto idxAttr = selectOp.getValueAttr();
+  auto idx = idxAttr.getInt();
+  auto sidx = (size_t)(idx & ((1 << idxAttr.getType().getIntOrFloatBitWidth()) - 1));
+  if (sidx >= gamma.getInputs().size()) {
+    return failure();
+  }
+  rewriter.replaceAllOpUsesWith(gamma, gamma.getInputs()[sidx]);
+  return success();
+}
+
+LogicalResult wcet::LUTOp::verify() {
+  size_t contentSize = getContents().size();
+  if (!(contentSize > 0 && (contentSize & (contentSize - 1)) == 0)) {
+    return emitOpError("contents size sould be a power of two");
+  }
+
+  auto indexWidth = getIndex().getType().getWidth();
+  size_t contentWidth = utils::getMinBitwidth(getContents().size() - 1);
+  if (indexWidth != contentWidth) {
+    return emitOpError("has an index too ") << ((indexWidth < contentWidth) ? "narrow" : "wide") << " (" << indexWidth
+                                            << " bit" << ((indexWidth > 1) ? "s" : "") << ")";
+  }
+
+  // Make sure that the result type is wide enough to represent all of the LUT's possible values.
+  unsigned requiredBits = 0;
+  for (int64_t value : getContents()) {
+    unsigned neededBits = utils::getMinBitwidth(value);
+    if (neededBits > requiredBits)
+      requiredBits = neededBits;
+  }
+  auto resultWidth = getResult().getType().getWidth();
+  if (resultWidth < requiredBits) {
+    return emitOpError("has a result type too narrow to represent all possible values (required at least ")
+           << requiredBits << " bits, but got " << resultWidth << ")";
+  }
+
+  return success();
+}
+
+LogicalResult wcet::LUTOp::canonicalize(wcet::LUTOp lut, PatternRewriter &rewriter) {
+
+  auto selectOp = dyn_cast<circt::hw::ConstantOp>(lut.getIndex().getDefiningOp());
+  if (!selectOp)
+    return failure();
+
+  auto idxAttr = selectOp.getValueAttr();
+  size_t idx = (size_t)(idxAttr.getInt() & ((1 << selectOp.getType().getIntOrFloatBitWidth()) - 1));
+  auto cnst = rewriter.create<circt::hw::ConstantOp>(rewriter.getUnknownLoc(), lut.getType(), lut.getContents()[idx]);
+  rewriter.replaceAllOpUsesWith(lut, cnst);
+  return success();
 }
 
 #define GET_TYPEDEF_CLASSES
