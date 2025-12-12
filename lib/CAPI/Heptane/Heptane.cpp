@@ -239,12 +239,8 @@ size_t mlirWcetAnalysis(MlirModule module, mlir::SmallVector<size_t> &instrs) {
     auto pm = mlir::PassManager::on<mlir::ModuleOp>(mod->getContext());
 
     pm.addPass(wcet::createInlineCorePass());
-    pm.addPass(mlir::createCanonicalizerPass());
-    pm.addPass(wcet::createConstantPropPass());
-    pm.addPass(mlir::createCanonicalizerPass());
     // pm.addPass(wcet::createLongestPathPass());
-    if (failed(pm.run(mod))) {
-      llvm::errs() << "pipeline failed\n";
+    if (failed(pm.run(core->getParentOfType<mlir::ModuleOp>()))) {
       return 0;
     }
 
@@ -262,7 +258,7 @@ size_t mlirWcetAnalysis(MlirModule module, mlir::SmallVector<size_t> &instrs) {
       llvm::errs() << "instruction fail " << instr << "\n";
       return 0;
     }
-    llvm::errs() << "wcet of the instr: " << llvm::format("0x%08x", instr) << " - " << currentWcet << "\n";
+    // llvm::errs() << "wcet of the instr: " << llvm::format("0x%08x", instr) << " - " << currentWcet << "\n";
     // core->dumpPretty();
 
     assert(lastDum->getResultTypes().size() == analyzedCore.getResultTypes().size());
