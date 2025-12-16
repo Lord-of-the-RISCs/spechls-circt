@@ -31,9 +31,9 @@ add_circt_dialect_library(SpecHLSTransforms
     OptimizeControlLogic.cpp
     RemoveIntraRAW.cpp
     ExposeMemorySpeculation.cpp
- #   ExposeControlFlowSpeculation.cpp
- #   GenerateHazardControlFSM.cpp
- #    ArrayPartitioning.cpp
+   ExposeControlFlowSpeculation.cpp
+    GenerateHazardControlFSM.cpp
+     ArrayPartitioning.cpp
     FactorGammaInputs.cpp
     SpecHLSTopoSort.cpp
     SimplifyComb.cpp
