@@ -281,5 +281,34 @@ struct ConvertSpecHLSToHWPass : public spechls::impl::SpecHLSToHWPassBase<Conver
   }
 };
 
+struct SpecHLSTaskToHWPass : public spechls::impl::SpecHLSTaskToHWPassBase<SpecHLSTaskToHWPass> {
+
+  FrozenRewritePatternSet patterns;
+
+  using SpecHLSTaskToHWPassBase<SpecHLSTaskToHWPass>::SpecHLSTaskToHWPassBase;
+
+  LogicalResult initialize(MLIRContext *ctx) override {
+    RewritePatternSet patternList{ctx};
+    patternList.add<KernelConversion>(ctx);
+    patternList.add<TaskConversion>(ctx);
+    patternList.add<GammaConversion>(ctx);
+    patternList.add<LutConversion>(ctx);
+    patterns = std::move(patternList);
+    return success();
+  }
+
+  void runOnOperation() override {
+    ConversionTarget target(getContext());
+    target.addLegalDialect<circt::hw::HWDialect>();
+    target.addLegalDialect<circt::comb::CombDialect>();
+    target.addIllegalDialect<spechls::SpecHLSDialect>();
+    target.addLegalDialect<circt::seq::SeqDialect>();
+
+    target.addIllegalOp<spechls::KernelOp, spechls::TaskOp,spechls::GammaOp,spechls::LUTOp>();
+
+    if (failed(mlir::applyFullConversion(getOperation(), target, patterns)))
+      return signalPassFailure();
+  }
+};
 
 } // namespace

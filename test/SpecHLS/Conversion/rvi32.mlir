@@ -1,4 +1,10 @@
-spechls.kernel @SCC_0(%0 : !spechls.array<ui8, 4194304>, %1 : !spechls.array<ui8, 4194304>, %2 : !spechls.array<ui8, 4194304>, %3 : !spechls.array<ui8, 4194304>, %4 : si32, %5 : i1, %6 : !spechls.array<ui32, 32>, %7 : ui32, %8 : !spechls.array<ui32, 4194304>, %9 : i1) attributes {spechls.max_scc=0} {
+spechls.kernel @SCC_0(
+%0 : !spechls.array<ui8, 4194304>,
+%1 : !spechls.array<ui8, 4194304>,
+%2 : !spechls.array<ui8, 4194304>,
+%3 : !spechls.array<ui8, 4194304>,
+%4 : si32,
+%5 : i1, %6 : !spechls.array<ui32, 32>, %7 : ui32, %8 : !spechls.array<ui32, 4194304>, %9 : i1) attributes {spechls.max_scc=0} {
     %11 = hw.constant 99 : i7
     %10 = hw.bitcast %11 : (i7) -> ui7
     %13 = hw.constant 103 : i7

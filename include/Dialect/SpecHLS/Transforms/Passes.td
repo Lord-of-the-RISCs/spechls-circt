@@ -68,4 +68,35 @@ def SimplifyCombPass: Pass<"simplify-comb", "::ModuleOp"> {
   let dependentDialects = ["::circt::comb::CombDialect", "::circt::hw::HWDialect"];
 }
 
+def FactorGammaInputsPass : Pass<"factor-gamma-inputs", "ModuleOp"> {
+  let summary = "Simplify LUT patterns.";
+  let dependentDialects = ["::spechls::SpecHLSDialect", "::circt::hw::HWDialect", "::circt::comb::CombDialect"];
+}
+
+def ExposeControlFlowSpeculation : Pass<"expose-cf-speculation", "ModuleOp"> {
+  let summary = "Insert CF flow speculation for a given GammaConfiguration.";
+  let dependentDialects = ["::spechls::SpecHLSDialect", "::circt::hw::HWDialect", "::circt::comb::CombDialect"];
+}
+
+
+def ArrayPartitioning : Pass<"partition-array", "ModuleOp"> {
+  let summary = "Partition a named SpecHLS array (MuOp) into blocks and rewrite loads/stores accordingly.";
+  let dependentDialects = [
+    "::spechls::SpecHLSDialect",
+    "::circt::hw::HWDialect",
+    "::circt::comb::CombDialect",
+    "::mlir::arith::ArithDialect"
+  ];
+
+  // Pass options (fields become C++ members with the same name as varName).
+  let options = [
+    Option<"arrayName",  "array-name",  "std::string", /*default=*/"",
+           "Target MuOp symbol name to partition">,
+    Option<"blockSize",  "block-size",  "int64_t",     /*default=*/"0",
+           "Partition block size (0 means auto: arraySize/nb-blocks)">,
+    Option<"nbBlocks",   "nb-blocks",   "int64_t",     /*default=*/"4",
+           "Number of blocks/partitions">
+  ];
+}
+
 #endif // SPECHLS_INCLUDED_DIALECT_SPECHLS_TRANSFORMS_PASSES_TD
