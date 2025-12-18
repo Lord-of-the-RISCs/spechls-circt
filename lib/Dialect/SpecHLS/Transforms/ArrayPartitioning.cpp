@@ -39,8 +39,7 @@ namespace spechls {
 /// This is a *graph traversal* following result users. `visit(op)` returns:
 ///   - true  => continue traversal
 ///   - false => stop early (and typically signalPassFailure from caller).
-static void traverseForwardUses(Operation *start,
-                               const std::function<bool(Operation *)> &visit) {
+static void traverseForwardUses(Operation *start, const std::function<bool(Operation *)> &visit) {
   SmallVector<Operation *, 16> worklist;
   llvm::SmallPtrSet<Operation *, 32> seen;
 
@@ -68,21 +67,25 @@ static void traverseForwardUses(Operation *start,
 /// We map: original array SSA value -> vector of per-partition array SSA values.
 /// This is the key fix compared to storing ops: partitioning is about SSA values.
 using PartitionVec = SmallVector<Value, 4>;
-using PartitionMap = llvm::DenseMap<void*, PartitionVec>;
+using PartitionMap = llvm::DenseMap<Value, PartitionVec>;
 
-static FailureOr<const PartitionVec *> lookupPartitions(PartitionMap &pm,
-                                                        Value arrayVal) {
+static FailureOr<const PartitionVec *> lookupPartitions(PartitionMap &pm, Value arrayVal) {
 
-    llvm::outs() << "searching key: " <<  arrayVal << "\n";
+  llvm::outs() << "searching key: " << arrayVal << "::" << arrayVal.getAsOpaquePointer() << "\n";
   // iterate over pm and print keys
-  for (const auto &pair : pm) {
-    Value key = mlir::Value::getFromOpaquePointer(pair.first);
-    llvm::outs() << "\tPartitionMap key: " << key << "\n";
-  }
-  auto it = pm.find(arrayVal.getAsOpaquePointer());
-  if (it == pm.end())
+  // for (const auto &pair : pm) {
+  //   llvm::outs() << "\t- found key: " <<  pair.first << "::"<< pair.first.getAsOpaquePointer() << "\n";
+  // }
+  auto val = pm[arrayVal];
+  auto it = pm.find(arrayVal);
+  if (it == pm.end()) {
+
+    llvm::outs() << "key not found " << arrayVal << "::" << arrayVal.getAsOpaquePointer() << "\n";
     return failure();
-  return &it->second;
+  } else {
+    llvm::outs() << "key found " << arrayVal << "::" << arrayVal.getAsOpaquePointer() << "\n";
+    return &it->second;
+  }
 }
 
 //===----------------------------------------------------------------------===//
@@ -116,33 +119,27 @@ static Value castToI32(IRRewriter &rewriter, Location loc, Value v) {
 }
 
 static Value cstI32(IRRewriter &rewriter, Location loc, int64_t v) {
-  return rewriter.create<hw::ConstantOp>(loc, rewriter.getI32IntegerAttr(v))
-      .getResult();
+  return rewriter.create<hw::ConstantOp>(loc, rewriter.getI32IntegerAttr(v)).getResult();
 }
 
 /// Block partitioning math:
 ///   partId = index / block_size   in [0..nb_blocks-1]
 ///   offset = index % block_size   in [0..block_size-1]
-static Value computeBlockPartitionId(IRRewriter &rewriter, Location loc,
-                                     Value index, int64_t block_size) {
+static Value computeBlockPartitionId(IRRewriter &rewriter, Location loc, Value index, int64_t block_size) {
   Value idx32 = castToI32(rewriter, loc, index);
   Value bs32 = cstI32(rewriter, loc, block_size);
   return rewriter.create<comb::DivUOp>(loc, idx32, bs32).getResult();
 }
 
-static Value computeBlockOffset(IRRewriter &rewriter, Location loc, Value index,
-                                int64_t block_size) {
+static Value computeBlockOffset(IRRewriter &rewriter, Location loc, Value index, int64_t block_size) {
   Value idx32 = castToI32(rewriter, loc, index);
   Value bs32 = cstI32(rewriter, loc, block_size);
   return rewriter.create<comb::ModUOp>(loc, idx32, bs32).getResult();
 }
 
-static Value isPartition(IRRewriter &rewriter, Location loc, Value partIdI32,
-                         int64_t idConst) {
+static Value isPartition(IRRewriter &rewriter, Location loc, Value partIdI32, int64_t idConst) {
   Value idV = cstI32(rewriter, loc, idConst);
-  return rewriter
-      .create<comb::ICmpOp>(loc, comb::ICmpPredicate::eq, partIdI32, idV)
-      .getResult();
+  return rewriter.create<comb::ICmpOp>(loc, comb::ICmpPredicate::eq, partIdI32, idV).getResult();
 }
 
 static Value andI1(IRRewriter &rewriter, Location loc, Value a, Value b) {
@@ -153,10 +150,8 @@ static Value andI1(IRRewriter &rewriter, Location loc, Value a, Value b) {
 // Type building for partitioned arrays
 //===----------------------------------------------------------------------===//
 
-static spechls::ArrayType buildPartitionArrayType(spechls::ArrayType arrayTy,
-                                                 int64_t nbBlocks,
-                                                 int64_t blockSize,
-                                                 MLIRContext *ctx) {
+static spechls::ArrayType buildPartitionArrayType(spechls::ArrayType arrayTy, int64_t nbBlocks, int64_t blockSize,
+                                                  MLIRContext *ctx) {
   assert(nbBlocks > 0 && "nbBlocks must be > 0");
   assert(blockSize > 0 && "blockSize must be > 0");
   // This pass implements equal-size block partitioning; enforce consistency.
@@ -171,15 +166,14 @@ static spechls::ArrayType buildPartitionArrayType(spechls::ArrayType arrayTy,
 // Pass
 //===----------------------------------------------------------------------===//
 
-struct ArrayPartitioning
-    : public spechls::impl::ArrayPartitioningBase<ArrayPartitioning> {
+struct ArrayPartitioning : public spechls::impl::ArrayPartitioningBase<ArrayPartitioning> {
 
-    ArrayPartitioning() = default;
+  ArrayPartitioning() = default;
 
-    // Forward option-based ctor to the generated base if the registration/emit
-    // code constructs the pass with options.
-    ArrayPartitioning(const spechls::ArrayPartitioningOptions &opts)
-        : spechls::impl::ArrayPartitioningBase<ArrayPartitioning>(opts) {}
+  // Forward option-based ctor to the generated base if the registration/emit
+  // code constructs the pass with options.
+  ArrayPartitioning(const spechls::ArrayPartitioningOptions &opts)
+      : spechls::impl::ArrayPartitioningBase<ArrayPartitioning>(opts) {}
   void runOnOperation() override {
     MLIRContext *ctx = &getContext();
     Operation *top = getOperation();
@@ -213,8 +207,7 @@ struct ArrayPartitioning
     });
 
     if (!targetMu) {
-      top->emitError(Twine("partition-array: no MuOp found with name '") +
-                     targetName + "'");
+      top->emitError(Twine("partition-array: no MuOp found with name '") + targetName + "'");
       signalPassFailure();
       return;
     }
@@ -233,10 +226,8 @@ struct ArrayPartitioning
     if (blockSizeOpt == 0) {
       // Auto mode: require exact divisibility.
       if (fullSize % nbBlocks != 0) {
-        targetMu.emitError()
-            << "partition-array: array size (" << fullSize
-            << ") is not divisible by nb-blocks (" << nbBlocks
-            << "); either change nb-blocks or set --block-size explicitly";
+        targetMu.emitError() << "partition-array: array size (" << fullSize << ") is not divisible by nb-blocks ("
+                             << nbBlocks << "); either change nb-blocks or set --block-size explicitly";
         signalPassFailure();
         return;
       }
@@ -245,10 +236,8 @@ struct ArrayPartitioning
       blockSize = blockSizeOpt;
       // Enforce exact match: equal-size block partitioning.
       if (blockSize * nbBlocks != fullSize) {
-        targetMu.emitError()
-            << "partition-array: invalid (block-size * nb-blocks) = ("
-            << blockSize << " * " << nbBlocks << ") != array size (" << fullSize
-            << ")";
+        targetMu.emitError() << "partition-array: invalid (block-size * nb-blocks) = (" << blockSize << " * "
+                             << nbBlocks << ") != array size (" << fullSize << ")";
         signalPassFailure();
         return;
       }
@@ -260,8 +249,7 @@ struct ArrayPartitioning
       return;
     }
 
-    spechls::ArrayType partArrayTy =
-        buildPartitionArrayType(arrayTy, nbBlocks, blockSize, ctx);
+    spechls::ArrayType partArrayTy = buildPartitionArrayType(arrayTy, nbBlocks, blockSize, ctx);
     if (!partArrayTy) {
       targetMu.emitError("partition-array: failed to build partition ArrayType");
       signalPassFailure();
@@ -275,43 +263,82 @@ struct ArrayPartitioning
     PartitionMap partitions;
 
     PartitionVec muParts;
+    PartitionVec initParts;
     muParts.reserve(nbBlocks);
+    initParts.reserve(nbBlocks);
+   auto kernelOp = dyn_cast<KernelOp>(targetMu->getParentOp());
+
+    auto init = targetMu.getInitValue();
+    // if init is blokc operand, we partition it too
+    auto arg = dyn_cast<BlockArgument>(init);
+    if (arg != nullptr) {
+      // add argument to block
+      for (int64_t i = 0; i < nbBlocks; ++i) {
+        auto newarg = init.getParentBlock()->addArgument(partArrayTy, init.getLoc());
+
+        initParts.push_back(newarg);
+      }
+
+      // 1. Update function type
+
+      if (kernelOp == nullptr) {
+        targetMu.emitError("MuOp has no parent function");
+        signalPassFailure();
+        return;
+      }
+      FunctionType oldType = kernelOp.getFunctionType();
+      if (oldType == nullptr) {
+        targetMu.emitError("parent op has not a Function type");
+        signalPassFailure();
+        return;
+      }
+      SmallVector<Type> newInputs(oldType.getInputs().begin(), oldType.getInputs().end());
+      for (int64_t i = 0; i < nbBlocks; ++i) {
+        newInputs.push_back(partArrayTy);
+      }
+      auto newType = FunctionType::get(kernelOp->getContext(), newInputs, oldType.getResults());
+
+      kernelOp.setFunctionType(newType);
+
+    } else {
+      targetMu.emitError("invalid pattern for partitioning");
+      signalPassFailure();
+    }
 
     for (int64_t i = 0; i < nbBlocks; ++i) {
-      std::string newSym =
-          (targetMu.getSymName().str() + "_part_" + std::to_string(i));
+      std::string newSym = (targetMu.getSymName().str() + "_part_" + std::to_string(i));
 
       // NOTE: This assumes MuOp builder is (loc, resultTy, symName, init, loop).
       // If your MuOp signature differs, adjust accordingly.
-      auto newMu = rewriter.create<spechls::MuOp>(targetMu.getLoc(), partArrayTy,
-                                                  newSym, targetMu.getInitValue(),
-                                                  targetMu.getLoopValue());
+      auto newMu =
+          rewriter.create<spechls::MuOp>(targetMu.getLoc(), partArrayTy, newSym, initParts[i], targetMu.getLoopValue());
+
+      // newMu.verify();
       muParts.push_back(newMu.getResult());
       llvm::outs() << "Created partitioned MuOp: " << newMu << "\n";
     }
-    partitions[targetMu.getResult().getAsOpaquePointer()] = muParts;
+    partitions[targetMu.getResult()] = muParts;
 
-    // 4) Rewrite forward users.
-    traverseForwardUses(targetMu, [&](Operation *o) -> bool {
-      rewriter.setInsertionPointAfter(o);
+    // 4) collect forward users.
+    llvm::SmallVector<Operation *, 32> users;
+    llvm::SmallVector<Operation *, 32> deadOps;
 
-      return llvm::TypeSwitch<Operation *, bool>(o)
-          .Case<spechls::AlphaOp>([&](spechls::AlphaOp alpha) -> bool {
-            // // Alpha: update array. Create one Alpha per partition and gate WE.
-            // llvm::outs() << "Alpha found: " << alpha << "\n";
-            // llvm::outs() << "  - array value: " << alpha.getArray() << "\n";
-            // //iterate over partitions
-            // for (auto &p : partitions) {
-            //   llvm::outs() << "    - partitioned array value: " << p.first << "\n";
-            //   // for (auto &pv : p.second) {
-            //   //   llvm::outs() << "      - partition value: " << pv << "\n";
-            //   // }
-            // }
+    deadOps.push_back(targetMu);
+
+    traverseForwardUses(targetMu.getOperation(), [&](Operation *o) -> bool {
+      users.push_back(o);
+      llvm::outs() << "Found user op: " << *o << "\n";
+      return true;
+    }); // 4) Rewrite forward users.
+
+    for (auto o : users) {
+      llvm::outs() << "dispatch on: " << *o << "\n";
+      llvm::TypeSwitch<Operation *>(o)
+          .Case<spechls::AlphaOp>([&](spechls::AlphaOp alpha) {
             auto partsOrFail = lookupPartitions(partitions, alpha.getArray());
             if (failed(partsOrFail)) {
               alpha.emitError("partition-array: no mapping for alpha.getArray()");
-              //signalPassFailure();
-              return false;
+              signalPassFailure();
             }
             const PartitionVec &inParts = **partsOrFail;
 
@@ -319,68 +346,61 @@ struct ArrayPartitioning
             outParts.reserve(nbBlocks);
 
             Location loc = alpha.getLoc();
-            Value partId =
-                computeBlockPartitionId(rewriter, loc, alpha.getIndex(), blockSize);
-            Value offset =
-                computeBlockOffset(rewriter, loc, alpha.getIndex(), blockSize);
+            Value partId = computeBlockPartitionId(rewriter, loc, alpha.getIndex(), blockSize);
+            Value offset = computeBlockOffset(rewriter, loc, alpha.getIndex(), blockSize);
 
             for (int64_t i = 0; i < nbBlocks; ++i) {
               Value isThis = isPartition(rewriter, loc, partId, i);
               Value we_i = andI1(rewriter, loc, alpha.getWe(), isThis);
 
-              auto newAlpha = rewriter.create<spechls::AlphaOp>(
-                  loc, partArrayTy, inParts[i], alpha.getValue(), offset, we_i);
+              auto newAlpha =
+                  rewriter.create<spechls::AlphaOp>(loc, partArrayTy, inParts[i], alpha.getValue(), offset, we_i);
               llvm::outs() << "Created partitioned AlphaOp: " << newAlpha << "\n";
               outParts.push_back(newAlpha.getResult());
             }
 
-            partitions[alpha.getResult().getAsOpaquePointer()] = outParts;
-            return true;
+            partitions[alpha.getResult()] = outParts;
+            deadOps.push_back(alpha);
           })
-          .Case<spechls::LoadOp>([&](spechls::LoadOp load) -> bool {
+          .Case<spechls::LoadOp>([&](spechls::LoadOp load) {
             // Load: read from array. Load each partition at offset, then Gamma select.
             llvm::outs() << "Search partition for LoadOp: " << load.getArray() << "\n";
             auto partsOrFail = lookupPartitions(partitions, load.getArray());
             if (failed(partsOrFail)) {
               load.emitError("partition-array: no mapping for load.getArray()");
-              //signalPassFailure();
-              return false;
+              signalPassFailure();
             }
             const PartitionVec &inParts = **partsOrFail;
 
             Location loc = load.getLoc();
 
-            Value partId =
-                computeBlockPartitionId(rewriter, loc, load.getIndex(), blockSize);
-            Value offset =
-                computeBlockOffset(rewriter, loc, load.getIndex(), blockSize);
+            Value partId = computeBlockPartitionId(rewriter, loc, load.getIndex(), blockSize);
+            Value offset = computeBlockOffset(rewriter, loc, load.getIndex(), blockSize);
 
             SmallVector<Value, 8> perPartLoads;
             perPartLoads.reserve(nbBlocks);
 
             for (int64_t i = 0; i < nbBlocks; ++i) {
-              auto newLoad = rewriter.create<spechls::LoadOp>(
-                  loc, load.getResult().getType(), inParts[i], offset);
+              auto newLoad = rewriter.create<spechls::LoadOp>(loc, load.getResult().getType(), inParts[i], offset);
               perPartLoads.push_back(newLoad.getResult());
               llvm::outs() << "Created partitioned LoadOp: " << newLoad << "\n";
             }
 
-            auto gamma = rewriter.create<spechls::GammaOp>(
-                loc, load.getResult().getType(),
-                rewriter.getStringAttr("load_part_select"), partId,
-                ValueRange(perPartLoads));
+            auto gamma = rewriter.create<spechls::GammaOp>(loc, load.getResult().getType(),
+                                                           rewriter.getStringAttr("load_part_select"), partId,
+                                                           ValueRange(perPartLoads));
             llvm::outs() << "Created merging GammaOp: " << gamma << "\n";
             load.replaceAllUsesWith(gamma.getResult());
-            return true;
+            deadOps.push_back(load);
           })
-          .Case<spechls::SyncOp>([&](spechls::SyncOp sync) -> bool {
+          .Case<spechls::SyncOp>([&](spechls::SyncOp sync) {
             // Sync: expand operands that are partitioned into all partitions.
             Location loc = sync.getLoc();
             SmallVector<Value, 16> newOperands;
             llvm::SmallPtrSet<Value, 16> seen;
 
             for (Value opnd : sync.getOperands()) {
-              auto it = partitions.find(opnd.getAsOpaquePointer());
+              auto it = partitions.find(opnd);
               if (it == partitions.end()) {
                 if (seen.insert(opnd).second)
                   newOperands.push_back(opnd);
@@ -394,12 +414,60 @@ struct ArrayPartitioning
 
             auto newSync = rewriter.create<spechls::SyncOp>(loc, newOperands);
             sync.replaceAllUsesWith(newSync.getResult());
-            return true;
+            deadOps.push_back(sync);
           })
-          .Default([&](Operation *) -> bool { return true; });
-    });
+          .Default([&](Operation *other) { llvm::outs() << "unexpected op " << *other; });
+   }
 
-    // Cleanup is intentionally not forced here; rely on later DCE/canonicalize.
+   for (int i=0;i<nbBlocks;i++) {
+      Value mu = muParts[i];
+
+        llvm::outs() << "\n\nPartitioned MuOp value: " << mu << "\n";
+      auto muOp = dyn_cast<MuOp>(mu.getDefiningOp());
+      if (muOp!=nullptr) {
+        llvm::outs() << "MuOp details: " << muOp << "\n";
+        auto partsOrFail = lookupPartitions(partitions, muOp.getLoopValue());
+        if (failed(partsOrFail)) {
+          muOp.emitError("partition-array: no mapping for load.getArray()");
+          signalPassFailure();
+        }
+        const PartitionVec &inParts = **partsOrFail;
+        for (size_t j=0;j<inParts.size();j++)
+          llvm::outs() << "\t- init part " << j << ": " << inParts[j] << "\n";
+        muOp.setOperand(1, inParts[i]);
+      }
+   }
+
+    targetMu.setOperand(1, init); // restore original init to target MuOp
+
+    bool changed = true;
+
+
+    // remove SCC dead ops
+    while (changed) {
+      changed = false;
+
+      // Index loop so we can remove elements safely.
+      for (size_t i = 0; i < deadOps.size(); ) {
+        mlir::Operation *op = deadOps[i];
+
+        if (op && op->use_empty()) {
+          rewriter.eraseOp(op);
+
+          // Remove op from deadOps in O(1) by swapping with the last element.
+          deadOps[i] = deadOps.back();
+          deadOps.pop_back();
+
+          changed = true;
+          // don't ++i because we need to process the element we swapped in
+        } else {
+          ++i;
+        }
+      }
+    }
+    llvm::outs() << kernelOp << "\n";
+
+     llvm::outs() << "End of pass\n";
   }
 };
 
