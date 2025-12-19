@@ -11,6 +11,7 @@
 #include "Dialect/SpecHLS/IR/SpecHLSOps.h"
 #include "Dialect/SpecHLS/IR/SpecHLSTypes.h"
 #include "Dialect/SpecHLS/Transforms/Passes.h"
+#include "mlir/Support/WalkResult.h"
 
 #include <circt-c/Dialect/Comb.h>
 #include <circt-c/Dialect/Debug.h>
@@ -221,6 +222,13 @@ bool mlirModuleInferLSQ(MlirModule mod) {
   return failed(pm.run(module));
 }
 
+bool spechlsLowerComplexOperation(MlirModule mod) {
+  auto module = unwrap(mod);
+  auto pm = mlir::PassManager::on<mlir::ModuleOp>(module.getContext());
+  pm.addNestedPass<spechls::KernelOp>(spechls::createLowerComplexOperationsPass());
+  return failed(pm.run(module));
+}
+
 void mlirDumpModule(MlirModule module) { unwrap(module)->dump(); }
 void mlirDumpOperation(MlirOperation op) { unwrap(op)->dump(); }
 void mlirDumpValue(MlirValue val) { unwrap(val).dump(); }
@@ -256,5 +264,75 @@ MlirType spechlsKernelGetArgumentType(MlirOperation op, int index) {
 MlirType spechlsGetCommitType(MlirOperation op) {
   auto task = unwrap(op)->getParentOfType<spechls::TaskOp>();
   return wrap(task->getResultTypes().front());
+}
+
+bool exposeControlFlowSpeculation(MlirModule module, const char *targetTask, double clockPeriod, const char *target,
+                                  const char *targetsFile, double probabilityThreshold, const char *traceFileName) {
+  return unwrap(module)
+      .walk([&](spechls::KernelOp kernel) {
+        auto pm = mlir::PassManager::on<spechls::KernelOp>(kernel->getContext());
+        pm.addPass(spechls::createExposeControlFlowSpeculationPass(spechls::ExposeControlFlowSpeculationPassOptions{
+            targetTask, clockPeriod, target, targetsFile, probabilityThreshold, traceFileName, false}));
+        if (failed(pm.run(kernel)))
+          return mlir::WalkResult::interrupt();
+        return mlir::WalkResult::advance();
+      })
+      .wasInterrupted();
+}
+
+bool exposeControlFlowSpeculationAllTasks(MlirModule module, double clockPeriod, const char *target,
+                                          const char *targetsFile, double probabilityThreshold,
+                                          const char *traceFileName) {
+  return unwrap(module)
+      .walk([&](spechls::KernelOp kernel) {
+        auto pm = mlir::PassManager::on<spechls::KernelOp>(kernel->getContext());
+        pm.addPass(spechls::createExposeControlFlowSpeculationPass(spechls::ExposeControlFlowSpeculationPassOptions{
+            "", clockPeriod, target, targetsFile, probabilityThreshold, traceFileName, false}));
+        if (failed(pm.run(kernel)))
+          return mlir::WalkResult::interrupt();
+        return mlir::WalkResult::advance();
+      })
+      .wasInterrupted();
+}
+
+bool linearizeTasks(MlirModule mod) {
+  auto module = unwrap(mod);
+  auto pm = mlir::PassManager::on<mlir::ModuleOp>(module->getContext());
+  pm.addNestedPass<spechls::KernelOp>(spechls::createLinearizeTaskPass());
+  return failed(pm.run(module));
+}
+
+bool mergeTasks(MlirModule mod) {
+  auto module = unwrap(mod);
+  auto pm = mlir::PassManager::on<mlir::ModuleOp>(module.getContext());
+  pm.addNestedPass<spechls::KernelOp>(spechls::createMergeTasksPass());
+  return failed(pm.run(module));
+}
+
+bool speculationPipeline(MlirModule mod, double clockPeriod, const char *target, const char *targetsFile,
+                         double probabilityThreshold, const char *traceFileName) {
+  auto module = unwrap(mod);
+  auto *ctx = module->getContext();
+  auto pm = mlir::PassManager::on<mlir::ModuleOp>(ctx);
+  pm.addPass(mlir::createCanonicalizerPass());
+  pm.addPass(mlir::createCSEPass());
+  pm.addNestedPass<spechls::KernelOp>(spechls::createLinearizeTaskPass());
+  pm.addPass(mlir::createCanonicalizerPass());
+  pm.addPass(mlir::createCSEPass());
+  pm.addNestedPass<spechls::KernelOp>(spechls::createExposeControlFlowSpeculationPass(
+      spechls::ExposeControlFlowSpeculationPassOptions{.targetTask = "",
+                                                       .clockPeriod = clockPeriod,
+                                                       .target = target,
+                                                       .targetsFile = targetsFile,
+                                                       .probabilityThreshold = probabilityThreshold,
+                                                       .traceFileName = traceFileName,
+                                                       .wcetModel = false}));
+  pm.addPass(mlir::createCanonicalizerPass());
+  pm.addPass(mlir::createCSEPass());
+  pm.addNestedPass<spechls::KernelOp>(spechls::createMergeTasksPass());
+  pm.addPass(mlir::createCanonicalizerPass());
+  pm.addPass(mlir::createCSEPass());
+
+  return failed(pm.run(module));
 }
 }
