@@ -24,6 +24,7 @@
 #include "Dialect/SpecHLS/IR/SpecHLSDialect.cpp.inc"
 #include "Dialect/SpecHLS/IR/SpecHLSTypes.h"
 #include "Utils.h"
+#include "mlir/IR/PatternMatch.h"
 #include "llvm/Support/LogicalResult.h"
 
 using namespace mlir;
@@ -293,8 +294,8 @@ void spechls::GammaOp::print(OpAsmPrinter &printer) {
 
 LogicalResult spechls::GammaOp::verify() {
   auto inputs = getInputs();
-  if (inputs.size() < 2)
-    return emitOpError("expects at least two data inputs");
+  // if (inputs.size() < 2)
+  //   return emitOpError("expects at least two data inputs");
 
   unsigned int selectWidth = getSelect().getType().getWidth();
   if (selectWidth < utils::getMinBitwidth(inputs.size() - 1))
@@ -666,6 +667,74 @@ mlir::OpFoldResult spechls::FieldOp::fold(FoldAdaptor adaptor) {
     }
   }
   return nullptr;
+}
+
+llvm::LogicalResult spechls::CallOp::canonicalize(CallOp op, ::mlir::PatternRewriter &rewriter) {
+  if (op->hasAttr("spechls.pure")) {
+    for (auto res : op.getResults())
+      if (res.getNumUses() != 0)
+        return llvm::failure();
+
+    rewriter.eraseOp(op);
+    return llvm::success();
+  }
+  return llvm::failure();
+}
+
+struct RemoveUnusedTaskInputPattern : OpRewritePattern<spechls::TaskOp> {
+  using OpRewritePattern<spechls::TaskOp>::OpRewritePattern;
+  LogicalResult matchAndRewrite(spechls::TaskOp task, PatternRewriter &rewriter) const override {
+    for (unsigned index = 0; index < task.getArgs().size(); ++index) {
+      if (task.getBodyBlock()->getArgument(index).getNumUses() == 0) {
+        rewriter.modifyOpInPlace(task, [&]() {
+          task.getBodyBlock()->eraseArgument(index);
+          task.getArgsMutable().erase(index);
+        });
+        return llvm::success();
+      }
+    }
+    return llvm::failure();
+  }
+};
+
+struct RemoveDuplicateTaskInputsPattern : OpRewritePattern<spechls::TaskOp> {
+  using OpRewritePattern<spechls::TaskOp>::OpRewritePattern;
+  LogicalResult matchAndRewrite(spechls::TaskOp task, PatternRewriter &rewriter) const override {
+
+    llvm::DenseMap<mlir::Value, unsigned> firstPositions;
+    llvm::SmallVector<mlir::Value> newArgs;
+    llvm::BitVector eraseIndices;
+    for (unsigned index = 0; index < task.getArgs().size(); ++index) {
+      auto arg = task.getArgs()[index];
+      if (!firstPositions.contains(arg)) {
+        firstPositions.try_emplace(arg, index);
+        eraseIndices.push_back(false);
+        newArgs.push_back(arg);
+      } else {
+        eraseIndices.push_back(true);
+      }
+    }
+    if (newArgs.size() != task.getArgs().size()) {
+      for (unsigned index = 0; index < task.getArgs().size(); ++index) {
+        auto arg = task.getArgs()[index];
+        if (firstPositions[arg] != index) {
+          task.getBodyBlock()->getArgument(index).replaceAllUsesWith(
+              task.getBodyBlock()->getArgument(firstPositions[arg]));
+        }
+      }
+      rewriter.modifyOpInPlace(task, [&]() {
+        task.getBodyBlock()->eraseArguments(eraseIndices);
+        task.getArgsMutable().assign(newArgs);
+      });
+      return llvm::success();
+    }
+    return llvm::failure();
+  }
+};
+
+void spechls::TaskOp::getCanonicalizationPatterns(RewritePatternSet &patterns, MLIRContext *context) {
+  patterns.add<RemoveUnusedTaskInputPattern>(context);
+  patterns.add<RemoveDuplicateTaskInputsPattern>(context);
 }
 
 //===--------------------------------------------------------------------------------------------------------------===//

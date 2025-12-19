@@ -151,6 +151,9 @@ def SpecHLS_TaskOp : SpecHLSOp<"task", [SingleBlock, RegionKindInterface, Isolat
             return &getBody().front();
         }
     }];
+
+
+    let hasCanonicalizer = 1;
 }
 
 def SpecHLS_CommitOp : SpecHLSOp<"commit", [HasParent<"TaskOp">, Terminator]> {
@@ -229,6 +232,8 @@ def SpecHLS_CallOp : SpecHLSOp<"call",
                 setNameFn(getResult(), getCallee());
         }
     }];
+
+    let hasCanonicalizeMethod = 1;
 }
 
 def SpecHLS_AlphaOp : SpecHLSOp<"alpha"> {
