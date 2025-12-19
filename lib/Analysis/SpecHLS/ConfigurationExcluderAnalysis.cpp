@@ -89,7 +89,7 @@ ConfigurationExcluderAnalysis::ConfigurationExcluderAnalysis(spechls::TaskOp tas
       bool isGamma = llvm::isa<spechls::GammaOp>(op);
       int forcedEntry = 0;
       if (isGamma) {
-        forcedEntry = mapConfiguration[llvm::cast<spechls::GammaOp>(op)];
+        forcedEntry = mapConfiguration[llvm::dyn_cast<spechls::GammaOp>(op)];
         if (forcedEntry != 0)
           isGamma = false;
       }
