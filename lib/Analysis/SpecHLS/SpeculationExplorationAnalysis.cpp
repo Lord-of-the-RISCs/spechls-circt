@@ -15,6 +15,7 @@
 #include <circt/Scheduling/Problems.h>
 #include <circt/Support/LLVM.h>
 #include <llvm/ADT/SmallVector.h>
+#include <llvm/ADT/TypeSwitch.h>
 #include <llvm/Support/LogicalResult.h>
 #include <mlir/Dialect/Bufferization/IR/BufferizableOpInterface.h>
 #include <mlir/IR/Attributes.h>
@@ -72,7 +73,7 @@ constructBaseProblem(spechls::TaskOp task, double targetClock, mlir::OpBuilder &
 
   // Declare operation and operator type.
   // Do not declare dependence yet as other operation may not be declared yet.
-  circt::scheduling::ChainingCyclicProblem problem(task);
+  circt::scheduling::ChainingCyclicProblem problem(graph);
   task.getBodyBlock()->walk([&](mlir::Operation *op) {
     llvm::SmallVector<mlir::Value> operands;
     auto sspOp = builder.create<circt::ssp::OperationOp>(op->getLoc(), 1, operands,
@@ -90,16 +91,17 @@ constructBaseProblem(spechls::TaskOp task, double targetClock, mlir::OpBuilder &
         ++latency;
       }
     }
-    sspOp->setAttr("lat", mlir::IntegerAttr::get(mlir::IntegerType::get(ctx, 32), latency));
-    sspOp->setAttr("in", mlir::FloatAttr::get(mlir::Float32Type::get(ctx), combDelay));
     if (latency == 0) {
       problem.setLatency(operatorType, 0);
       problem.setIncomingDelay(operatorType, combDelay);
       problem.setOutgoingDelay(operatorType, combDelay);
+      sspOp->setAttr("combDelay", mlir::FloatAttr::get(mlir::Float64Type::get(ctx), combDelay));
     } else {
       problem.setLatency(operatorType, latency);
       problem.setIncomingDelay(operatorType, combDelay);
       problem.setOutgoingDelay(operatorType, 0);
+      sspOp->setAttr("latency", mlir::IntegerAttr::get(mlir::IntegerType::get(ctx, 64), latency));
+      sspOp->setAttr("combDelay", mlir::FloatAttr::get(mlir::Float64Type::get(ctx), combDelay));
     }
 
     problem.setLinkedOperatorType(sspOp, operatorType);
@@ -108,38 +110,38 @@ constructBaseProblem(spechls::TaskOp task, double targetClock, mlir::OpBuilder &
   // Declare dependencies
   task.getBodyBlock()->walk([&](mlir::Operation *op) {
     auto sspOp = association[op];
-    if (!llvm::isa<spechls::GammaOp>(op)) {
-      if (llvm::isa<spechls::MuOp>(op)) {
-        for (auto operand : op->getOperands()) {
-          if (auto *pred = operand.getDefiningOp()) {
-            circt::scheduling::ChainingCyclicProblem::Dependence dependence(association[pred], sspOp);
+    llvm::TypeSwitch<mlir::Operation *, void>(op)
+        .Case<MuOp>([&](spechls::MuOp mu) {
+          for (auto operand : mu->getOperands()) {
+            if (auto *pred = operand.getDefiningOp()) {
+              circt::scheduling::ChainingCyclicProblem::Dependence dependence(association[pred], sspOp);
+              assert(mlir::succeeded(problem.insertDependence(dependence)));
+              problem.setDistance(dependence, 1);
+            }
+          }
+        })
+        .Case<spechls::DelayOp, spechls::RollbackableDelayOp, spechls::CancellableDelayOp>([&](auto delay) {
+          for (auto operand : delay->getOperands()) {
+            if (auto *pred = operand.getDefiningOp()) {
+              circt::scheduling::ChainingCyclicProblem::Dependence dependence(association[pred], sspOp);
+              assert(mlir::succeeded(problem.insertDependence(dependence)));
+              problem.setDistance(dependence, delay.getDepth());
+            }
+          }
+        })
+        .Case<spechls::GammaOp>([&](spechls::GammaOp) { sspOp->setAttr("isGamma", mlir::UnitAttr::get(ctx)); })
+        .Default([&](mlir::Operation *op) {
+          llvm::SmallVector<mlir::Value> operands;
+          for (auto operand : op->getOperands()) {
+            if (auto *pred = operand.getDefiningOp()) {
+              sspOp.getOperandsMutable().append(association[pred]->getResult(0));
+            }
+          }
+          for (auto &opOp : sspOp->getOpOperands()) {
+            circt::scheduling::ChainingCyclicProblem::Dependence dependence(&opOp);
             assert(mlir::succeeded(problem.insertDependence(dependence)));
-            problem.setDistance(dependence, 1);
           }
-        }
-      } else if (auto delay = llvm::dyn_cast<spechls::DelayOp>(op)) {
-        for (auto operand : op->getOperands()) {
-          if (auto *pred = operand.getDefiningOp()) {
-            circt::scheduling::ChainingCyclicProblem::Dependence dependence(association[pred], sspOp);
-            assert(mlir::succeeded(problem.insertDependence(dependence)));
-            problem.setDistance(dependence, delay.getDepth());
-          }
-        }
-      } else {
-        llvm::SmallVector<mlir::Value> operands;
-        for (auto operand : op->getOperands()) {
-          if (auto *pred = operand.getDefiningOp()) {
-            sspOp.getOperandsMutable().append(association[pred]->getResult(0));
-          }
-        }
-        for (auto &opOp : sspOp->getOpOperands()) {
-          circt::scheduling::ChainingCyclicProblem::Dependence dependence(&opOp);
-          assert(mlir::succeeded(problem.insertDependence(dependence)));
-        }
-      }
-    } else {
-      sspOp->setAttr("isGamma", mlir::UnitAttr::get(ctx));
-    }
+        });
   });
   return problem;
 }
@@ -352,10 +354,10 @@ SpeculationExplorationAnalysis::SpeculationExplorationAnalysis(spechls::TaskOp t
       }
     }
   }
-  llvm::errs() << "No configuration found.\n";
   this->configuration = llvm::SmallVector<int>();
   this->proba = -1.0;
   graph.erase();
+  llvm::errs() << "No configuration found.\n";
 }
 
 } // namespace spechls
