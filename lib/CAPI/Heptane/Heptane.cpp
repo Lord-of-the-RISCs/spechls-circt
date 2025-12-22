@@ -5,6 +5,7 @@
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 
+#include "Analysis/Wcet/GraphWcetAnalysis.h"
 #include "CAPI/Dialect/Schedule.h"
 #include "CAPI/Dialect/SpecHLS.h"
 #include "CAPI/Dialect/Wcet.h"
@@ -13,17 +14,22 @@
 #include "Dialect/SpecHLS/IR/SpecHLSTypes.h"
 #include "Dialect/Wcet/IR/WcetOps.h"
 #include "Dialect/Wcet/Transforms/Passes.h"
+#include "Support/WcetUtils.h"
 #include "circt/Support/LLVM.h"
+#include "mlir/IR/AffineExpr.h"
 #include "mlir/IR/BuiltinAttributes.h"
 #include "mlir/IR/OpDefinition.h"
 #include "mlir/IR/Operation.h"
 #include "mlir/IR/PatternMatch.h"
 #include "mlir/IR/Verifier.h"
+#include "mlir/Pass/AnalysisManager.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/Support/raw_ostream.h"
 #include <circt/Dialect/HW/HWOps.h>
+#include <cstddef>
 #include <cstdint>
+#include <kernel/rtlil.h>
 #include <llvm/Support/Format.h>
 
 #include <circt-c/Dialect/Comb.h>
@@ -59,48 +65,6 @@
 using namespace mlir;
 
 namespace {
-
-wcet::CoreOp createAnalyseCore(IRRewriter &rewriter, ModuleOp &top, wcet::CoreOp &analyzedCore,
-                               SmallVector<std::optional<IntegerAttr>> &state, SmallVector<Type> &types,
-                               size_t instrs) {
-
-  rewriter.setInsertionPointToEnd(top.getBody());
-  wcet::CoreOp result = rewriter.create<wcet::CoreOp>(rewriter.getUnknownLoc(), rewriter.getFunctionType({}, {}),
-                                                      rewriter.getStringAttr(CORE_ANALYSIS_NAME));
-  result->setAttr("wcet.analysis", rewriter.getUnitAttr());
-  rewriter.setInsertionPointToEnd(&result.getBody().front());
-
-  SmallVector<Value> coreInputs;
-  auto instr =
-      rewriter.create<circt::hw::ConstantOp>(rewriter.getUnknownLoc(), analyzedCore.getArgumentTypes().front(), instrs);
-  coreInputs.push_back(instr);
-
-  SmallVector<Value> dummyInputs;
-  for (auto st : llvm::enumerate(state)) {
-    if (st.value().has_value()) {
-      dummyInputs.push_back(
-          rewriter.create<circt::hw::ConstantOp>(rewriter.getUnknownLoc(), types[st.index()], st.value().value()));
-    } else {
-      dummyInputs.push_back(rewriter.create<wcet::InitOp>(rewriter.getUnknownLoc(), types[st.index()], "Unknown"));
-    }
-  }
-
-  auto firstDummy = rewriter.create<wcet::DummyOp>(rewriter.getUnknownLoc(), types, dummyInputs);
-  firstDummy->setAttr("wcet.current", rewriter.getUnitAttr());
-  for (auto out : firstDummy.getOutputs()) {
-    coreInputs.push_back(out);
-  }
-
-  auto coreInstance = rewriter.create<wcet::CoreInstanceOp>(rewriter.getUnknownLoc(), analyzedCore, coreInputs);
-
-  auto secondDummy = rewriter.create<wcet::DummyOp>(rewriter.getUnknownLoc(), coreInstance->getResultTypes(),
-                                                    coreInstance->getResults());
-  secondDummy->setAttr("wcet.next", rewriter.getUnitAttr());
-
-  rewriter.create<wcet::CommitOp>(rewriter.getUnknownLoc(), result->getResultTypes(), ValueRange());
-  // result->dumpPretty();
-  return result;
-}
 
 int64_t retrieveWcet(spechls::FSMOp &fsm) {
   auto packOp = dyn_cast_or_null<spechls::PackOp>(fsm.getMispec().getDefiningOp());
@@ -213,6 +177,110 @@ void destroyMLIR(MlirModule module) {
 
 void mlirDumpModule(MlirModule module) { unwrap(module)->dump(); }
 
+// size_t recWcetLongAnalysis(IRRewriter &rewriter, mlir::SmallVector<size_t> instrs,
+//                            SmallVector<std::optional<IntegerAttr>> &state, SmallVector<Type> &stateTypes,
+//                            wcet::CoreOp &analyzedCore) {
+//   if (instrs.empty())
+//     return 0;
+//   size_t cInstr = instrs[0];
+//   instrs.erase(instrs.begin());
+//   auto mod = analyzedCore->getParentOfType<ModuleOp>();
+//   auto core = createAnalyseCore(rewriter, mod, analyzedCore, state, stateTypes, cInstr);
+//
+//   auto inlinePM = PassManager::on<ModuleOp>(mod->getContext());
+//   inlinePM.addPass(wcet::createInlineCorePass());
+//   if (failed(inlinePM.run(mod))) {
+//     return 0;
+//   }
+//
+//   auto top = ModuleOp::create(rewriter.getUnknownLoc());
+//   rewriter.setInsertionPointToEnd(top.getBody());
+//   auto newCore = cast<wcet::CoreOp>(rewriter.clone(*core));
+//   core->erase();
+//
+//   auto topPm = mlir::PassManager::on<mlir::ModuleOp>(top->getContext());
+//   topPm.addPass(mlir::createCanonicalizerPass());
+//   if (failed(topPm.run(top))) {
+//     return 0;
+//   }
+//
+//   spechls::FSMOp fsm;
+//   newCore->walk([&](spechls::FSMOp f) { fsm = f; });
+//   SmallVector<int64_t> penalties = retrieveMultWcet(fsm);
+//
+//   wcet::DummyOp lastDum = nullptr;
+//   for (auto d : newCore.getOps<wcet::DummyOp>()) {
+//     if (!d->hasAttr("wcet.next"))
+//       continue;
+//     lastDum = d;
+//     break;
+//   }
+//   if (!lastDum) {
+//     llvm::errs() << "instruction fail " << cInstr << "\n";
+//     return 0;
+//   }
+//
+//   SmallVector<std::optional<IntegerAttr>> dumResult;
+//   for (auto d : lastDum.getInputs()) {
+//     auto lastResultOp = dyn_cast_or_null<circt::hw::ConstantOp>(d.getDefiningOp());
+//     if (lastResultOp) {
+//       dumResult.push_back(lastResultOp.getValueAttr());
+//       continue;
+//     }
+//     dumResult.push_back({});
+//   }
+//
+//   size_t result = 0;
+//   for (auto pen : penalties) {
+//     state.clear();
+//     for (size_t i = 0; i < analyzedCore.getResultTypes().size(); i++) {
+//       auto nbPred = dyn_cast_or_null<IntegerAttr>(analyzedCore.getArgAttr(i + 1, "wcet.nbPred"));
+//       if (!nbPred || nbPred.getInt() == 0) {
+//         state.push_back(dumResult[i]);
+//       } else if (nbPred.getInt() > (int64_t)pen) {
+//         state.push_back(dumResult[i - pen]);
+//       } else {
+//         IntegerType it = dyn_cast_or_null<IntegerType>(stateTypes[i]);
+//         if (it && it.getWidth() == 1) {
+//           state.push_back(rewriter.getIntegerAttr(rewriter.getI1Type(), 0));
+//         } else {
+//           state.push_back({});
+//         }
+//       }
+//     }
+//     auto cWcet = pen + recWcetLongAnalysis(rewriter, instrs, state, stateTypes, analyzedCore);
+//     if (cWcet > result) {
+//       result = cWcet;
+//     }
+//   }
+//   return result;
+// }
+
+size_t mlirWcetLongAnalysis(MlirModule module, mlir::SmallVector<size_t> &instr) {
+  //==== Setup Analysis
+  auto mod = unwrap(module);
+  return wcet::GraphAnalysis(mod, instr).wcet;
+  // mlir::IRRewriter rewriter(mod->getContext());
+
+  // wcet::CoreOp analyzedCore = nullptr;
+  // mod->walk([&](wcet::CoreOp c) {
+  //   if (c->hasAttr("wcet.cpuCore"))
+  //     analyzedCore = c;
+  // });
+
+  // mlir::SmallVector<std::optional<mlir::IntegerAttr>> state;
+  // mlir::SmallVector<Type> stateTypes;
+
+  // for (auto type : analyzedCore.getResultTypes()) {
+  //   stateTypes.push_back(type);
+  //   state.push_back({});
+  // }
+
+  // llvm::errs() << instr.size() << "\n";
+  //// llvm::errs() << "begins analysis\n";
+  // return recWcetLongAnalysis(rewriter, instr, state, stateTypes, analyzedCore);
+}
+
 size_t mlirWcetAnalysis(MlirModule module, mlir::SmallVector<size_t> &instrs) {
   //==== Setup Analysis
   size_t wcet = 0;
@@ -236,19 +304,29 @@ size_t mlirWcetAnalysis(MlirModule module, mlir::SmallVector<size_t> &instrs) {
   // llvm::errs() << "begins analysis\n";
   for (auto instr : instrs) {
     auto core = createAnalyseCore(rewriter, mod, analyzedCore, state, stateTypes, instr);
-    auto pm = mlir::PassManager::on<mlir::ModuleOp>(mod->getContext());
 
+    auto pm = mlir::PassManager::on<mlir::ModuleOp>(mod->getContext());
     pm.addPass(wcet::createInlineCorePass());
-    // pm.addPass(wcet::createLongestPathPass());
-    if (failed(pm.run(core->getParentOfType<mlir::ModuleOp>()))) {
+    if (failed(pm.run(mod))) {
+      return 0;
+    }
+
+    auto top = ModuleOp::create(rewriter.getUnknownLoc());
+    rewriter.setInsertionPointToEnd(top.getBody());
+    auto newCore = cast<wcet::CoreOp>(rewriter.clone(*core));
+    core->erase();
+
+    auto topPm = mlir::PassManager::on<mlir::ModuleOp>(top->getContext());
+    topPm.addPass(mlir::createCanonicalizerPass());
+    if (failed(topPm.run(top))) {
       return 0;
     }
 
     spechls::FSMOp fsm;
-    core->walk([&](spechls::FSMOp f) { fsm = f; });
+    newCore->walk([&](spechls::FSMOp f) { fsm = f; });
     size_t currentWcet = (size_t)retrieveWcet(fsm);
     wcet::DummyOp lastDum = nullptr;
-    for (auto d : core.getOps<wcet::DummyOp>()) {
+    for (auto d : newCore.getOps<wcet::DummyOp>()) {
       if (!d->hasAttr("wcet.next"))
         continue;
       lastDum = d;
@@ -289,7 +367,7 @@ size_t mlirWcetAnalysis(MlirModule module, mlir::SmallVector<size_t> &instrs) {
         }
       }
     }
-    core->erase();
+    top->erase();
     wcet += currentWcet;
   }
 

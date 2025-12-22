@@ -64,7 +64,16 @@ public:
       spechlsDialect->addInterface<MyInlinerInterface>();
 
     OpPassManager pm = PassManager::on<mlir::ModuleOp>(ctx);
-    pm.addPass(mlir::createInlinerPass());
+    auto inlinePass = mlir::createInlinerPass();
+    if (failed(inlinePass->initializeOptions("default-pipeline=", [&](const Twine &msg) {
+          llvm::errs() << msg << "\n";
+          return failure();
+        }))) {
+      signalPassFailure();
+      return;
+    }
+
+    pm.addPass(std::move(inlinePass));
     if (failed(runPipeline(pm, getOperation()))) {
       signalPassFailure();
     }

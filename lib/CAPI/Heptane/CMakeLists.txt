@@ -17,6 +17,8 @@ target_link_libraries(heptaneapi PUBLIC
     ScheduleTransforms
     Wcet
     WcetTransforms
+    WcetAnalysis
+    WcetUtils
 
     Yosys::Yosys
 )
