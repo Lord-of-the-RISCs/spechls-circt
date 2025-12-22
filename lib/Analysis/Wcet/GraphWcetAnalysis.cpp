@@ -20,10 +20,14 @@
 #include "mlir/Transforms/Passes.h"
 #include "llvm/ADT/APInt.h"
 #include "llvm/ADT/Hashing.h"
+#include "llvm/ADT/STLExtras.h"
+#include "llvm/Support/raw_ostream.h"
 #include <cstdint>
+#include <fstream>
 #include <mlir/IR/BuiltinOps.h>
 #include <mlir/Pass/PassManager.h>
 #include <stack>
+#include <string>
 
 using namespace mlir;
 namespace wcet {
@@ -69,6 +73,51 @@ struct DenseMapInfo<wcet::state> {
 } // namespace llvm
 
 namespace {
+
+void dumpGraph(DenseMap<wcet::state, SmallVector<wcet::state>> outs, SmallVector<size_t> instrs) {
+  size_t instrsHash = 0;
+  for (auto i : instrs) {
+    instrsHash = instrsHash ^ i;
+  }
+  std::string outputFileName = "/tmp/graph_" + std::to_string(instrsHash) + ".dot";
+
+  DenseMap<size_t, SmallVector<wcet::state>> statesByLayer;
+  DenseMap<wcet::state, size_t> statesId;
+  size_t id = 0;
+  for (auto [st, outs] : outs) {
+    statesByLayer[st.layers].push_back(st);
+    statesId[st] = id++;
+  }
+
+  std::ofstream dot(outputFileName);
+  dot << "digraph G {\n";
+  dot << "  rankdir=LR;\n  node [shape=circle];\n  edge [constraint=true];\n  graph [rankstep=1.2, nodestep=0.6];\n";
+
+  for (auto &[layer, states] : statesByLayer) {
+    dot << "{ rank=same\n";
+    for (auto st : states) {
+      dot << "n" << statesId[st] << " [label=\""
+          << "pen=" << st.pen << "\"];\n";
+    }
+    if (layer == 0 || layer >= instrs.size() + 1) {
+      dot << "}\n";
+      continue;
+    }
+    dot << "l" << layer << " [shape=plaintext, label=\"" << std::hex << instrs[layer - 1] << std::dec << "\"];\n";
+
+    dot << "}\n\n";
+  }
+
+  for (auto &[src, out] : outs) {
+    for (auto &dst : out) {
+      dot << " n" << statesId[src] << " -> n" << statesId[dst] << ";\n";
+    }
+  }
+
+  dot << "}\n";
+  dot.close();
+}
+
 void visitedState(wcet::state &st, SmallVector<wcet::state> &visited,
                   DenseMap<wcet::state, SmallVector<wcet::state>> &outs) {
   if (std::find(visited.begin(), visited.end(), st) != visited.end())
@@ -268,6 +317,9 @@ GraphAnalysis::GraphAnalysis(mlir::ModuleOp mod, mlir::SmallVector<size_t> instr
   for (auto state : layers) {
     succs[state].push_back(lastState);
   }
+  succs[lastState] = {};
+
+  dumpGraph(succs, instrs);
 
   // Find the longest path in the PG
   wcet = longestPath(initState, lastState, succs);
