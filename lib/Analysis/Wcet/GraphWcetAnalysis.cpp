@@ -19,44 +19,13 @@
 #include "mlir/Support/LLVM.h"
 #include "mlir/Transforms/Passes.h"
 #include "llvm/ADT/APInt.h"
-#include "llvm/ADT/Hashing.h"
-#include "llvm/ADT/STLExtras.h"
 #include "llvm/Support/raw_ostream.h"
 #include <cstdint>
-#include <fstream>
 #include <mlir/IR/BuiltinOps.h>
 #include <mlir/Pass/PassManager.h>
 #include <stack>
-#include <string>
 
 using namespace mlir;
-namespace wcet {
-typedef struct StateStruct {
-  StateStruct(const StateStruct &) = default;
-  StateStruct(StateStruct &&) = default;
-  StateStruct &operator=(const StateStruct &) = default;
-  StateStruct &operator=(StateStruct &&) = default;
-  StateStruct(int64_t pen, size_t layers, mlir::SmallVector<std::optional<mlir::IntegerAttr>> st)
-      : pen(pen), layers(layers), st(std::move(st)) {}
-
-  int64_t pen;
-  size_t layers;
-  mlir::SmallVector<std::optional<mlir::IntegerAttr>> st;
-
-  bool operator==(const StateStruct &rhs) const {
-    bool result = rhs.pen == this->pen && rhs.layers == this->layers;
-    for (auto it : llvm::enumerate(this->st)) {
-      if (!result)
-        break;
-      result = result && it.value() == rhs.st[it.index()];
-    }
-    return result;
-  }
-
-} state;
-
-} // namespace wcet
-
 namespace llvm {
 template <>
 struct DenseMapInfo<wcet::state> {
@@ -73,50 +42,6 @@ struct DenseMapInfo<wcet::state> {
 } // namespace llvm
 
 namespace {
-
-void dumpGraph(DenseMap<wcet::state, SmallVector<wcet::state>> outs, SmallVector<size_t> instrs) {
-  size_t instrsHash = 0;
-  for (auto i : instrs) {
-    instrsHash = instrsHash ^ i;
-  }
-  std::string outputFileName = "/tmp/graph_" + std::to_string(instrsHash) + ".dot";
-
-  DenseMap<size_t, SmallVector<wcet::state>> statesByLayer;
-  DenseMap<wcet::state, size_t> statesId;
-  size_t id = 0;
-  for (auto [st, outs] : outs) {
-    statesByLayer[st.layers].push_back(st);
-    statesId[st] = id++;
-  }
-
-  std::ofstream dot(outputFileName);
-  dot << "digraph G {\n";
-  dot << "  rankdir=LR;\n  node [shape=circle];\n  edge [constraint=true];\n  graph [rankstep=1.2, nodestep=0.6];\n";
-
-  for (auto &[layer, states] : statesByLayer) {
-    dot << "{ rank=same\n";
-    for (auto st : states) {
-      dot << "n" << statesId[st] << " [label=\""
-          << "pen=" << st.pen << "\"];\n";
-    }
-    if (layer == 0 || layer >= instrs.size() + 1) {
-      dot << "}\n";
-      continue;
-    }
-    dot << "l" << layer << " [shape=plaintext, label=\"" << std::hex << instrs[layer - 1] << std::dec << "\"];\n";
-
-    dot << "}\n\n";
-  }
-
-  for (auto &[src, out] : outs) {
-    for (auto &dst : out) {
-      dot << " n" << statesId[src] << " -> n" << statesId[dst] << ";\n";
-    }
-  }
-
-  dot << "}\n";
-  dot.close();
-}
 
 void visitedState(wcet::state &st, SmallVector<wcet::state> &visited,
                   DenseMap<wcet::state, SmallVector<wcet::state>> &outs) {
@@ -143,9 +68,8 @@ void topologicalSort(wcet::state &st, std::stack<wcet::state> &stack, DenseMap<w
   }
 }
 
-int64_t longestPath(wcet::state &start, wcet::state &end, DenseMap<wcet::state, SmallVector<wcet::state>> outs) {
-
-  DenseMap<wcet::state, int64_t> dists;
+int64_t longestPath(wcet::state &start, wcet::state &end, DenseMap<wcet::state, SmallVector<wcet::state>> outs,
+                    DenseMap<wcet::state, int64_t> &dists) {
   DenseMap<wcet::state, bool> visited;
   std::stack<wcet::state> stack;
   SmallVector<wcet::state> states;
@@ -198,7 +122,6 @@ void mergeSameState(SmallVector<wcet::state> &states, DenseMap<wcet::state, Smal
 
 mlir::SmallVector<wcet::state> stateAnalysis(mlir::IRRewriter &rewriter, size_t instr, wcet::state &st,
                                              mlir::SmallVector<mlir::Type> &stTypes, wcet::CoreOp &analyzedCore) {
-
   auto mod = analyzedCore->getParentOfType<mlir::ModuleOp>();
   auto core = createAnalyseCore(rewriter, mod, analyzedCore, st.st, stTypes, instr);
 
@@ -247,22 +170,8 @@ mlir::SmallVector<wcet::state> stateAnalysis(mlir::IRRewriter &rewriter, size_t 
 
   SmallVector<wcet::state> result;
   for (auto pen : penalties) {
-    mlir::SmallVector<std::optional<mlir::IntegerAttr>> state;
-    for (size_t i = 0; i < analyzedCore.getResultTypes().size(); i++) {
-      auto nbPred = dyn_cast_or_null<IntegerAttr>(analyzedCore.getArgAttr(i + 1, "wcet.nbPred"));
-      if (!nbPred || nbPred.getInt() == 0) {
-        state.push_back(dumResult[i]);
-      } else if (nbPred.getInt() > (int64_t)pen) {
-        state.push_back(dumResult[i - pen]);
-      } else {
-        IntegerType it = dyn_cast_or_null<IntegerType>(stTypes[i]);
-        if (it && it.getWidth() == 1) {
-          state.push_back(rewriter.getIntegerAttr(rewriter.getI1Type(), 0));
-        } else {
-          state.push_back({});
-        }
-      }
-    }
+    mlir::SmallVector<std::optional<mlir::IntegerAttr>> state =
+        generateNextState(rewriter, analyzedCore, stTypes, dumResult, pen);
     result.push_back(wcet::StateStruct(pen, st.layers + 1, state));
   }
   return result;
@@ -273,6 +182,7 @@ namespace wcet {
 GraphAnalysis::GraphAnalysis(mlir::ModuleOp mod, mlir::SmallVector<size_t> instrs) {
   wcet = 0;
 
+  // llvm::errs() << instrs.size() << "\n";
   // Setup analysis
   mlir::DenseMap<state, mlir::SmallVector<state>> succs;
   mlir::DenseMap<state, mlir::SmallVector<state>> preds;
@@ -297,11 +207,17 @@ GraphAnalysis::GraphAnalysis(mlir::ModuleOp mod, mlir::SmallVector<size_t> instr
 
   mlir::SmallVector<state> layers = {initState};
 
+  // size_t lId = 0;
   // Build the penalties graphs
   for (auto instr : instrs) {
+    // llvm::errs() << lId++ << ":";
     mergeSameState(layers, succs, preds);
     SmallVector<wcet::state> nextLayers;
     for (auto state : layers) {
+      // for (auto s : state.st) {
+      //   llvm::errs() << " " << s;
+      // }
+      // llvm::errs() << "\n";
       mlir::SmallVector<wcet::state> succOfState = stateAnalysis(rewriter, instr, state, stTypes, analyzedCore);
       succs[state].append(succOfState);
       for (auto succSt : succOfState) {
@@ -319,9 +235,9 @@ GraphAnalysis::GraphAnalysis(mlir::ModuleOp mod, mlir::SmallVector<size_t> instr
   }
   succs[lastState] = {};
 
-  dumpGraph(succs, instrs);
-
   // Find the longest path in the PG
-  wcet = longestPath(initState, lastState, succs);
+  DenseMap<wcet::state, int64_t> dists;
+  wcet = longestPath(initState, lastState, succs, dists);
+  dumpGraph(succs, instrs, dists);
 }
 } // namespace wcet
