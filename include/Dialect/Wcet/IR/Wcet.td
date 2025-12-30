@@ -240,6 +240,23 @@ def Wcet_LUTOp : WcetOp<"lut", [Pure, DeclareOpInterfaceMethods<OpAsmOpInterface
             setNameFn(getResult(), "lut");
         }
     }];
+
+}
+def Wcet_ConstArrayRead : WcetOp<"constArrayRead", [Pure]> { 
+  let arguments = (ins
+    AnyInteger:$index,
+    DenseI64ArrayAttr:$contents,
+    I64Attr:$step
+  );
+
+  let results = (outs AnyInteger:$result);
+
+  let hasCanonicalizeMethod = 1;
+
+  let assemblyFormat = [{
+     $index `<` $contents `>` `,` $step attr-dict `:` type($index) `,` type($result)
+    }];
+
 }
 
 #endif // SPECHLS_INCLUDED_DIALECT_WCET_IR_WCET_TD

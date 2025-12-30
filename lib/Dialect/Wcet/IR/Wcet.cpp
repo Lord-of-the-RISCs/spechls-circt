@@ -39,6 +39,7 @@
 #include "Dialect/Wcet/IR/WcetDialect.cpp.inc"
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/Support/LogicalResult.h"
+#include "llvm/Support/raw_ostream.h"
 
 using namespace mlir;
 
@@ -354,6 +355,24 @@ LogicalResult wcet::LUTOp::canonicalize(wcet::LUTOp lut, PatternRewriter &rewrit
   return success();
 }
 
+LogicalResult wcet::ConstArrayRead::canonicalize(wcet::ConstArrayRead read, PatternRewriter &rewriter) {
+
+  auto selectOp = dyn_cast<circt::hw::ConstantOp>(read.getIndex().getDefiningOp());
+  if (!selectOp)
+    return failure();
+
+  auto idxAttr = selectOp.getValueAttr();
+  size_t idx = (size_t)(idxAttr.getInt() & (((size_t)1 << selectOp.getType().getIntOrFloatBitWidth()) - 1));
+  auto step = cast<IntegerAttr>(read.getStepAttr()).getInt();
+  if (step < 0) {
+    llvm::errs() << step << "\n";
+    return failure();
+  }
+  auto cnst =
+      rewriter.create<circt::hw::ConstantOp>(rewriter.getUnknownLoc(), read.getType(), read.getContents()[idx / step]);
+  rewriter.replaceAllOpUsesWith(read, cnst);
+  return success();
+}
 #define GET_TYPEDEF_CLASSES
 #include "Dialect/Wcet/IR/WcetTypes.cpp.inc"
 
