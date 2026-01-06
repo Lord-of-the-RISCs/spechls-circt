@@ -14,7 +14,9 @@
 #include "circt/Support/LLVM.h"
 #include "mlir/IR/PatternMatch.h"
 #include "mlir/Pass/PassManager.h"
+#include "mlir/Support/LLVM.h"
 #include "mlir/Transforms/Passes.h"
+#include "llvm/Support/raw_ostream.h"
 #include <cstdint>
 #include <optional>
 
@@ -64,14 +66,15 @@ int64_t retrieveWcet(spechls::FSMOp &fsm) {
   return wcet;
 }
 
-std::optional<wcet::state> stateAnalysis(IRRewriter &rewriter, size_t instr, wcet::state &state,
-                                         SmallVector<Type> &stTypes, wcet::CoreOp &analyzedCore) {
+std::optional<wcet::state> stateAnalysis(IRRewriter &rewriter, wcet::state &state, SmallVector<Type> &stTypes,
+                                         wcet::CoreOp &analyzedCore) {
   ModuleOp mod = analyzedCore->getParentOfType<ModuleOp>();
-  auto core = createAnalyseCore(rewriter, mod, analyzedCore, state.st, stTypes, instr);
+  auto core = createAnalyseCore(rewriter, mod, analyzedCore, state.st, stTypes);
 
   auto pm = PassManager::on<ModuleOp>(mod->getContext());
   pm.addPass(wcet::createInlineCorePass());
   if (failed(pm.run(mod))) {
+    llvm::errs() << "inlining failed\n";
     return {};
   }
 
@@ -83,6 +86,7 @@ std::optional<wcet::state> stateAnalysis(IRRewriter &rewriter, size_t instr, wce
   auto topPm = mlir::PassManager::on<mlir::ModuleOp>(top->getContext());
   topPm.addPass(createCanonicalizerPass());
   if (failed(topPm.run(top))) {
+    llvm::errs() << "canonicalize failed\n";
     return {};
   }
 
@@ -97,7 +101,7 @@ std::optional<wcet::state> stateAnalysis(IRRewriter &rewriter, size_t instr, wce
     break;
   }
   if (!lastDum) {
-    llvm::errs() << "instruction fail " << instr << "\n";
+    llvm::errs() << "no last Dum\n";
     return {};
   }
 
@@ -111,8 +115,9 @@ std::optional<wcet::state> stateAnalysis(IRRewriter &rewriter, size_t instr, wce
     dumResult.push_back({});
   }
 
-  SmallVector<std::optional<IntegerAttr>> st =
-      generateNextState(rewriter, analyzedCore, stTypes, dumResult, currentWcet);
+  SmallVector<std::optional<IntegerAttr>> st;
+
+  st = generateNextState(rewriter, analyzedCore, stTypes, dumResult, currentWcet);
 
   wcet::state res = wcet::StateStruct(currentWcet, state.layers + 1, st);
   top->erase();
@@ -126,20 +131,47 @@ namespace wcet {
 LinearAnalysis::LinearAnalysis(ModuleOp mod, SmallVector<size_t> instrs) {
   wcet = 0;
 
+  ModuleOp workingMod = mod.clone();
   DenseMap<state, SmallVector<state>> succs;
   DenseMap<state, SmallVector<state>> preds;
-  IRRewriter rewriter(mod->getContext());
+  IRRewriter rewriter(workingMod->getContext());
 
+  // Retrieve the wcet core to analyze
   wcet::CoreOp analyzedCore = nullptr;
-  mod->walk([&](wcet::CoreOp c) {
+  workingMod->walk([&](wcet::CoreOp c) {
     if (c->hasAttr("wcet.cpuCore"))
       analyzedCore = c;
   });
 
+  // Replace fetchs by array reads
+  SmallVector<int64_t> i64instrs;
+  for (auto i : instrs) {
+    i64instrs.push_back(i);
+  }
+
+  analyzedCore->walk([&](Operation *op) {
+    if (op->hasAttr("wcet.fetch")) {
+      auto oldFetch = dyn_cast_or_null<spechls::LoadOp>(op);
+      if (!oldFetch)
+        return;
+      rewriter.setInsertionPoint(oldFetch);
+      wcet::ConstArrayRead newFetch = wcet::ConstArrayRead::create(
+          rewriter, rewriter.getUnknownLoc(), oldFetch.getType(), oldFetch.getIndex(), i64instrs, 4);
+      rewriter.replaceAllOpUsesWith(oldFetch, newFetch);
+      newFetch->dumpPretty();
+      rewriter.eraseOp(oldFetch);
+    }
+  });
+
+  // Setup the initial state
   SmallVector<std::optional<IntegerAttr>> st;
   SmallVector<Type> stTypes;
 
-  for (auto type : analyzedCore.getResultTypes()) {
+  auto resultsType = analyzedCore.getResultTypes();
+  stTypes.push_back(resultsType[0]);
+  st.push_back(rewriter.getIntegerAttr(resultsType[0], 0)); // pc
+  for (size_t i = 1; i < resultsType.size(); i++) {
+    Type type = analyzedCore.getResultTypes()[i];
     stTypes.push_back(type);
     st.push_back({});
   }
@@ -147,29 +179,45 @@ LinearAnalysis::LinearAnalysis(ModuleOp mod, SmallVector<size_t> instrs) {
   succs.try_emplace(initState);
   preds.try_emplace(initState);
 
+  // analysis' core
   SmallVector<state> layers = {initState};
   wcet::state cState = initState;
   DenseMap<wcet::state, int64_t> dists;
   dists[initState] = 0;
-  for (auto instr : instrs) {
-    auto nextSt = stateAnalysis(rewriter, instr, cState, stTypes, analyzedCore);
+  while (cState.st.size() > 0) {
+    auto nextSt = stateAnalysis(rewriter, cState, stTypes, analyzedCore);
     if (!nextSt) {
       wcet = 0;
       return;
     }
+    if (nextSt == cState)
+      break;
     succs[cState].push_back(nextSt.value());
     preds[nextSt.value()].push_back(cState);
     dists[nextSt.value()] = dists[cState] + nextSt.value().pen;
+    wcet += nextSt.value().pen;
+    if (nextSt.value().st.size() == 0) {
+      cState = nextSt.value();
+      break;
+    }
+    if ((size_t)nextSt.value().st[0].value().getInt() < (size_t)cState.st[0].value().getInt()) {
+      cState = nextSt.value();
+      break;
+    }
     cState = nextSt.value();
-    wcet += cState.pen;
+    if ((size_t)nextSt.value().st[0].value().getInt() >= instrs.size() * 4) {
+      break;
+    }
   }
 
+  // Dump Penalty Graph
   auto lastState = StateStruct(0, cState.layers + 1, {});
   preds[lastState].push_back(cState);
   succs[cState].push_back(lastState);
   succs[lastState] = {};
 
   dumpGraph(succs, instrs, dists);
+  workingMod->erase();
 }
 
 } // namespace wcet

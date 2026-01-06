@@ -74,7 +74,7 @@ void dumpGraph(DenseMap<wcet::state, SmallVector<wcet::state>> outs, SmallVector
 
 wcet::CoreOp createAnalyseCore(mlir::IRRewriter &rewriter, mlir::ModuleOp &top, wcet::CoreOp &analyzedCore,
                                mlir::SmallVector<std::optional<mlir::IntegerAttr>> &state,
-                               mlir::SmallVector<mlir::Type> &types, size_t instrs) {
+                               mlir::SmallVector<mlir::Type> &types) {
 
   rewriter.setInsertionPointToEnd(top.getBody());
   wcet::CoreOp result = rewriter.create<wcet::CoreOp>(rewriter.getUnknownLoc(), rewriter.getFunctionType({}, {}),
@@ -83,9 +83,6 @@ wcet::CoreOp createAnalyseCore(mlir::IRRewriter &rewriter, mlir::ModuleOp &top, 
   rewriter.setInsertionPointToEnd(&result.getBody().front());
 
   mlir::SmallVector<mlir::Value> coreInputs;
-  auto instr =
-      rewriter.create<circt::hw::ConstantOp>(rewriter.getUnknownLoc(), analyzedCore.getArgumentTypes().front(), instrs);
-  coreInputs.push_back(instr);
 
   mlir::SmallVector<mlir::Value> dummyInputs;
   for (auto st : llvm::enumerate(state)) {
@@ -154,9 +151,11 @@ SmallVector<std::optional<IntegerAttr>> generateNextState(IRRewriter &rewriter, 
                                                           SmallVector<Type> &stTypes,
                                                           SmallVector<std::optional<IntegerAttr>> &dumResult,
                                                           int64_t pen) {
+  if (!dumResult[0].has_value())
+    return {};
   SmallVector<std::optional<IntegerAttr>> state;
   for (size_t i = 0; i < analyzedCore.getResultTypes().size(); i++) {
-    auto nbPred = dyn_cast_or_null<IntegerAttr>(analyzedCore.getArgAttr(i + 1, "wcet.nbPred"));
+    auto nbPred = dyn_cast_or_null<IntegerAttr>(analyzedCore.getArgAttr(i, "wcet.nbPred"));
     IntegerType it = dyn_cast_or_null<IntegerType>(stTypes[i]);
     if (!nbPred || nbPred.getInt() == 0) {
       if (it && it.getWidth() == 1 && !dumResult[i]) {

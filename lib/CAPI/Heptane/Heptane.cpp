@@ -16,6 +16,7 @@
 #include "mlir/IR/OpDefinition.h"
 #include "mlir/IR/Operation.h"
 #include "mlir/IR/Verifier.h"
+#include "llvm/Support/raw_ostream.h"
 #include <circt/Dialect/HW/HWOps.h>
 #include <cstddef>
 #include <kernel/rtlil.h>

@@ -77,24 +77,36 @@ public:
     SmallVector<Operation *> toRemove;
 
     //============= Retrieve instructions types ===============================
-    size_t numInstrs = 0;
-    speculativeTask->walk([&](Operation *op) {
-      auto fetch = op->getAttr("wcet.fetch");
-      if (!fetch)
-        return;
-      coreInputsTypes.push_back(op->getResultTypes().front());
-      auto fetchNumber = dyn_cast_or_null<IntegerAttr>(fetch);
-      if (!fetchNumber) {
-        fetchNumber = rewriter.getI32IntegerAttr(0);
+    // size_t numInstrs = 0;
+    // speculativeTask->walk([&](Operation *op) {
+    //  auto fetch = op->getAttr("wcet.fetch");
+    //  if (!fetch)
+    //    return;
+    //  coreInputsTypes.push_back(op->getResultTypes().front());
+    //  auto fetchNumber = dyn_cast_or_null<IntegerAttr>(fetch);
+    //  if (!fetchNumber) {
+    //    fetchNumber = rewriter.getI32IntegerAttr(0);
+    //  }
+    //  coreInputsAttrs.push_back(rewriter.getDictionaryAttr(rewriter.getNamedAttr("wcet.instrNb", fetchNumber)));
+    //  coreInputs.push_back(op->getResult(0));
+    //  toRemove.push_back(op);
+    //  numInstrs++;
+    //});
+    speculativeTask->walk([&](spechls::MuOp mu) {
+      if (mu->hasAttr("wcet.pc")) {
+        coreInputsTypes.push_back(mu.getType());
+        coreOutputsTypes.push_back(mu.getType());
+        coreInputsAttrs.push_back({});
+        coreInputs.push_back(mu);
+        coreOutputs.push_back(mu.getLoopValue().getDefiningOp());
+        toRemove.push_back(mu);
       }
-      coreInputsAttrs.push_back(rewriter.getDictionaryAttr(rewriter.getNamedAttr("wcet.instrNb", fetchNumber)));
-      coreInputs.push_back(op->getResult(0));
-      toRemove.push_back(op);
-      numInstrs++;
     });
 
     //============= Retrieve Mu ===============================================
     speculativeTask->walk([&](spechls::MuOp mu) {
+      if (mu->hasAttr("wcet.pc"))
+        return;
       coreInputsTypes.push_back(mu.getType());
       coreOutputsTypes.push_back(mu.getType());
       coreInputsAttrs.push_back(rewriter.getDictionaryAttr({}));
@@ -282,7 +294,7 @@ public:
     }
 
     core->setAttr("wcet.cpuCore", rewriter.getUnitAttr());
-    core->setAttr("wcet.numInstrs", rewriter.getUI32IntegerAttr(numInstrs));
+    // core->setAttr("wcet.numInstrs", rewriter.getUI32IntegerAttr(numInstrs));
 
     speculativeTask->getParentOfType<spechls::KernelOp>()->erase();
   }

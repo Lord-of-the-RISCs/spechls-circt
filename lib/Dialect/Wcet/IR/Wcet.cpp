@@ -134,7 +134,6 @@ LogicalResult wcet::PenaltyOp::canonicalize(wcet::PenaltyOp op, PatternRewriter 
   if (!op.getInput().getDefiningOp()->hasTrait<mlir::OpTrait::ConstantLike>())
     return failure();
   for (auto *us : op.getInput().getUsers()) {
-    llvm::errs() << us->getName() << "\n";
     us->setAttr("wcet.delay", rewriter.getI32IntegerAttr(op.getDepth()));
   }
   rewriter.replaceAllOpUsesWith(op, op.getInput());
@@ -368,6 +367,8 @@ LogicalResult wcet::ConstArrayRead::canonicalize(wcet::ConstArrayRead read, Patt
     llvm::errs() << step << "\n";
     return failure();
   }
+  if (idx / step >= read.getContents().size())
+    return failure();
   auto cnst =
       rewriter.create<circt::hw::ConstantOp>(rewriter.getUnknownLoc(), read.getType(), read.getContents()[idx / step]);
   rewriter.replaceAllOpUsesWith(read, cnst);
