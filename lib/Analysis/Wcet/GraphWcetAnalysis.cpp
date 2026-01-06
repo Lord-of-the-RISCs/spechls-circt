@@ -20,6 +20,7 @@
 #include "mlir/Transforms/Passes.h"
 #include "llvm/ADT/APInt.h"
 #include "llvm/Support/raw_ostream.h"
+#include <cstddef>
 #include <cstdint>
 #include <mlir/IR/BuiltinOps.h>
 #include <mlir/Pass/PassManager.h>
@@ -120,10 +121,10 @@ void mergeSameState(SmallVector<wcet::state> &states, DenseMap<wcet::state, Smal
   states = result;
 }
 
-mlir::SmallVector<wcet::state> stateAnalysis(mlir::IRRewriter &rewriter, size_t instr, wcet::state &st,
+mlir::SmallVector<wcet::state> stateAnalysis(mlir::IRRewriter &rewriter, wcet::state &st,
                                              mlir::SmallVector<mlir::Type> &stTypes, wcet::CoreOp &analyzedCore) {
   auto mod = analyzedCore->getParentOfType<mlir::ModuleOp>();
-  auto core = createAnalyseCore(rewriter, mod, analyzedCore, st.st, stTypes, instr);
+  auto core = createAnalyseCore(rewriter, mod, analyzedCore, st.st, stTypes);
 
   auto inlinePM = mlir::PassManager::on<mlir::ModuleOp>(mod->getContext());
   inlinePM.addPass(wcet::createInlineCorePass());
@@ -154,7 +155,6 @@ mlir::SmallVector<wcet::state> stateAnalysis(mlir::IRRewriter &rewriter, size_t 
     break;
   }
   if (!lastDum) {
-    llvm::errs() << "instruction fail " << instr << "\n";
     return {};
   }
 
@@ -181,23 +181,47 @@ namespace wcet {
 
 GraphAnalysis::GraphAnalysis(mlir::ModuleOp mod, mlir::SmallVector<size_t> instrs) {
   wcet = 0;
+  ModuleOp workingMod = mod.clone();
 
-  // llvm::errs() << instrs.size() << "\n";
   // Setup analysis
   mlir::DenseMap<state, mlir::SmallVector<state>> succs;
   mlir::DenseMap<state, mlir::SmallVector<state>> preds;
-  mlir::IRRewriter rewriter(mod->getContext());
+  mlir::IRRewriter rewriter(workingMod->getContext());
 
+  // Retrieve the wcet core to analyze
   wcet::CoreOp analyzedCore = nullptr;
-  mod->walk([&](wcet::CoreOp c) {
+  workingMod->walk([&](wcet::CoreOp c) {
     if (c->hasAttr("wcet.cpuCore"))
       analyzedCore = c;
   });
 
+  // Replace fetchs by array reads
+  SmallVector<int64_t> i64instrs;
+  for (auto i : instrs)
+    i64instrs.push_back(i);
+
+  analyzedCore->walk([&](Operation *op) {
+    if (op->hasAttr("wcet.fetch")) {
+      auto oldFetch = dyn_cast_or_null<spechls::LoadOp>(op);
+      if (!oldFetch)
+        return;
+      rewriter.setInsertionPoint(oldFetch);
+      wcet::ConstArrayRead newFetch = wcet::ConstArrayRead::create(
+          rewriter, rewriter.getUnknownLoc(), oldFetch.getType(), oldFetch.getIndex(), i64instrs, 4);
+      rewriter.replaceAllOpUsesWith(oldFetch, newFetch);
+      rewriter.eraseOp(oldFetch);
+    }
+  });
+
+  // Setup the initial state
   mlir::SmallVector<std::optional<mlir::IntegerAttr>> st;
   mlir::SmallVector<mlir::Type> stTypes;
 
-  for (auto type : analyzedCore.getResultTypes()) {
+  auto resultsType = analyzedCore.getResultTypes();
+  stTypes.push_back(resultsType[0]);
+  st.push_back(rewriter.getIntegerAttr(resultsType[0], 0)); // pc
+  for (size_t i = 1; i < resultsType.size(); i++) {
+    Type type = analyzedCore.getResultTypes()[i];
     stTypes.push_back(type);
     st.push_back({});
   }
@@ -206,31 +230,33 @@ GraphAnalysis::GraphAnalysis(mlir::ModuleOp mod, mlir::SmallVector<size_t> instr
   preds.try_emplace(initState);
 
   mlir::SmallVector<state> layers = {initState};
+  mlir::SmallVector<state> lastLayers;
 
-  // size_t lId = 0;
-  // Build the penalties graphs
-  for (auto instr : instrs) {
-    // llvm::errs() << lId++ << ":";
+  auto layer = 1;
+  // Analysis' core
+  while (!layers.empty()) {
     mergeSameState(layers, succs, preds);
     SmallVector<wcet::state> nextLayers;
     for (auto state : layers) {
-      // for (auto s : state.st) {
-      //   llvm::errs() << " " << s;
-      // }
-      // llvm::errs() << "\n";
-      mlir::SmallVector<wcet::state> succOfState = stateAnalysis(rewriter, instr, state, stTypes, analyzedCore);
-      succs[state].append(succOfState);
+      mlir::SmallVector<wcet::state> succOfState = stateAnalysis(rewriter, state, stTypes, analyzedCore);
       for (auto succSt : succOfState) {
+        succs[state].push_back(succSt);
         preds[succSt].push_back(state);
+        if (succSt.st.empty() || (size_t)succSt.st[0].value().getInt() >= instrs.size() * 4 ||
+            (size_t)succSt.st[0].value().getInt() < (size_t)state.st[0].value().getInt()) {
+          lastLayers.push_back(succSt);
+          continue;
+        }
+        nextLayers.push_back(succSt);
       }
-      nextLayers.append(succOfState);
     }
-    layers = nextLayers;
+    layers = std::move(nextLayers);
+    layer++;
   }
 
-  auto lastState = StateStruct(0, layers.front().layers + 1, {});
-  preds.try_emplace(lastState, layers);
-  for (auto state : layers) {
+  auto lastState = StateStruct(0, layer, {});
+  preds.try_emplace(lastState, lastLayers);
+  for (auto state : lastLayers) {
     succs[state].push_back(lastState);
   }
   succs[lastState] = {};
@@ -239,5 +265,6 @@ GraphAnalysis::GraphAnalysis(mlir::ModuleOp mod, mlir::SmallVector<size_t> instr
   DenseMap<wcet::state, int64_t> dists;
   wcet = longestPath(initState, lastState, succs, dists);
   dumpGraph(succs, instrs, dists);
+  workingMod->erase();
 }
 } // namespace wcet

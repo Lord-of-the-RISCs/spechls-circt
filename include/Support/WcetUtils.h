@@ -41,7 +41,7 @@ typedef struct StateStruct {
 } // namespace wcet
 wcet::CoreOp createAnalyseCore(mlir::IRRewriter &rewriter, mlir::ModuleOp &top, wcet::CoreOp &analyzedCore,
                                mlir::SmallVector<std::optional<mlir::IntegerAttr>> &state,
-                               mlir::SmallVector<mlir::Type> &types, size_t instrs);
+                               mlir::SmallVector<mlir::Type> &types);
 
 mlir::SmallVector<int64_t> retrieveMultWcet(spechls::FSMOp &fsm);
 
