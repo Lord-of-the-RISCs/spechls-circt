@@ -5,15 +5,22 @@
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 
+#include "Analysis/Wcet/GraphWcetAnalysis.h"
+#include "Analysis/Wcet/LinearWcetAnalysis.h"
 #include "CAPI/Dialect/Schedule.h"
 #include "CAPI/Dialect/SpecHLS.h"
 #include "CAPI/Dialect/Wcet.h"
 #include "Dialect/Schedule/Transforms/Passes.h" // IWYU pragma: keep
-#include "Dialect/Wcet/Transforms/Passes.h"
 #include "circt/Support/LLVM.h"
+#include "mlir/IR/BuiltinAttributes.h"
+#include "mlir/IR/OpDefinition.h"
 #include "mlir/IR/Operation.h"
 #include "mlir/IR/Verifier.h"
 #include "llvm/Support/raw_ostream.h"
+#include <circt/Dialect/HW/HWOps.h>
+#include <cstddef>
+#include <kernel/rtlil.h>
+#include <llvm/Support/Format.h>
 
 #include <circt-c/Dialect/Comb.h>
 #include <circt-c/Dialect/Debug.h>
@@ -45,35 +52,9 @@
 
 #include "CAPI/Heptane/Heptane.h"
 
+using namespace mlir;
+
 extern "C" {
-
-//===--------------------------------------------------------------------------------------------------------------===//
-// Utility functions
-//===--------------------------------------------------------------------------------------------------------------===//
-
-// const char *getCStringDataFromMlirStringRef(MlirStringRef str) { return str.data; }
-//
-// size_t getCStringSizeFromMlirStringRef(MlirStringRef str) { return str.length; }
-//
-// const char *getCStringDataFromMlirIdentifier(MlirIdentifier identifier) {
-//   MlirStringRef str = mlirIdentifierStr(identifier);
-//   return str.data;
-// }
-//
-// size_t getCStringSizeFromMlirIdentifier(MlirIdentifier identifier) {
-//   MlirStringRef str = mlirIdentifierStr(identifier);
-//   return str.length;
-// }
-//
-// char getCharAt(const char *v, int offset) { return v[offset]; }
-//
-// MlirIdentifier mlirOperationGetAttributeNameAt(MlirOperation op, int64_t pos) {
-//   return mlirOperationGetAttribute(op, pos).name;
-// }
-//
-// MlirAttribute mlirOperationGetAttributeAt(MlirOperation op, int64_t pos) {
-//   return mlirOperationGetAttribute(op, pos).attribute;
-// }
 
 //===--------------------------------------------------------------------------------------------------------------===//
 // Passes
@@ -125,52 +106,14 @@ void destroyMLIR(MlirModule module) {
   }
 
 void mlirDumpModule(MlirModule module) { unwrap(module)->dump(); }
-size_t mlirWcetAnalysis(MlirModule module, mlir::SmallVector<size_t> &instrs) {
-  //==== Setup module
+
+size_t mlirWcetLongAnalysis(MlirModule module, mlir::SmallVector<size_t> &instr) {
   auto mod = unwrap(module);
-  auto pm = mlir::PassManager::on<mlir::ModuleOp>(mod->getContext());
-  pm.addPass(wcet::createSetupAnalysisPass());
-  if (failed(pm.run(mod))) {
-    llvm::errs() << "setup failed\n";
-    return 0;
-  }
-  //==== Analyse each instructions
-  for (size_t instr : instrs) {
-    pm.clear();
-    auto insertPass = wcet::createInsertInstrPass();
-    if (mlir::failed(insertPass->initializeOptions("instrs=" + std::to_string(instr), [](const mlir::Twine &msg) {
-          llvm::errs() << msg << "\n";
-          return mlir::failure();
-        }))) {
-      return 0;
-    }
-    pm.addPass(std::move(insertPass));
-    pm.addPass(wcet::createInlineCorePass());
-    pm.addPass(mlir::createCanonicalizerPass());
-    pm.addPass(wcet::createLongestPathPass());
-    if (failed(pm.run(mod))) {
-      llvm::errs() << "pipeline failed\n";
-      return 0;
-    }
-  }
-  //==== Retrieve the Wcet
-  size_t wcet = 0;
-  mod->walk([&](mlir::Operation *op) {
-    if (op->hasAttr("wcet.penalties")) {
-      wcet += mlir::cast<mlir::IntegerAttr>(op->getAttr("wcet.penalties")).getInt();
-    }
-  });
+  return wcet::GraphAnalysis(mod, instr).wcet;
+}
 
-  //==== Clean up
-  //  mlir::Operation *analysisCore;
-  //  mod->walk([&](mlir::Operation *c) {
-  //    if (c->hasAttr("wcet.analysis")) {
-  //      analysisCore = c;
-  //      return;
-  //    }
-  //  });
-  //  analysisCore->erase();
-
-  return wcet;
+size_t mlirWcetAnalysis(MlirModule module, mlir::SmallVector<size_t> &instrs) {
+  auto mod = unwrap(module);
+  return wcet::LinearAnalysis(mod, instrs).wcet;
 }
 }

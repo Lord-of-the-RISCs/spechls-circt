@@ -77,24 +77,36 @@ public:
     SmallVector<Operation *> toRemove;
 
     //============= Retrieve instructions types ===============================
-    size_t numInstrs = 0;
-    speculativeTask->walk([&](Operation *op) {
-      auto fetch = op->getAttr("wcet.fetch");
-      if (!fetch)
-        return;
-      coreInputsTypes.push_back(op->getResultTypes().front());
-      auto fetchNumber = dyn_cast_or_null<IntegerAttr>(fetch);
-      if (!fetchNumber) {
-        fetchNumber = rewriter.getI32IntegerAttr(0);
+    // size_t numInstrs = 0;
+    // speculativeTask->walk([&](Operation *op) {
+    //  auto fetch = op->getAttr("wcet.fetch");
+    //  if (!fetch)
+    //    return;
+    //  coreInputsTypes.push_back(op->getResultTypes().front());
+    //  auto fetchNumber = dyn_cast_or_null<IntegerAttr>(fetch);
+    //  if (!fetchNumber) {
+    //    fetchNumber = rewriter.getI32IntegerAttr(0);
+    //  }
+    //  coreInputsAttrs.push_back(rewriter.getDictionaryAttr(rewriter.getNamedAttr("wcet.instrNb", fetchNumber)));
+    //  coreInputs.push_back(op->getResult(0));
+    //  toRemove.push_back(op);
+    //  numInstrs++;
+    //});
+    speculativeTask->walk([&](spechls::MuOp mu) {
+      if (mu->hasAttr("wcet.pc")) {
+        coreInputsTypes.push_back(mu.getType());
+        coreOutputsTypes.push_back(mu.getType());
+        coreInputsAttrs.push_back({});
+        coreInputs.push_back(mu);
+        coreOutputs.push_back(mu.getLoopValue().getDefiningOp());
+        toRemove.push_back(mu);
       }
-      coreInputsAttrs.push_back(rewriter.getDictionaryAttr(rewriter.getNamedAttr("wcet.instrNb", fetchNumber)));
-      coreInputs.push_back(op->getResult(0));
-      toRemove.push_back(op);
-      numInstrs++;
     });
 
     //============= Retrieve Mu ===============================================
     speculativeTask->walk([&](spechls::MuOp mu) {
+      if (mu->hasAttr("wcet.pc"))
+        return;
       coreInputsTypes.push_back(mu.getType());
       coreOutputsTypes.push_back(mu.getType());
       coreInputsAttrs.push_back(rewriter.getDictionaryAttr({}));
@@ -112,22 +124,42 @@ public:
           rewriter.getDictionaryAttr(rewriter.getNamedAttr("wcet.nbPred", rewriter.getI32IntegerAttr(0))));
       coreOutputs.push_back(d->getOperand(0).getDefiningOp());
       toRemove.push_back(d);
-      spechls::DelayOp nextDelay = nullptr;
+      Operation *nextDelay = nullptr;
       for (auto *op : d->getUsers()) {
+        if (op == d)
+          continue;
         auto nd = dyn_cast_or_null<spechls::DelayOp>(op);
         if (nd) {
           nextDelay = nd;
           break;
         }
+        auto clnd = dyn_cast_or_null<spechls::CancellableDelayOp>(op);
+        if (clnd) {
+          nextDelay = clnd;
+          break;
+        }
+        auto rbnd = dyn_cast_or_null<spechls::RollbackableDelayOp>(op);
+        if (rbnd) {
+          d->dumpPretty();
+          llvm::errs() << "------------\n";
+          rbnd->dumpPretty();
+          nextDelay = rbnd;
+          break;
+        }
       }
       int nbPred = 0;
       while (nextDelay) {
-        coreInputs.push_back(nextDelay);
-        coreInputsTypes.push_back(nextDelay.getType());
-        coreOutputsTypes.push_back(nextDelay.getType());
+        auto rb = dyn_cast_or_null<spechls::RollbackableDelayOp>(nextDelay);
+        if (rb) {
+          llvm::errs() << "here too\n";
+          rb->dumpPretty();
+        }
+        coreInputs.push_back(nextDelay->getResult(0));
+        coreInputsTypes.push_back(nextDelay->getResultTypes().front());
+        coreOutputsTypes.push_back(nextDelay->getResultTypes().front());
         coreInputsAttrs.push_back(
             rewriter.getDictionaryAttr(rewriter.getNamedAttr("wcet.nbPred", rewriter.getI32IntegerAttr(++nbPred))));
-        coreOutputs.push_back(nextDelay.getInput().getDefiningOp());
+        coreOutputs.push_back(nextDelay->getOperand(0).getDefiningOp());
         toRemove.push_back(nextDelay);
         auto nextUsers = nextDelay->getUsers();
         nextDelay = nullptr;
@@ -135,6 +167,19 @@ public:
           auto nd = dyn_cast_or_null<spechls::DelayOp>(op);
           if (nd) {
             nextDelay = nd;
+            break;
+          }
+          auto clnd = dyn_cast_or_null<spechls::CancellableDelayOp>(op);
+          if (clnd) {
+            nextDelay = clnd;
+            break;
+          }
+          auto rbnd = dyn_cast_or_null<spechls::RollbackableDelayOp>(op);
+          if (rbnd) {
+            d->dumpPretty();
+            llvm::errs() << "------------\n";
+            rbnd->dumpPretty();
+            nextDelay = rbnd;
             break;
           }
         }
@@ -249,7 +294,7 @@ public:
     }
 
     core->setAttr("wcet.cpuCore", rewriter.getUnitAttr());
-    core->setAttr("wcet.numInstrs", rewriter.getUI32IntegerAttr(numInstrs));
+    // core->setAttr("wcet.numInstrs", rewriter.getUI32IntegerAttr(numInstrs));
 
     speculativeTask->getParentOfType<spechls::KernelOp>()->erase();
   }

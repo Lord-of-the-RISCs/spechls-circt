@@ -205,6 +205,58 @@ def Wcet_CoreInstanceOp : WcetOp<"core_instance",
       ];
     }
 
+def Wcet_GammaOp : WcetOp<"gamma",
+        [Pure, DeclareOpInterfaceMethods<OpAsmOpInterface, ["getAsmResultNames"]>]> {
+    let arguments = (ins StrAttr:$sym_name, AnyInteger:$select, Variadic<AnyType>:$inputs);
+    let results = (outs AnyType:$result);
 
+    let hasCustomAssemblyFormat = 1;
+    let hasVerifier = 1;
+    let hasCanonicalizeMethod = 1;
+
+    let extraClassDefinition = [{
+        void $cppClass::getAsmResultNames(llvm::function_ref<void(mlir::Value, llvm::StringRef)> setNameFn) {
+            setNameFn(getResult(), "gamma");
+        }
+    }];
+}
+
+def Wcet_LUTOp : WcetOp<"lut", [Pure, DeclareOpInterfaceMethods<OpAsmOpInterface, ["getAsmResultNames"]>]> {
+    let arguments = (ins
+        AnyInteger:$index,
+        DenseI64ArrayAttr:$contents
+    );
+    let results = (outs AnyInteger:$result);
+
+    let assemblyFormat = [{
+        $index $contents attr-dict `:` functional-type($index, $result)
+    }];
+
+    let hasVerifier = 1;
+    let hasCanonicalizeMethod = 1;
+
+    let extraClassDefinition = [{
+        void $cppClass::getAsmResultNames(llvm::function_ref<void(mlir::Value, llvm::StringRef)> setNameFn) {
+            setNameFn(getResult(), "lut");
+        }
+    }];
+
+}
+def Wcet_ConstArrayRead : WcetOp<"constArrayRead", [Pure]> { 
+  let arguments = (ins
+    AnyInteger:$index,
+    DenseI64ArrayAttr:$contents,
+    I64Attr:$step
+  );
+
+  let results = (outs AnyInteger:$result);
+
+  let hasCanonicalizeMethod = 1;
+
+  let assemblyFormat = [{
+     $index `<` $contents `>` `,` $step attr-dict `:` type($index) `,` type($result)
+    }];
+
+}
 
 #endif // SPECHLS_INCLUDED_DIALECT_WCET_IR_WCET_TD

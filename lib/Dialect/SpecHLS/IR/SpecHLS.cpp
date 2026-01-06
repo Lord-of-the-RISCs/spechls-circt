@@ -7,6 +7,7 @@
 
 #include "Dialect/SpecHLS/IR/SpecHLSOps.h"
 
+#include "circt/Dialect/HW/HWOps.h"
 #include "circt/Support/LLVM.h"
 #include "mlir/IR/OpDefinition.h"
 #include <llvm/ADT/STLExtras.h>
@@ -25,6 +26,7 @@
 #include "Dialect/SpecHLS/IR/SpecHLSTypes.h"
 #include "Utils.h"
 #include "llvm/Support/LogicalResult.h"
+#include "llvm/Support/raw_ostream.h"
 
 using namespace mlir;
 

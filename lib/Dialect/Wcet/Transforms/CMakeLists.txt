@@ -13,6 +13,11 @@ add_mlir_pdll_library(WcetGammaBinarizationPatternsIncGen
   GammaBinarization.h.inc
 )
 
+add_mlir_pdll_library(WcetConstantPropPatternsIncGen
+  ConstantProp.pdll
+  ConstantProp.h.inc
+)
+
 add_circt_dialect_library(WcetTransforms
     InsertInstr.cpp
     LongestPath.cpp
@@ -22,12 +27,16 @@ add_circt_dialect_library(WcetTransforms
     LUTToMux.cpp
     GammaBinarization.cpp
     SetupAnalysis.cpp
+    ExtractControl.cpp
+    EraseAnalyzedCore.cpp
+    ConstantProp.cpp
 
     DEPENDS
     WcetTransformsIncGen
     WcetSplitDelaysPatternsIncGen
     WcetLUTToMuxPatternsIncGen
     WcetGammaBinarizationPatternsIncGen
+    WcetConstantPropPatternsIncGen
 )
 target_include_directories(WcetTransforms
   PRIVATE
