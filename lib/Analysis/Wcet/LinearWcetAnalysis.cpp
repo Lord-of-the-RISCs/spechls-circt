@@ -120,6 +120,7 @@ std::optional<wcet::state> stateAnalysis(IRRewriter &rewriter, wcet::state &stat
   st = generateNextState(rewriter, analyzedCore, stTypes, dumResult, currentWcet);
 
   wcet::state res = wcet::StateStruct(currentWcet, state.layers + 1, st);
+  top->dumpPretty();
   top->erase();
   return res;
 }
@@ -130,7 +131,7 @@ namespace wcet {
 
 LinearAnalysis::LinearAnalysis(ModuleOp mod, SmallVector<size_t> instrs) {
   wcet = 0;
-
+  size_t step = 4;
   ModuleOp workingMod = mod.clone();
   DenseMap<state, SmallVector<state>> succs;
   DenseMap<state, SmallVector<state>> preds;
@@ -139,8 +140,12 @@ LinearAnalysis::LinearAnalysis(ModuleOp mod, SmallVector<size_t> instrs) {
   // Retrieve the wcet core to analyze
   wcet::CoreOp analyzedCore = nullptr;
   workingMod->walk([&](wcet::CoreOp c) {
-    if (c->hasAttr("wcet.cpuCore"))
+    if (c->hasAttr("wcet.cpuCore")) {
       analyzedCore = c;
+      IntegerAttr pcStep = dyn_cast_or_null<IntegerAttr>(c->getAttr("wcet.pcStep"));
+      if (pcStep)
+        step = (size_t)pcStep.getInt();
+    }
   });
 
   // Replace fetchs by array reads
@@ -156,7 +161,7 @@ LinearAnalysis::LinearAnalysis(ModuleOp mod, SmallVector<size_t> instrs) {
         return;
       rewriter.setInsertionPoint(oldFetch);
       wcet::ConstArrayRead newFetch = wcet::ConstArrayRead::create(
-          rewriter, rewriter.getUnknownLoc(), oldFetch.getType(), oldFetch.getIndex(), i64instrs, 4);
+          rewriter, rewriter.getUnknownLoc(), oldFetch.getType(), oldFetch.getIndex(), i64instrs, step);
       rewriter.replaceAllOpUsesWith(oldFetch, newFetch);
       newFetch->dumpPretty();
       rewriter.eraseOp(oldFetch);
@@ -205,7 +210,7 @@ LinearAnalysis::LinearAnalysis(ModuleOp mod, SmallVector<size_t> instrs) {
       break;
     }
     cState = nextSt.value();
-    if ((size_t)nextSt.value().st[0].value().getInt() >= instrs.size() * 4) {
+    if ((size_t)nextSt.value().st[0].value().getInt() >= instrs.size() * step) {
       break;
     }
   }

@@ -1,6 +1,6 @@
 // RUN: spechls-opt -split-input-file --outline-core %s | spechls-opt |FileCheck %s
 
-//CHECK: wcet.core @core_test(%arg0: i32 {wcet.instrNb = 0 : i32}, %arg1: i32, %arg2: !spechls.array<i32, 32>, %arg3: i32 {wcet.nbPred = 0 : i32}, %arg4: i32 {wcet.nbPred = 1 : i32}) -> (i32, !spechls.array<i32, 32>, i32, i32)
+//CHECK: wcet.core @core_test(%arg0: i32, %arg1: i32, %arg2: !spechls.array<i32, 32>, %arg3: i32 {wcet.nbPred = 0 : i32}, %arg4: i32 {wcet.nbPred = 1 : i32}) -> (i32, i32, !spechls.array<i32, 32>, i32, i32)
 //CHECK-NOT: spechls.delay
 //CHECK-NOT: spechls.mu
 //CHECK: wcet.commit
@@ -11,9 +11,11 @@ spechls.kernel @simpl(%in0 : i32, %in01 : i32, %in1 : !spechls.array<i32, 32>, %
     (i32, i32, !spechls.array<i32, 32>, !spechls.array<i32, 64>, i1)  ->
     !spechls.struct<"out_task" {"result" : i32 }> attributes {spechls.speculative} {
         %mu = spechls.mu<"x">(%0, %result): i32
+        %mu_pc = spechls.mu<"pc">(%2, %next_pc) {wcet.pc, wcet.pcStep = 4 : i32} : i32
         %mu_arr = spechls.mu<"arr">(%arr, %next_arr) : !spechls.array<i32, 32>
         %1 = hw.constant 1 : i1
-        %3 = spechls.load %mu_arr[%2 : i32] {wcet.fetch} : <i32, 32>
+        %c4_i32 = hw.constant 4 : i32
+        %3 = spechls.load %mu_arr[%mu_pc : i32] {wcet.fetch} : <i32, 32>
         %4 = spechls.delay %3 by 1 : i32
         %addr = spechls.load %data[%4 : i32] : <i32, 64> 
         %5 = spechls.delay %4 by 1 : i32
@@ -21,6 +23,7 @@ spechls.kernel @simpl(%in0 : i32, %in01 : i32, %in1 : !spechls.array<i32, 32>, %
         %mul = comb.mul %mu, %5 : i32
         %result = spechls.gamma<"result">(%gammaCtrl, %add, %mul) : i1, i32
         %next_arr = spechls.alpha %mu_arr[%addr : i32], %result if %1 : !spechls.array<i32, 32>
+        %next_pc = comb.add %mu_pc, %c4_i32 : i32
         spechls.commit %result : i32
       }
     %result = spechls.field <"result"> %result_struct : !spechls.struct<"out_task" {"result" : i32 }>

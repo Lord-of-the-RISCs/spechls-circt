@@ -9,6 +9,8 @@
 #include "circt/Dialect/HW/HWOps.h"
 #include "circt/Support/LLVM.h"
 #include "mlir/Support/LLVM.h"
+#include "llvm/Support/raw_ostream.h"
+#include <cassert>
 #include <fstream>
 
 using namespace mlir;
@@ -154,12 +156,14 @@ SmallVector<std::optional<IntegerAttr>> generateNextState(IRRewriter &rewriter, 
   if (!dumResult[0].has_value())
     return {};
   SmallVector<std::optional<IntegerAttr>> state;
+  assert(analyzedCore.getResultTypes().size() == dumResult.size());
   for (size_t i = 0; i < analyzedCore.getResultTypes().size(); i++) {
     auto nbPred = dyn_cast_or_null<IntegerAttr>(analyzedCore.getArgAttr(i, "wcet.nbPred"));
     IntegerType it = dyn_cast_or_null<IntegerType>(stTypes[i]);
     if (!nbPred || nbPred.getInt() == 0) {
       if (it && it.getWidth() == 1 && !dumResult[i]) {
-        state.push_back(rewriter.getIntegerAttr(stTypes[i], 1));
+        state.push_back({});
+        // state.push_back(rewriter.getIntegerAttr(stTypes[i], 1));
       } else {
         state.push_back(dumResult[i]);
       }

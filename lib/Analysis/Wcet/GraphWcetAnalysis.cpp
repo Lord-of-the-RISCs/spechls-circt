@@ -100,8 +100,8 @@ int64_t longestPath(wcet::state &start, wcet::state &end, DenseMap<wcet::state, 
   return dists[end];
 }
 
-void mergeSameState(SmallVector<wcet::state> &states, DenseMap<wcet::state, SmallVector<wcet::state>> succs,
-                    DenseMap<wcet::state, SmallVector<wcet::state>> preds) {
+void mergeSameState(SmallVector<wcet::state> &states, DenseMap<wcet::state, SmallVector<wcet::state>> &succs,
+                    DenseMap<wcet::state, SmallVector<wcet::state>> &preds) {
   SmallVector<wcet::state> result;
   for (auto cSt : states) {
     wcet::state *sameState = nullptr;
@@ -111,10 +111,7 @@ void mergeSameState(SmallVector<wcet::state> &states, DenseMap<wcet::state, Smal
         break;
       }
     }
-    if (sameState) {
-      preds[*sameState].append(preds[cSt]);
-      preds.erase(preds.find(cSt));
-    } else {
+    if (!sameState) {
       result.push_back(cSt);
     }
   }
@@ -161,11 +158,10 @@ mlir::SmallVector<wcet::state> stateAnalysis(mlir::IRRewriter &rewriter, wcet::s
   mlir::SmallVector<std::optional<mlir::IntegerAttr>> dumResult;
   for (auto d : lastDum.getInputs()) {
     auto lastResultOp = dyn_cast_or_null<circt::hw::ConstantOp>(d.getDefiningOp());
-    if (lastResultOp) {
+    if (lastResultOp)
       dumResult.push_back(lastResultOp.getValueAttr());
-      continue;
-    }
-    dumResult.push_back({});
+    else
+      dumResult.push_back({});
   }
 
   SmallVector<wcet::state> result;
@@ -181,6 +177,7 @@ namespace wcet {
 
 GraphAnalysis::GraphAnalysis(mlir::ModuleOp mod, mlir::SmallVector<size_t> instrs) {
   wcet = 0;
+  size_t step = 4;
   ModuleOp workingMod = mod.clone();
 
   // Setup analysis
@@ -191,8 +188,12 @@ GraphAnalysis::GraphAnalysis(mlir::ModuleOp mod, mlir::SmallVector<size_t> instr
   // Retrieve the wcet core to analyze
   wcet::CoreOp analyzedCore = nullptr;
   workingMod->walk([&](wcet::CoreOp c) {
-    if (c->hasAttr("wcet.cpuCore"))
+    if (c->hasAttr("wcet.cpuCore")) {
       analyzedCore = c;
+      IntegerAttr pcStep = dyn_cast_or_null<IntegerAttr>(c->getAttr("wcet.pcStep"));
+      if (pcStep)
+        step = (size_t)pcStep.getInt();
+    }
   });
 
   // Replace fetchs by array reads
@@ -207,7 +208,7 @@ GraphAnalysis::GraphAnalysis(mlir::ModuleOp mod, mlir::SmallVector<size_t> instr
         return;
       rewriter.setInsertionPoint(oldFetch);
       wcet::ConstArrayRead newFetch = wcet::ConstArrayRead::create(
-          rewriter, rewriter.getUnknownLoc(), oldFetch.getType(), oldFetch.getIndex(), i64instrs, 4);
+          rewriter, rewriter.getUnknownLoc(), oldFetch.getType(), oldFetch.getIndex(), i64instrs, step);
       rewriter.replaceAllOpUsesWith(oldFetch, newFetch);
       rewriter.eraseOp(oldFetch);
     }
@@ -242,7 +243,7 @@ GraphAnalysis::GraphAnalysis(mlir::ModuleOp mod, mlir::SmallVector<size_t> instr
       for (auto succSt : succOfState) {
         succs[state].push_back(succSt);
         preds[succSt].push_back(state);
-        if (succSt.st.empty() || (size_t)succSt.st[0].value().getInt() >= instrs.size() * 4 ||
+        if (succSt.st.empty() || (size_t)succSt.st[0].value().getInt() >= instrs.size() * step ||
             (size_t)succSt.st[0].value().getInt() < (size_t)state.st[0].value().getInt()) {
           lastLayers.push_back(succSt);
           continue;
