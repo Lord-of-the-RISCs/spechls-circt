@@ -423,7 +423,13 @@ LogicalResult printMuInitialization(CppEmitter &emitter, spechls::KernelOp kerne
 
 LogicalResult printOperation(CppEmitter &emitter, ModuleOp moduleOp) {
   raw_indented_ostream &os = emitter.ostream();
-  os << "#include <ap_int.h>\n";
+  
+  if (emitter.shouldGenerateCatapultCompatibleCode()){
+    os << "#include <ac_int.h>\n";
+  }
+  else {
+    os << "#include <ap_int.h>\n";
+  }
   if (!emitter.shouldGenerateVitisHLSCompatibleCode())
     os << "#include <io_printf.h>\n";
   os << "\n#include \"spechls_support.h\"\n\n";
@@ -1533,6 +1539,8 @@ LogicalResult CppEmitter::emitType(Location loc, Type type) {
         os << "unsigned int";
       else if (iType.getWidth() == 64)
         os << "unsigned long long";
+      else if (this->shouldGenerateCatapultCompatibleCode())
+        os << "ac_int<" << iType.getWidth() << ", false>";
       else
         os << "ap_uint<" << iType.getWidth() << ">";
     } else {
@@ -1547,6 +1555,8 @@ LogicalResult CppEmitter::emitType(Location loc, Type type) {
         os << "int";
       else if (iType.getWidth() == 64)
         os << "long long";
+      else if (this->shouldGenerateCatapultCompatibleCode())
+        os << "ac_int<" << iType.getWidth() << ", true>";
       else
         os << "ap_int<" << iType.getWidth() << ">";
     }
