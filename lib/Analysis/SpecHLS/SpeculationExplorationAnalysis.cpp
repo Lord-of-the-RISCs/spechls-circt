@@ -9,6 +9,7 @@
 #include "Analysis/SpecHLS/ConfigurationExcluderAnalysis.h"
 #include "Analysis/SpecHLS/MobilityAnalysis.h"
 #include "Dialect/SpecHLS/IR/SpecHLSOps.h"
+#include "llvm/Support/raw_ostream.h"
 
 #include <circt/Dialect/SSP/SSPOps.h>
 #include <circt/Scheduling/Algorithms.h>
@@ -44,7 +45,7 @@ bool areSameConfig(llvm::ArrayRef<int> config1, llvm::ArrayRef<int> config2) {
 bool areCompatibleConfig(llvm::ArrayRef<int> base, llvm::ArrayRef<int> config, llvm::ArrayRef<bool> memspecGammas) {
   // It is presupposed that the lengths of the vectors are the same.
   for (unsigned i = 0; i < base.size(); ++i) {
-    if (config[i] != -1) {
+    if (config[i] != 0) {
       if (memspecGammas[i]) {
         if (base[i] < config[i]) {
           return false;
@@ -194,7 +195,7 @@ SpeculationExplorationAnalysis::SpeculationExplorationAnalysis(spechls::TaskOp t
   llvm::SmallVector<bool> memspecGammas;
 
   std::sort(gammas.begin(), gammas.end(), [&](spechls::GammaOp &g1, spechls::GammaOp &g2) {
-    return mobility.mobilities[g1] < mobility.mobilities[g2];
+    return mobility.mobilities[g1] > mobility.mobilities[g2];
   });
 
   unsigned numGamma = gammas.size();
@@ -229,6 +230,7 @@ SpeculationExplorationAnalysis::SpeculationExplorationAnalysis(spechls::TaskOp t
       }
       configurations.try_emplace(translatedConfig, 1);
     }
+
     double getProbability(llvm::ArrayRef<int> configuration, llvm::ArrayRef<bool> memspecGammas) {
       if (numConfiguration == 0)
         return 1.0;
@@ -345,7 +347,7 @@ SpeculationExplorationAnalysis::SpeculationExplorationAnalysis(spechls::TaskOp t
             }
 
             if (!ConfigurationExcluderAnalysis(task, targetClock, newConfig, gammas).deadEnd)
-              configs.push(ConfigurationType{.config = std::move(newConfig),
+              configs.push(ConfigurationType{.config = newConfig,
                                              .lastGamma = index,
                                              .numSpeculation = config.numSpeculation + 1,
                                              .proba = proba});
