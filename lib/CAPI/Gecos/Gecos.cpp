@@ -238,6 +238,8 @@ MlirBlock sspGetGraphBlock(MlirOperation op) {
   return wrap(&(instance.getDependenceGraph().getBody().front()));
 }
 
+MlirOperation getDefiningOp(MlirValue value) { return wrap(unwrap(value).getDefiningOp()); }
+
 MlirOperation mlirGetSSPInstance(MlirModule module) {
   auto mod = unwrap(module);
   for (auto &op : mod.getOperation()->getRegions().front().getBlocks().front()) {
