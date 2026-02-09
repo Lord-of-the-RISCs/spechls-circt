@@ -222,77 +222,103 @@ TimingAnalyserFactory timingAnalyserFactory;
 
 std::optional<std::tuple<double, int, double>>
 TimingAnalyser::computeOperationTiming(mlir::Operation *op, double clockPeriod, mlir::MLIRContext *ctx) {
-  if (auto combDelayAttr = op->getAttrOfType<mlir::FloatAttr>("spechls.combDelay")) {
-    return std::make_tuple(combDelayAttr.getValueAsDouble(), 0, combDelayAttr.getValueAsDouble());
-  }
-  if (op->hasAttr("spechls.latency")) {
-    unsigned latency = op->getAttrOfType<mlir::IntegerAttr>("spechls.lantency").getUInt();
-    return std::make_tuple(0.0, latency, 0.0);
-  }
-  return llvm::TypeSwitch<mlir::Operation *, std::optional<std::tuple<double, int, double>>>(op)
-      .Case<circt::comb::AddOp, circt::comb::SubOp>([&](mlir::Operation *op) {
-        double bw = static_cast<double>(op->getResultTypes().front().getIntOrFloatBitWidth());
-        double combDelay = this->addOpTiming.cstParameter + this->addOpTiming.bwParameter * bw;
-        return std::make_tuple(combDelay, 0, combDelay);
-      })
-      .Case<spechls::LoadOp, spechls::AlphaOp>([&](mlir::Operation *op) {
-        return std::make_tuple(this->localMemTiming.inDelay, this->localMemTiming.latency,
-                               this->localMemTiming.outDelay);
-      })
-      .Case<circt::comb::ICmpOp>([&](mlir::Operation *op) {
-        double bw = static_cast<double>(op->getResultTypes().front().getIntOrFloatBitWidth());
-        double combDelay = this->eqOpTiming.cstParameter + this->eqOpTiming.bwParameter * std::log2(bw);
-        return std::make_tuple(combDelay, 0, combDelay);
-      })
-      .Case([&](circt::comb::MuxOp &op) {
-        double bw = static_cast<double>(op->getResultTypes().front().getIntOrFloatBitWidth());
-        double ctrlBw = static_cast<double>(op.getCond().getType().getIntOrFloatBitWidth());
-        double combDelay = this->muxOpTiming.cstParameter + this->muxOpTiming.bwParameter * std::log2(bw) +
-                           this->muxOpTiming.ctrlBwParameter * ctrlBw;
-        return std::make_tuple(combDelay, 0, combDelay);
-      })
-      .Case([&](spechls::GammaOp &op) {
-        if (llvm::isa<spechls::ArrayType>(op->getResult(0).getType())) {
-          return std::make_tuple(0.0, 0, 0.0);
-        }
-        double bw = static_cast<double>(op->getResultTypes().front().getIntOrFloatBitWidth());
-        double ctrlBw = static_cast<double>(op.getOperand(0).getType().getIntOrFloatBitWidth());
-        double combDelay = this->muxOpTiming.cstParameter + this->muxOpTiming.bwParameter * std::log2(bw) +
-                           this->muxOpTiming.ctrlBwParameter * ctrlBw;
-        return std::make_tuple(combDelay, 0, combDelay);
-      })
-      .Case<circt::comb::ShlOp, circt::comb::ShrSOp, circt::comb::ShrUOp>([&](mlir::Operation *op) {
-        double combDelay = 0.0;
-        if (!llvm::isa<circt::hw::ConstantOp>(op->getOperand(1).getDefiningOp())) {
+  auto initialComputation = [&]() -> std::optional<std::tuple<double, int, double>> {
+    if (auto combDelayAttr = op->getAttrOfType<mlir::FloatAttr>("spechls.combDelay")) {
+      return std::make_tuple(combDelayAttr.getValueAsDouble(), 0, combDelayAttr.getValueAsDouble());
+    }
+    if (op->hasAttr("spechls.latency")) {
+      unsigned latency = op->getAttrOfType<mlir::IntegerAttr>("spechls.lantency").getUInt();
+      return std::make_tuple(0.0, latency, 0.0);
+    }
+    return llvm::TypeSwitch<mlir::Operation *, std::optional<std::tuple<double, int, double>>>(op)
+        .Case<circt::comb::AddOp, circt::comb::SubOp>([&](mlir::Operation *op) {
           double bw = static_cast<double>(op->getResultTypes().front().getIntOrFloatBitWidth());
-          combDelay = this->shiftOpTiming.cstParameter + this->shiftOpTiming.bwParameter * bw;
-        }
-        return std::make_tuple(combDelay, 0, combDelay);
-      })
-      .Case<circt::hw::ConstantOp, circt::hw::BitcastOp, spechls::MuOp, spechls::DelayOp, spechls::RollbackableDelayOp,
-            spechls::CancellableDelayOp, circt::comb::ExtractOp, circt::comb::ConcatOp, spechls::TaskOp,
-            spechls::PrintOp, spechls::ExitOp, spechls::KernelOp, spechls::SyncOp, spechls::PackOp,
-            spechls::FSMCommandOp, spechls::FSMOp, circt::comb::ReplicateOp>(
-          [&](mlir::Operation *op) { return std::make_tuple(0.0, 0, 0.0); })
-      .Case([&](circt::comb::OrOp &op) {
-        double combDelay = this->orOpTiming.cstParameter + this->orOpTiming.linearParameter * op.getNumOperands();
-        return std::make_tuple(combDelay, 0, combDelay);
-      })
-      .Case([&](circt::comb::XorOp &op) {
-        double combDelay = this->xorOpTiming.cstParameter + this->xorOpTiming.linearParameter * op.getNumOperands();
-        return std::make_tuple(combDelay, 0, combDelay);
-      })
-      .Case([&](circt::comb::AndOp &op) {
-        double combDelay = this->andOpTiming.cstParameter + this->andOpTiming.linearParameter * op.getNumOperands();
-        return std::make_tuple(combDelay, 0, combDelay);
-      })
-      .Case<spechls::CallOp, spechls::FieldOp, spechls::CommitOp>(
-          [&](mlir::Operation *op) { return std::make_tuple(0.0, 0, 0.0); })
-      .Default([&](mlir::Operation *op) {
-        llvm::errs() << "No timing found for following operation.\n";
-        op->dump();
-        return std::nullopt;
-      });
+          double combDelay = this->addOpTiming.cstParameter + this->addOpTiming.bwParameter * bw;
+          return std::make_tuple(combDelay, 0, combDelay);
+        })
+        .Case<spechls::LoadOp, spechls::AlphaOp>([&](mlir::Operation *op) {
+          return std::make_tuple(this->localMemTiming.inDelay, this->localMemTiming.latency,
+                                 this->localMemTiming.outDelay);
+        })
+        .Case<circt::comb::ICmpOp>([&](mlir::Operation *op) {
+          double bw = static_cast<double>(op->getResultTypes().front().getIntOrFloatBitWidth());
+          double combDelay = this->eqOpTiming.cstParameter + this->eqOpTiming.bwParameter * std::log2(bw);
+          return std::make_tuple(combDelay, 0, combDelay);
+        })
+        .Case([&](circt::comb::MuxOp &op) {
+          double bw = static_cast<double>(op->getResultTypes().front().getIntOrFloatBitWidth());
+          double ctrlBw = static_cast<double>(op.getCond().getType().getIntOrFloatBitWidth());
+          double combDelay = this->muxOpTiming.cstParameter + this->muxOpTiming.bwParameter * std::log2(bw) +
+                             this->muxOpTiming.ctrlBwParameter * ctrlBw;
+          return std::make_tuple(combDelay, 0, combDelay);
+        })
+        .Case([&](spechls::GammaOp &op) {
+          if (llvm::isa<spechls::ArrayType>(op->getResult(0).getType())) {
+            return std::make_tuple(0.0, 0, 0.0);
+          }
+          double bw = static_cast<double>(op->getResultTypes().front().getIntOrFloatBitWidth());
+          double ctrlBw = static_cast<double>(op.getOperand(0).getType().getIntOrFloatBitWidth());
+          double combDelay = this->muxOpTiming.cstParameter + this->muxOpTiming.bwParameter * std::log2(bw) +
+                             this->muxOpTiming.ctrlBwParameter * ctrlBw;
+          return std::make_tuple(combDelay, 0, combDelay);
+        })
+        .Case<circt::comb::ShlOp, circt::comb::ShrSOp, circt::comb::ShrUOp>([&](mlir::Operation *op) {
+          double combDelay = 0.0;
+          if (!llvm::isa<circt::hw::ConstantOp>(op->getOperand(1).getDefiningOp())) {
+            double bw = static_cast<double>(op->getResultTypes().front().getIntOrFloatBitWidth());
+            combDelay = this->shiftOpTiming.cstParameter + this->shiftOpTiming.bwParameter * bw;
+          }
+          return std::make_tuple(combDelay, 0, combDelay);
+        })
+        .Case<circt::hw::ConstantOp, circt::hw::BitcastOp, spechls::MuOp, spechls::DelayOp,
+              spechls::RollbackableDelayOp, spechls::CancellableDelayOp, circt::comb::ExtractOp, circt::comb::ConcatOp,
+              spechls::TaskOp, spechls::PrintOp, spechls::ExitOp, spechls::KernelOp, spechls::SyncOp, spechls::PackOp,
+              spechls::FSMCommandOp, spechls::FSMOp, circt::comb::ReplicateOp, spechls::RollbackOp, spechls::RewindOp>(
+            [&](mlir::Operation *op) { return std::make_tuple(0.0, 0, 0.0); })
+        .Case([&](circt::comb::OrOp &op) {
+          double combDelay = this->orOpTiming.cstParameter + this->orOpTiming.linearParameter * op.getNumOperands();
+          return std::make_tuple(combDelay, 0, combDelay);
+        })
+        .Case([&](circt::comb::XorOp &op) {
+          double combDelay = this->xorOpTiming.cstParameter + this->xorOpTiming.linearParameter * op.getNumOperands();
+          return std::make_tuple(combDelay, 0, combDelay);
+        })
+        .Case([&](circt::comb::AndOp &op) {
+          double combDelay = this->andOpTiming.cstParameter + this->andOpTiming.linearParameter * op.getNumOperands();
+          return std::make_tuple(combDelay, 0, combDelay);
+        })
+        .Case<spechls::CallOp, spechls::FieldOp, spechls::CommitOp, spechls::DummyOp>(
+            [&](mlir::Operation *op) { return std::make_tuple(0.0, 0, 0.0); })
+        .Default([&](mlir::Operation *op) {
+          llvm::errs() << "No timing found for following operation.\n";
+          op->dump();
+          return std::nullopt;
+        });
+  }();
+  if (initialComputation) {
+    if (std::get<1>(initialComputation.value()) == 0) {
+      auto combDelay = std::get<0>(initialComputation.value());
+      unsigned lat = 0;
+      while (combDelay >= clockPeriod) {
+        combDelay -= clockPeriod;
+        ++lat;
+      }
+      return std::make_tuple(combDelay, lat, combDelay);
+    }
+    unsigned lat = std::get<1>(initialComputation.value());
+    double inDelay = std::get<0>(initialComputation.value());
+    double outDelay = std::get<2>(initialComputation.value());
+    while (inDelay >= clockPeriod) {
+      inDelay -= clockPeriod;
+      ++lat;
+    }
+    while (outDelay >= clockPeriod) {
+      outDelay -= clockPeriod;
+      ++lat;
+    }
+    return std::make_tuple(inDelay, lat, outDelay);
+  }
+  return initialComputation;
 }
 
 } // namespace spechls
