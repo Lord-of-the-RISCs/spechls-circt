@@ -68,6 +68,10 @@ def SpecHLS_StructType : SpecHLSType<"Struct", "struct"> {
         ArrayRefParameter<"::mlir::Type">:$fieldTypes
     );
 
+    let extraClassDeclaration = [{
+        unsigned getBitWidth();
+    }];
+
     let hasCustomAssemblyFormat = 1;
     let genVerifyDecl = 1;
 }
@@ -183,7 +187,7 @@ def SpecHLS_GammaOp : SpecHLSOp<"gamma",
 }
 
 def SpecHLS_MuOp : SpecHLSOp<"mu",
-        [Pure, SameOperandsAndResultType, DeclareOpInterfaceMethods<OpAsmOpInterface, ["getAsmResultNames"]>]> {
+        [SameOperandsAndResultType, DeclareOpInterfaceMethods<OpAsmOpInterface, ["getAsmResultNames"]>]> {
     let arguments = (ins StrAttr:$sym_name, AnyType:$initValue, AnyType:$loopValue);
     let results = (outs AnyType:$result);
 
@@ -196,7 +200,7 @@ def SpecHLS_MuOp : SpecHLSOp<"mu",
     }];
 }
 
-def SpecHLS_PrintOp : SpecHLSOp<"print", [DeclareOpInterfaceMethods<OpAsmOpInterface, ["getAsmResultNames"]>]> {
+def SpecHLS_PrintOp : SpecHLSOp<"print", [Pure, DeclareOpInterfaceMethods<OpAsmOpInterface, ["getAsmResultNames"]>]> {
     let arguments = (ins I32:$state, I1:$enable, StrAttr:$format, Variadic<AnyType>:$args);
     let results = (outs I32:$new_state);
 
@@ -236,7 +240,7 @@ def SpecHLS_CallOp : SpecHLSOp<"call",
     let hasCanonicalizeMethod = 1;
 }
 
-def SpecHLS_AlphaOp : SpecHLSOp<"alpha"> {
+def SpecHLS_AlphaOp : SpecHLSOp<"alpha", [Pure]> {
     let arguments = (ins
         Arg<SpecHLS_ArrayType, "The array to write to", [MemWriteAt<0, FullEffect>]>:$array,
         AnyInteger:$index,
@@ -249,7 +253,7 @@ def SpecHLS_AlphaOp : SpecHLSOp<"alpha"> {
     let hasVerifier = 1;
 }
 
-def SpecHLS_LoadOp : SpecHLSOp<"load", [DeclareOpInterfaceMethods<InferTypeOpInterface>]> {
+def SpecHLS_LoadOp : SpecHLSOp<"load", [Pure, DeclareOpInterfaceMethods<InferTypeOpInterface>]> {
     let arguments = (ins
         Arg<SpecHLS_ArrayType, "The array to read from", [MemReadAt<0, FullEffect>]>:$array,
         AnyInteger:$index
@@ -282,7 +286,7 @@ def SpecHLS_LUTOp : SpecHLSOp<"lut", [Pure, DeclareOpInterfaceMethods<OpAsmOpInt
 }
 
 def SpecHLS_DelayOp : SpecHLSOp<"delay",
-        [AttrSizedOperandSegments,
+        [Pure, AttrSizedOperandSegments,
          TypesMatchWith<"Delay input and output types must match", "input", "result", "$_self">,
          OptionalTypesMatchWith<"Delay input and initialization value must have the same type",
                                 "input", "init", "$_self">]> {
@@ -298,7 +302,7 @@ def SpecHLS_DelayOp : SpecHLSOp<"delay",
 }
 
 def SpecHLS_CancellableDelayOp : SpecHLSOp<"cancellableDelay",
-        [AttrSizedOperandSegments]> {
+        [Pure, AttrSizedOperandSegments]> {
     let arguments = (ins
         I1:$input,
         UI32Attr:$depth,
@@ -314,7 +318,7 @@ def SpecHLS_CancellableDelayOp : SpecHLSOp<"cancellableDelay",
 }
 
 def SpecHLS_RollbackableDelayOp : SpecHLSOp<"rollbackableDelay",
-        [AttrSizedOperandSegments,
+        [Pure, AttrSizedOperandSegments,
          TypesMatchWith<"Delay input and output types must match", "input", "result", "$_self">,
          OptionalTypesMatchWith<"Delay input and initialization value must have the same type",
                                 "input", "init", "$_self">]> {
@@ -333,7 +337,7 @@ def SpecHLS_RollbackableDelayOp : SpecHLSOp<"rollbackableDelay",
     let hasCustomAssemblyFormat = 1;
 }
 
-def SpecHLS_FIFOOp : SpecHLSOp<"fifo", [DeclareOpInterfaceMethods<OpAsmOpInterface, ["getAsmResultNames"]>, AllTypesMatch<["input", "result"]>]> {
+def SpecHLS_FIFOOp : SpecHLSOp<"fifo", [Pure, DeclareOpInterfaceMethods<OpAsmOpInterface, ["getAsmResultNames"]>, AllTypesMatch<["input", "result"]>]> {
     let arguments = (ins SpecHLS_StructType:$input, UI32Attr:$depth);
     let results = (outs SpecHLS_StructType:$result);
 
@@ -393,7 +397,7 @@ def SpecHLS_FieldOp : SpecHLSOp<"field", [Pure, DeclareOpInterfaceMethods<InferT
 }
 
 def SpecHLS_FSMOp : SpecHLSOp<"fsm",
-        [TypesMatchWith<"State input and output types must match", "state", "result", "$_self">,
+        [Pure, TypesMatchWith<"State input and output types must match", "state", "result", "$_self">,
          SameVariadicOperandSize]> {
     let arguments = (ins
         StrAttr:$name,
@@ -412,7 +416,7 @@ def SpecHLS_FSMOp : SpecHLSOp<"fsm",
     }];
 }
 
-def SpecHLS_FSMCommandOp : SpecHLSOp<"fsm_command"> {
+def SpecHLS_FSMCommandOp : SpecHLSOp<"fsm_command", [Pure]> {
     let arguments = (ins
         StrAttr:$name,
         SpecHLS_StructType:$state
@@ -425,7 +429,7 @@ def SpecHLS_FSMCommandOp : SpecHLSOp<"fsm_command"> {
 }
 
 def SpecHLS_RewindOp : SpecHLSOp<"rewind",
-        [TypesMatchWith<"Data input and output types must match", "input", "result", "$_self">]> {
+        [Pure, TypesMatchWith<"Data input and output types must match", "input", "result", "$_self">]> {
     let arguments = (ins
         DenseI64ArrayAttr:$depths,
         AnyType:$input,
@@ -440,7 +444,7 @@ def SpecHLS_RewindOp : SpecHLSOp<"rewind",
 }
 
 def SpecHLS_RollbackOp : SpecHLSOp<"rollback",
-        [TypesMatchWith<"Data input and output types must match", "input", "result", "$_self">]> {
+        [Pure, TypesMatchWith<"Data input and output types must match", "input", "result", "$_self">]> {
     let arguments = (ins
         DenseI64ArrayAttr:$depths,
         I64Attr:$offset,
@@ -456,7 +460,7 @@ def SpecHLS_RollbackOp : SpecHLSOp<"rollback",
 }
 
 def SpecHLS_CancelOp : SpecHLSOp<"cancel",
-        [TypesMatchWith<"Data input and output types must match", "input", "result", "$_self">]> {
+        [Pure, TypesMatchWith<"Data input and output types must match", "input", "result", "$_self">]> {
     let arguments = (ins
         I64Attr:$offset,
         I1:$input,
@@ -467,6 +471,19 @@ def SpecHLS_CancelOp : SpecHLSOp<"cancel",
 
     let assemblyFormat = [{
         `<` $offset `>` $input `,` $rollback `,` $writeCommand attr-dict `:` type($rollback)
+    }];
+}
+
+def SpecHLS_DummyOp : SpecHLSOp<"dummy", [Pure]> {
+    let arguments = (ins);
+    let results = (outs AnyType:$result);
+
+    let description = [{
+        Dummy operation. Used as an input of anytype. Like a constant, but with no value.
+    }];
+
+    let assemblyFormat = [{
+        attr-dict `:` type($result)
     }];
 }
 

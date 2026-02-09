@@ -8,6 +8,7 @@
 #include "Dialect/SpecHLS/IR/SpecHLSOps.h"
 
 #include "circt/Support/LLVM.h"
+#include "mlir/IR/BuiltinTypeInterfaces.h"
 #include "mlir/IR/OpDefinition.h"
 #include <llvm/ADT/STLExtras.h>
 #include <llvm/ADT/TypeSwitch.h>
@@ -88,6 +89,16 @@ LogicalResult spechls::StructType::verify(function_ref<InFlightDiagnostic()> emi
   if (fieldNames.size() != fieldTypes.size())
     return emitError() << "field name and field type count mismatch";
   return success();
+}
+
+unsigned spechls::StructType::getBitWidth() {
+  unsigned width = 0;
+  for (auto field : getFieldTypes()) {
+    width += llvm::TypeSwitch<mlir::Type, unsigned>(field)
+                 .Case<mlir::IntegerType, mlir::FloatType>([](mlir::Type t) { return t.getIntOrFloatBitWidth(); })
+                 .Case<spechls::StructType>([&](auto t) { return t.getBitWidth(); });
+  }
+  return width;
 }
 
 ParseResult spechls::KernelOp::parse(OpAsmParser &parser, OperationState &result) {
