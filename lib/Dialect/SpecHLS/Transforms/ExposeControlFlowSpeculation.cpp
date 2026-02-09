@@ -17,12 +17,17 @@
 #include "circt/Dialect/HW/HWOps.h"
 #include "circt/Dialect/SSP/SSPOps.h"
 #include "circt/Scheduling/Problems.h"
+#include "circt/Support/LLVM.h"
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/BuiltinAttributes.h"
+#include "mlir/IR/BuiltinTypeInterfaces.h"
 #include "mlir/IR/IRMapping.h"
 #include "mlir/IR/Location.h"
 #include "mlir/IR/Operation.h"
+#include "mlir/IR/Value.h"
 #include "llvm/ADT/SmallVector.h"
+#include "llvm/ADT/TypeSwitch.h"
+#include "llvm/Support/Casting.h"
 #include "llvm/Support/LogicalResult.h"
 
 #include <algorithm>
@@ -31,6 +36,7 @@
 #include <circt/Dialect/SSP/SSPDialect.h>
 #include <circt/Scheduling/Algorithms.h>
 #include <circt/Scheduling/Problems.h>
+#include <limits>
 #include <mlir/IR/BuiltinOps.h>
 #include <mlir/IR/MLIRContext.h>
 #include <mlir/Pass/PassManager.h>
@@ -53,14 +59,33 @@ namespace {
 circt::scheduling::ChainingCyclicProblem duplicateProblem(circt::scheduling::ChainingCyclicProblem &problem,
                                                           circt::ssp::DependenceGraphOp &graph) {
   circt::scheduling::ChainingCyclicProblem result(graph);
+
+  // Initialize operations & operators
   graph.getBodyBlock()->walk([&](circt::ssp::OperationOp op) {
     result.insertOperation(op);
     auto opr = *problem.getLinkedOperatorType(op);
+    auto inc = *problem.getIncomingDelay(opr);
+    auto lat = *problem.getLatency(opr);
+    auto out = *problem.getOutgoingDelay(opr);
+    result.setIncomingDelay(opr, inc);
+    result.setLatency(opr, lat);
+    result.setOutgoingDelay(opr, out);
     result.setLinkedOperatorType(op, opr);
-    result.setIncomingDelay(opr, *problem.getIncomingDelay(opr));
-    result.setLatency(opr, *problem.getLatency(opr));
-    result.setOutgoingDelay(opr, *problem.getOutgoingDelay(opr));
   });
+
+  // Initialize dependences
+  graph.getBodyBlock()->walk([&](circt::ssp::OperationOp op) {
+    for (auto dep : problem.getDependences(op)) {
+      if (dep.isAuxiliary()) {
+        if (failed(result.insertDependence(dep))) {
+          return mlir::WalkResult::interrupt();
+        }
+        result.setDistance(dep, *problem.getDistance(dep));
+      }
+    }
+    return mlir::WalkResult::advance();
+  });
+
   return result;
 }
 
@@ -84,6 +109,27 @@ llvm::SmallVector<mlir::Operation *> getTransitivePredecessors(mlir::Operation *
   return result;
 }
 
+namespace {
+
+llvm::SmallVector<int64_t> uniquifyDepths(llvm::ArrayRef<int64_t> depths) {
+  llvm::SmallVector<int64_t> result;
+  result.reserve(depths.size());
+  auto contains = [&](int64_t depth) {
+    for (auto d : result)
+      if (d == depth)
+        return true;
+    return false;
+  };
+  for (auto d : depths) {
+    if ((d != 0) && !contains(d)) {
+      result.push_back(d);
+    }
+  }
+  return result;
+}
+
+} // namespace
+
 struct ExposeControlFlowSpeculationPass
     : public spechls::impl::ExposeControlFlowSpeculationPassBase<ExposeControlFlowSpeculationPass> {
   using ExposeControlFlowSpeculationPassBase::ExposeControlFlowSpeculationPassBase;
@@ -104,21 +150,21 @@ struct ExposeControlFlowSpeculationPass
   }
 
   llvm::SmallVector<spechls::GammaOp>
-  sortGammas(llvm::ArrayRef<spechls::GammaOp> gammas, llvm::DenseMap<spechls::GammaOp, int> resolveDelays,
-             llvm::DenseMap<spechls::GammaOp, mlir::SmallVector<int>> inputLatencies) {
+  sortGammas(llvm::ArrayRef<spechls::GammaOp> gammas, llvm::DenseMap<spechls::GammaOp, unsigned> resolveDelays,
+             llvm::DenseMap<spechls::GammaOp, mlir::SmallVector<unsigned>> inputLatencies) {
     auto sorter = [&](spechls::GammaOp g1, spechls::GammaOp g2) {
       int resolve1 = resolveDelays[g1], resolve2 = resolveDelays[g2];
       if (resolve1 > resolve2)
-        return -1;
+        return true;
 
       if (resolve2 > resolve1)
-        return 1;
+        return false;
 
       if (poisonMap[g2].contains(g1))
-        return -1;
+        return false;
 
       if (poisonMap[g1].contains(g2))
-        return 1;
+        return true;
 
       int maxInputDelays1 = 0;
       for (int lat : inputLatencies[g1])
@@ -128,10 +174,8 @@ struct ExposeControlFlowSpeculationPass
         maxInputDelays2 = std::max(maxInputDelays2, lat);
 
       if (maxInputDelays1 > maxInputDelays2)
-        return -1;
-      if (maxInputDelays1 < maxInputDelays2)
-        return 1;
-      return 0;
+        return false;
+      return true;
     };
     llvm::SmallVector<spechls::GammaOp> result;
     for (spechls::GammaOp gamma : gammas)
@@ -160,22 +204,73 @@ struct ExposeControlFlowSpeculationPass
   }
 
   struct UnpipelineCoordinate {
-    unsigned pipelineStage, unpipelineStage;
+    bool pipelined;
+    unsigned unpipelineStage;
   };
 
   struct UnpipelineAnalysisResult {
-    llvm::DenseMap<spechls::GammaOp, llvm::SmallVector<llvm::DenseMap<mlir::Operation *, UnpipelineCoordinate>>>
+    llvm::DenseMap<spechls::GammaOp, llvm::SmallVector<llvm::DenseMap<spechls::DelayOp, UnpipelineCoordinate>>>
         operationsCoordinate;
-    llvm::DenseMap<mlir::Operation *, unsigned> pipelinedCycles;
+    llvm::DenseSet<mlir::Operation *> alwaysPipelined;
+    llvm::DenseMap<spechls::DelayOp, unsigned> pipelineDelays;
   };
 
+  unsigned getTypeBitWidth(mlir::Type type) {
+    return llvm::TypeSwitch<mlir::Type, unsigned>(type)
+        .Case<mlir::IntegerType, mlir::FloatType>([](mlir::Type type) { return type.getIntOrFloatBitWidth(); })
+        .Case<spechls::StructType>([&](spechls::StructType type) { return type.getBitWidth(); })
+        .Default([](mlir::Type type) {
+          llvm::errs() << "Unhandled type for `getTypeBitWidth`.\n";
+          type.dump();
+          exit(1);
+          return 0;
+        });
+  }
+
+  llvm::DenseSet<spechls::DelayOp> extractSlowDelays(spechls::GammaOp &gamma, unsigned input,
+                                                     UnpipelineAnalysisResult &unpipelineInfo) {
+    llvm::DenseSet<spechls::DelayOp> result;
+    llvm::DenseSet<mlir::Operation *> seen;
+
+    std::queue<mlir::Operation *> workList;
+
+    if (auto *pred = gamma.getInputs()[input].getDefiningOp()) {
+      if (!unpipelineInfo.alwaysPipelined.contains(pred)) {
+        seen.insert(pred);
+        workList.push(pred);
+        if (auto d = llvm::dyn_cast<spechls::DelayOp>(pred)) {
+          result.insert(d);
+        }
+      }
+    }
+
+    while (!workList.empty()) {
+      auto *current = workList.front();
+      workList.pop();
+      for (unsigned idx = 0; idx < current->getNumOperands(); ++idx) {
+        if (auto *pred = current->getOperand(idx).getDefiningOp()) {
+          if (!unpipelineInfo.alwaysPipelined.contains(pred) && !seen.contains(pred)) {
+            seen.insert(pred);
+            workList.push(pred);
+            if (auto d = llvm::dyn_cast<spechls::DelayOp>(pred)) {
+              result.insert(d);
+            }
+          }
+        }
+      }
+    }
+
+    return result;
+  }
+
   std::optional<UnpipelineAnalysisResult>
-  computeUnpipelineAnalysis(spechls::TaskOp &task, llvm::DenseMap<spechls::GammaOp, int> speculations,
+  computeUnpipelineAnalysis(spechls::TaskOp &task, llvm::DenseMap<spechls::GammaOp, unsigned> speculations,
                             double clockPeriod, spechls::TimingAnalyser &analyser, mlir::PassManager &canonicalizePm,
                             ResourceConstraintsInfo constrs,
-                            llvm::DenseMap<spechls::GammaOp, llvm::SmallVector<int>> &inputLatencies,
-                            llvm::DenseMap<mlir::Operation *, int> &startTimes,
-                            llvm::DenseMap<mlir::Operation *, double> &startTimesInCycle, mlir::MLIRContext *ctx) {
+                            llvm::DenseMap<spechls::GammaOp, llvm::SmallVector<unsigned>> &inputLatencies,
+                            llvm::DenseMap<mlir::Operation *, unsigned> &startTimes,
+                            llvm::DenseMap<mlir::Operation *, double> &startTimesInCycle,
+                            llvm::DenseMap<spechls::GammaOp, unsigned> &gammaCond, mlir::MLIRContext *ctx) {
     UnpipelineAnalysisResult result;
 
     // Schedule the 'fast' cycle
@@ -187,18 +282,23 @@ struct ExposeControlFlowSpeculationPass
     auto newTask = llvm::dyn_cast<spechls::TaskOp>(builder.clone(*task, mapper));
     llvm::SmallVector<mlir::Value> newArgs;
     for (auto arg : newTask.getArgs()) {
-      newArgs.push_back(builder.create<circt::hw::ConstantOp>(mlir::UnknownLoc::get(ctx), arg.getType(), 0));
+      auto argType = arg.getType();
+      auto cst = builder.create<spechls::DummyOp>(mlir::UnknownLoc::get(ctx), argType);
+      newArgs.push_back(builder.create<circt::hw::BitcastOp>(mlir::UnknownLoc::get(ctx), argType, cst));
     }
     newTask.getArgsMutable().assign(newArgs);
     for (auto [gamma, spec] : speculations) {
+      llvm::errs() << gamma.getSymName() << " -> " << spec << "\n";
       auto mappedGamma = llvm::dyn_cast<spechls::GammaOp>(mapper.lookup(gamma).getDefiningOp());
       auto operand = mappedGamma->getOperand(spec);
       mappedGamma.getInputsMutable().clear();
+      builder.setInsertionPointAfter(mappedGamma);
       mappedGamma.getInputsMutable().assign(operand);
     }
     if (failed(canonicalizePm.run(module)))
       return std::nullopt;
 
+    builder.setInsertionPointToStart(module.getBody());
     auto graph = builder.create<circt::ssp::DependenceGraphOp>(mlir::UnknownLoc::get(ctx));
     builder.setInsertionPointToStart(graph.getBodyBlock());
 
@@ -241,7 +341,7 @@ struct ExposeControlFlowSpeculationPass
             ->walk([&](mlir::Operation *op) {
               auto sspOp = association[op];
               return llvm::TypeSwitch<mlir::Operation *, mlir::WalkResult>(op)
-                  .Case([&](spechls::MuOp) {
+                  .Case([&](spechls::MuOp mu) {
                     for (auto predVal : op->getOperands()) {
                       if (auto *pred = predVal.getDefiningOp()) {
                         circt::scheduling::ChainingCyclicProblem::Dependence dep(association[pred], sspOp);
@@ -282,11 +382,13 @@ struct ExposeControlFlowSpeculationPass
 
     assert(mlir::succeeded(circt::scheduling::scheduleSimplex(problem, terminator, clockPeriod)));
     assert(mlir::succeeded(problem.verify()));
+    assert(problem.getInitiationInterval() == 1);
 
     task.getBodyBlock()->walk([&](mlir::Operation *op) {
       if (auto *mappedOp = mapper.lookupOrNull(op)) {
         if (association.contains(mappedOp)) {
           auto sspOp = association[mappedOp];
+          result.alwaysPipelined.insert(op);
           startTimes.try_emplace(op, *problem.getStartTime(sspOp));
           startTimesInCycle.try_emplace(op, *problem.getStartTimeInCycle(sspOp));
         }
@@ -294,14 +396,12 @@ struct ExposeControlFlowSpeculationPass
     });
 
     // Compute slow start times.
-    llvm::DenseSet<mlir::Operation *> alreadyComputed, pipelineCycle;
+    llvm::DenseSet<mlir::Operation *> alreadyComputed;
     std::queue<mlir::Operation *> workingList;
     task.getBodyBlock()->walk([&](mlir::Operation *op) {
       auto *mappedOp = mapper.lookupOrNull(op);
       if (mappedOp && association.contains(mappedOp) && startTimes.contains(op)) {
         alreadyComputed.insert(op);
-        result.pipelinedCycles.try_emplace(op, startTimes[op]);
-        pipelineCycle.insert(op);
       } else {
         workingList.push(op);
       }
@@ -363,55 +463,73 @@ struct ExposeControlFlowSpeculationPass
       alreadyComputed.insert(op);
     }
 
-    // Get gamma condition compute time
-    llvm::DenseMap<spechls::GammaOp, int> gammaCond;
-    task.getBodyBlock()->walk([&](spechls::GammaOp gamma) {
-      if (mlir::Operation *cond = gamma.getSelect().getDefiningOp()) {
-        if (auto delay = llvm::dyn_cast<spechls::DelayOp>(cond)) {
-          if (mlir::Operation *cond2 = delay.getInput().getDefiningOp()) {
-            cond = cond2;
-          } else {
-            gammaCond.try_emplace(gamma, 0);
-            return;
-          }
-        }
-        gammaCond.try_emplace(gamma, startTimes[cond]);
-      }
-    });
-
-    // Compute unpipeline coordinates of "slows" nodes
-    task.getBodyBlock()->walk([&](spechls::GammaOp gamma) {
-      unsigned condTime = gammaCond[gamma];
-      llvm::SmallVector<llvm::DenseMap<mlir::Operation *, UnpipelineCoordinate>> gammaCoordinates;
-      gammaCoordinates.resize(gamma.getInputs().size());
-      for (unsigned input = 0; input < gamma.getInputs().size(); ++input) {
-        if (input == static_cast<unsigned>(speculations[gamma]) - 1)
-          continue;
-        if (auto *pred = gamma.getInputs()[input].getDefiningOp()) {
-          auto transitivePredecessors = getTransitivePredecessors(pred, pipelineCycle);
-          for (auto *op : transitivePredecessors) {
-            unsigned startTime = startTimes[op];
-            if (startTime > condTime) {
-              unsigned unpipelineStage = startTime - condTime;
-              gammaCoordinates[input].try_emplace(op, UnpipelineCoordinate{condTime, unpipelineStage});
-            } else {
-              gammaCoordinates[input].try_emplace(op, UnpipelineCoordinate{startTime, 0});
-            }
-          }
-        }
-      }
-      result.operationsCoordinate.try_emplace(gamma, gammaCoordinates);
-    });
-
     // Update input latencies
     for (auto &[gamma, input] : speculations) {
       if (!gamma->hasAttr("spechls.memspec")) {
         for (unsigned i = 1; i < gamma->getNumOperands(); ++i) {
-          if (static_cast<int>(i) != input) {
+          if (i != input) {
             if (auto *pred = gamma.getOperand(i).getDefiningOp()) {
-              inputLatencies[gamma][i - 1] = std::max(startTimes[pred], gammaCond[gamma]);
+
+              auto timing = analyser.computeOperationTiming(pred, clockPeriod, ctx);
+              if (!timing)
+                return std::nullopt;
+              // auto t = *timing;
+
+              inputLatencies[gamma][i - 1] = std::max(startTimes[pred] + 1, gammaCond[gamma] + 1);
             } else {
-              inputLatencies[gamma][i - 1] = std::max(0, gammaCond[gamma]);
+              inputLatencies[gamma][i - 1] = gammaCond[gamma] + 1;
+            }
+          }
+        }
+      }
+    }
+
+    builder.setInsertionPointToStart(task.getBodyBlock());
+
+    // Add pipeline delays
+    mlir::Value trueCst = builder.create<circt::hw::ConstantOp>(builder.getUnknownLoc(), builder.getI1Type(), 1);
+
+    task.getBodyBlock()->walk([&](mlir::Operation *op) {
+      if (result.alwaysPipelined.contains(op))
+        return;
+      if (llvm::isa<spechls::MuOp>(op))
+        return;
+
+      unsigned opStartTime = startTimes[op];
+      for (unsigned predIdx = 0; predIdx < op->getNumOperands(); ++predIdx) {
+        auto pred = op->getOperand(predIdx);
+        if (auto *predOp = pred.getDefiningOp()) {
+          unsigned predStartTime = result.alwaysPipelined.contains(predOp) ? 0u : startTimes[predOp];
+          auto current = pred;
+          for (unsigned i = predStartTime; i < opStartTime; ++i) {
+            auto delay =
+                builder.create<spechls::DelayOp>(builder.getUnknownLoc(), pred.getType(), current, 1, trueCst, nullptr);
+            result.pipelineDelays.try_emplace(delay, i);
+            current = delay.getResult();
+          }
+          op->setOperand(predIdx, current);
+        }
+      }
+    });
+
+    // Add delays for slow faster than conds
+    for (auto [gamma, cond] : gammaCond) {
+      if (!gamma->hasAttr("spechls.memspec")) {
+        auto spec = speculations[gamma];
+        auto latencies = inputLatencies[gamma];
+        for (unsigned input = 1; input < gamma.getNumOperands(); ++input) {
+          if (input != spec) {
+            auto pred = gamma->getOperand(input);
+            if (auto *predOp = pred.getDefiningOp()) {
+              auto predStartTime = startTimes[predOp];
+              mlir::Value current = pred;
+              for (unsigned i = predStartTime; i < cond; ++i) {
+                auto delay = builder.create<spechls::DelayOp>(builder.getUnknownLoc(), pred.getType(), current, 1,
+                                                              trueCst, nullptr);
+                result.pipelineDelays.try_emplace(delay, i);
+                current = delay.getResult();
+              }
+              gamma->setOperand(input, current);
             }
           }
         }
@@ -465,12 +583,11 @@ struct ExposeControlFlowSpeculationPass
       return mlir::WalkResult::advance();
     });
     if (task == nullptr) {
-      llvm::errs() << "Target tas knot found.\n";
+      llvm::errs() << "Target task not found.\n";
       return llvm::failure();
     }
 
     spechls::SpeculationExplorationAnalysis exploration(task, clockPeriod, probabilityThreshold, traceFileName);
-
     bool needSpeculation = false;
     for (int config : exploration.configuration) {
       if (config > 0) {
@@ -485,8 +602,8 @@ struct ExposeControlFlowSpeculationPass
 
     auto constraint = generateResourceConstraint(task);
     llvm::SmallVector<spechls::GammaOp> gammas;
-    llvm::DenseMap<spechls::GammaOp, int> specGammas, resolveDelays;
-    llvm::DenseMap<spechls::GammaOp, mlir::SmallVector<int>> inputLatencies;
+    llvm::DenseMap<spechls::GammaOp, unsigned> specGammas, resolveDelays;
+    llvm::DenseMap<spechls::GammaOp, mlir::SmallVector<unsigned>> inputLatencies;
     llvm::SmallVector<int64_t> rollbackDepths;
     llvm::SmallVector<int64_t> rewindDepths;
 
@@ -551,29 +668,37 @@ struct ExposeControlFlowSpeculationPass
               problem.setDistance(dependence, 1);
             }
           }
-        } else if (auto delay = llvm::dyn_cast<spechls::DelayOp>(op)) {
-          for (auto operand : op->getOperands()) {
-            if (auto *pred = operand.getDefiningOp()) {
-              circt::scheduling::ChainingCyclicProblem::Dependence dependence(association[pred], sspOp);
-              assert(mlir::succeeded(problem.insertDependence(dependence)));
-              problem.setDistance(dependence, delay.getDepth());
-            }
-          }
         } else {
-          llvm::SmallVector<mlir::Value> operands;
-          for (auto operand : op->getOperands()) {
-            if (auto *pred = operand.getDefiningOp()) {
-              sspOp.getOperandsMutable().append(association[pred]->getResult(0));
+          auto treatDelay = [&](auto d) {
+            for (auto operand : d->getOperands()) {
+              if (auto *pred = operand.getDefiningOp()) {
+                circt::scheduling::ChainingCyclicProblem::Dependence dependence(association[pred], sspOp);
+                assert(mlir::succeeded(problem.insertDependence(dependence)));
+                problem.setDistance(dependence, d.getDepth());
+              }
             }
-          }
-          for (auto &opOp : sspOp->getOpOperands()) {
-            circt::scheduling::ChainingCyclicProblem::Dependence dependence(&opOp);
-            assert(mlir::succeeded(problem.insertDependence(dependence)));
+          };
+          if (auto delay = llvm::dyn_cast<spechls::DelayOp>(op)) {
+            treatDelay(delay);
+          } else if (auto delay = llvm::dyn_cast<spechls::RollbackableDelayOp>(op)) {
+            treatDelay(delay);
+          } else if (auto delay = llvm::dyn_cast<spechls::CancellableDelayOp>(op)) {
+            treatDelay(delay);
+          } else {
+            llvm::SmallVector<mlir::Value> operands;
+            for (auto operand : op->getOperands()) {
+              if (auto *pred = operand.getDefiningOp()) {
+                sspOp.getOperandsMutable().append(association[pred]->getResult(0));
+              }
+            }
+            for (auto &opOp : sspOp->getOpOperands()) {
+              circt::scheduling::ChainingCyclicProblem::Dependence dependence(&opOp);
+              assert(mlir::succeeded(problem.insertDependence(dependence)));
+            }
           }
         }
       }
     });
-
     // Compute resolve latencies of speculated Gammas
     for (spechls::GammaOp specGamma : specGammas.keys()) {
       for (spechls::GammaOp gamma : specGammas.keys()) {
@@ -583,13 +708,32 @@ struct ExposeControlFlowSpeculationPass
           sspOp.getOperandsMutable().append(association[pred].getResult(0));
         }
       }
-
       assert(mlir::succeeded(circt::scheduling::scheduleSimplex(problem, terminator, clockPeriod)));
       assert(mlir::succeeded(problem.verify()));
 
-      resolveDelays.try_emplace(specGamma, *problem.getInitiationInterval());
-      rollbackDepths.push_back(*problem.getInitiationInterval());
-      rewindDepths.push_back(*problem.getInitiationInterval());
+      int resolveDelay = 1;
+      if (problem.getInitiationInterval() != 1) {
+        auto sspGamma = association[specGamma];
+        sspGamma.getOperandsMutable().clear();
+
+        // Condition has a non-null definingOp, else it would have a resolveDelay of 0.
+        auto sspCond = association[specGamma.getOperand(0).getDefiningOp()];
+        auto newProblem = duplicateProblem(problem, graph);
+        circt::scheduling::ChainingCyclicProblem::Dependence dependence(sspCond, sspGamma);
+        if (failed(newProblem.insertDependence(dependence))) {
+          return llvm::failure();
+        }
+        do {
+          ++resolveDelay;
+          newProblem.setDistance(dependence, resolveDelay - 1);
+          assert(mlir::succeeded(circt::scheduling::scheduleSimplex(newProblem, terminator, clockPeriod)));
+          assert(mlir::succeeded(newProblem.verify()));
+        } while (*newProblem.getInitiationInterval() != 1);
+      }
+
+      resolveDelays.try_emplace(specGamma, resolveDelay);
+      rollbackDepths.push_back(resolveDelay);
+      rewindDepths.push_back(resolveDelay);
 
       for (spechls::GammaOp gamma : specGammas.keys())
         association[gamma].getOperandsMutable().clear();
@@ -608,79 +752,96 @@ struct ExposeControlFlowSpeculationPass
       }
 
       auto sspOp = association[specGamma];
-      llvm::SmallVector<int> latencies;
+      llvm::SmallVector<unsigned> latencies;
 
       for (unsigned index = 1; index < specGamma->getNumOperands(); ++index) {
-        if (auto *pred = specGamma->getOperand(index).getDefiningOp()) {
-          auto sspPred = association[pred];
-          // Try latency of 0
-          sspOp.getOperandsMutable().append(sspPred.getResult(0));
-
-          assert(mlir::succeeded(circt::scheduling::scheduleSimplex(problem, terminator, clockPeriod)));
-          assert(mlir::succeeded(problem.verify()));
-          if (problem.getInitiationInterval() == 1) {
-            latencies.push_back(0);
-          } else {
-            // Try successives distances to compute latency
-            unsigned distance = 0;
-            auto newProblem = duplicateProblem(problem, graph);
-            circt::scheduling::ChainingCyclicProblem::Dependence dependence(sspPred, sspOp);
-            do {
-              ++distance;
-              newProblem.setDistance(dependence, distance);
-              assert(mlir::succeeded(circt::scheduling::scheduleSimplex(newProblem, terminator, clockPeriod)));
-              assert(mlir::succeeded(newProblem.verify()));
-            } while (newProblem.getInitiationInterval() != 1);
-            latencies.push_back(distance);
-            rewindDepths.push_back(distance);
-          }
-
-        } else {
+        if (index == static_cast<unsigned>(specGammas[specGamma])) {
           latencies.push_back(0);
+        } else {
+          if (auto *pred = specGamma->getOperand(index).getDefiningOp()) {
+            auto sspPred = association[pred];
+            // Try latency of 0
+            sspOp.getOperandsMutable().append(sspPred.getResult(0));
+
+            assert(mlir::succeeded(circt::scheduling::scheduleSimplex(problem, terminator, clockPeriod)));
+            assert(mlir::succeeded(problem.verify()));
+            sspOp.getOperandsMutable().clear();
+            if (problem.getInitiationInterval() == 1) {
+              latencies.push_back(resolveDelays[specGamma]);
+            } else {
+              // Try successives distances to compute latency
+              unsigned distance = 1;
+              auto newProblem = duplicateProblem(problem, graph);
+              circt::scheduling::ChainingCyclicProblem::Dependence dependence(sspPred, sspOp);
+              if (failed(newProblem.insertDependence(dependence)))
+                return llvm::failure();
+              do {
+                ++distance;
+                newProblem.setDistance(dependence, distance - 1);
+                assert(mlir::succeeded(circt::scheduling::scheduleSimplex(newProblem, terminator, clockPeriod)));
+                assert(mlir::succeeded(newProblem.verify()));
+              } while (newProblem.getInitiationInterval() != 1);
+              distance = std::max<int>(resolveDelays[specGamma], distance);
+              latencies.push_back(distance);
+              rewindDepths.push_back(distance);
+            }
+
+          } else {
+            latencies.push_back(resolveDelays[specGamma]);
+          }
         }
       }
       inputLatencies.try_emplace(specGamma, latencies);
+
+      for (auto gamma : specGammas.keys()) {
+        association[gamma].getOperandsMutable().clear();
+      }
     }
 
     graph.erase();
-
+    builder.setInsertionPointToStart(task.getBodyBlock());
     auto trueCst = builder.create<circt::hw::ConstantOp>(mlir::UnknownLoc::get(ctx), builder.getIntegerType(1), true);
 
+    llvm::DenseSet<spechls::DelayOp> condDelayNodes;
     // Add delays to gamma conditions
     // Add delays to memspec gammas
     for (auto &[gamma, resolve] : resolveDelays) {
-      if (resolve > 2) {
+      gamma->setAttr("spechls.resolveDelay", builder.getI32IntegerAttr(resolve));
+      if (resolve > 1) {
         auto delay = builder.create<spechls::DelayOp>(mlir::UnknownLoc::get(ctx), gamma->getOperand(0).getType(),
                                                       gamma->getOperand(0), resolve - 1, trueCst, nullptr);
+        condDelayNodes.insert(delay);
         gamma->setOperand(0, delay.getResult());
       }
-
       if (gamma->hasAttr("spechls.memspec")) {
-        auto &latencies = inputLatencies[gamma];
-        int resolve = resolveDelays[gamma];
-        for (unsigned index = 1; index < gamma->getNumOperands(); ++index) {
-          auto numDelay = std::max(latencies[index] - 1, resolve);
-          if (numDelay > 0) {
-            auto delay = builder.create<spechls::DelayOp>(mlir::UnknownLoc::get(ctx), gamma.getOperand(index).getType(),
-                                                          gamma.getOperand(index), numDelay, trueCst, nullptr);
-            gamma.setOperand(index, delay);
-          }
+        // Big Scotch :(
+        mlir::Value lastValue = gamma.getOperand(gamma->getNumOperands() - 1);
+        // // recompute input latencies
+        // llvm::SmallVector<unsigned> latencies;
+        // unsigned current = gamma->getNumOperands() - 1;
+        // for (unsigned i = 1; i < gamma.getNumOperands(); ++i) {
+        //   latencies.push_back(current--);
+        // }
+        // inputLatencies[gamma] = latencies;
+        // rewire inputs
+        for (unsigned idx = 1; idx < gamma.getNumOperands() - 1; ++idx) {
+          gamma.setOperand(idx, lastValue);
         }
       }
     }
 
-    initPoisonMap(gammas);
-    auto sortedGammaNodes = sortGammas(gammas, resolveDelays, inputLatencies);
-
-    auto analyser = spechls::timingAnalyserFactory.get(target);
-    llvm::DenseMap<mlir::Operation *, int> startTimes;
+    llvm::DenseMap<mlir::Operation *, unsigned int> startTimes;
     llvm::DenseMap<mlir::Operation *, double> startTimesInCycle;
-    auto unpipelineInfo = computeUnpipelineAnalysis(task, specGammas, clockPeriod, analyser, canonicalizePm, constraint,
-                                                    inputLatencies, startTimes, startTimesInCycle, ctx);
-    if (!unpipelineInfo)
+    auto analyser = spechls::timingAnalyserFactory.get(target);
+    auto constrs = generateResourceConstraint(task);
+    auto unpipelineInfo = computeUnpipelineAnalysis(task, specGammas, clockPeriod, analyser, canonicalizePm, constrs,
+                                                    inputLatencies, startTimes, startTimesInCycle, resolveDelays, ctx);
+    if (!unpipelineInfo.has_value()) {
       return llvm::failure();
-
-    auto tmp = *unpipelineInfo;
+    }
+    initPoisonMap(gammas);
+    auto sortedGammaNodes =
+        sortGammas(llvm::SmallVector<spechls::GammaOp>(specGammas.keys()), resolveDelays, inputLatencies);
 
     builder.setInsertionPointToStart(task.getBodyBlock());
 
@@ -722,12 +883,12 @@ struct ExposeControlFlowSpeculationPass
     fsmInitialValues.push_back(
         builder.create<circt::hw::ConstantOp>(mlir::UnknownLoc::get(ctx), builder.getI32Type(), 0));
 
-    int maxCond = 0;
+    unsigned maxCond = 0u;
     for (auto &[gamma, resolve] : resolveDelays) {
       maxCond = std::max(maxCond, resolve);
     }
 
-    for (int i = 0; i < maxCond; ++i) {
+    for (unsigned i = 0; i < maxCond; ++i) {
       fsmTypeFieldNames.push_back("delayed_commit_" + std::to_string(i));
       fsmTypeFieldTypes.push_back(builder.getI1Type());
       fsmInitialValues.push_back(
@@ -747,6 +908,8 @@ struct ExposeControlFlowSpeculationPass
     fsmCmdTypeFieldNames.push_back("rbwe");
     fsmCmdTypeFieldTypes.push_back(builder.getI1Type());
 
+    llvm::DenseMap<spechls::GammaOp, std::string> gammaNameMap;
+
     for (spechls::GammaOp g : sortedGammaNodes) {
       std::string name = g.getSymName().str();
       if (!namesId.contains(name)) {
@@ -757,6 +920,7 @@ struct ExposeControlFlowSpeculationPass
         namesId.try_emplace(name, id + 1);
         name = name + std::to_string(id);
       }
+      gammaNameMap.try_emplace(g, name);
       gammaNames.push_back(builder.getStringAttr(name));
       mispecTypeFieldNames.push_back("mispec_" + name);
       fsmName += name;
@@ -768,7 +932,7 @@ struct ExposeControlFlowSpeculationPass
       fsmTypeFieldNames.push_back("selSlowPath_" + name);
       fsmTypeFieldTypes.push_back(builder.getI32Type());
       fsmInitialValues.push_back(
-          builder.create<circt::hw::ConstantOp>(mlir::UnknownLoc::get(ctx), builder.getI32Type(), specGammas[g]));
+          builder.create<circt::hw::ConstantOp>(mlir::UnknownLoc::get(ctx), builder.getI32Type(), specGammas[g] - 1));
       fsmTypeFieldNames.push_back("rollback_" + name);
       fsmTypeFieldTypes.push_back(builder.getI32Type());
       fsmInitialValues.push_back(
@@ -792,7 +956,7 @@ struct ExposeControlFlowSpeculationPass
       }
 
       condDelays.push_back(resolveDelays[g]);
-      fastIndices.push_back(specGammas[g]);
+      fastIndices.push_back(specGammas[g] - 1);
       llvm::SmallVector<mlir::Attribute> inputs;
       for (auto lat : inputLatencies[g]) {
         inputs.push_back(builder.getIntegerAttr(builder.getI64Type(), lat));
@@ -808,7 +972,9 @@ struct ExposeControlFlowSpeculationPass
 
     auto fsmStateMu = builder.create<spechls::MuOp>(mlir::UnknownLoc::get(ctx),
                                                     builder.getStringAttr(fsmName + "State"), fsmInit, fsmInit);
-    builder.create<spechls::DelayOp>(mlir::UnknownLoc::get(ctx), fsmType, fsmInit, 1, nullptr, fsmInit);
+
+    // startTimes.try_emplace(fsmStateMu, 0);
+    // startTimesInCycle.try_emplace(fsmStateMu, 0.0);
 
     auto fsm = builder.create<spechls::FSMOp>(
         mlir::UnknownLoc::get(ctx), fsmType, builder.getStringAttr(fsmName), builder.getArrayAttr(gammaNames),
@@ -830,147 +996,127 @@ struct ExposeControlFlowSpeculationPass
         builder.create<spechls::FieldOp>(mlir::UnknownLoc::get(ctx), "arrayRollBack", fsmCmd.getResult());
     auto rewindField = builder.create<spechls::FieldOp>(mlir::UnknownLoc::get(ctx), "rewind", fsmCmd.getResult());
     auto rbweField = builder.create<spechls::FieldOp>(mlir::UnknownLoc::get(ctx), "rbwe", fsmCmd.getResult());
-
     llvm::DenseMap<spechls::GammaOp, llvm::SmallVector<spechls::FieldOp>> gammaStallFields;
     for (unsigned id = 0; id < sortedGammaNodes.size(); ++id) {
       auto gamma = sortedGammaNodes[id];
       auto name = llvm::dyn_cast<mlir::StringAttr>(gammaNames[id]).str();
       llvm::SmallVector<spechls::FieldOp> fields;
       for (unsigned i = 0; i < gamma.getInputs().size(); ++i) {
-        fields.push_back(builder.create<spechls::FieldOp>(
-            mlir::UnknownLoc::get(ctx), "stall_" + name + "_" + std::to_string(i), fsmCmd.getResult()));
+        auto field = builder.create<spechls::FieldOp>(mlir::UnknownLoc::get(ctx),
+                                                      "stall_" + name + "_" + std::to_string(i), fsmCmd.getResult());
+        fields.push_back(field);
       }
       gammaStallFields.try_emplace(gamma, fields);
     }
 
-    if (wcetModel)
-      return llvm::success();
-
-    // Add delays
-    task.getBodyBlock()->walk([&](mlir::Operation *op) {
-      if (!(llvm::isa<spechls::GammaOp>(op) || llvm::isa<spechls::DelayOp>(op) ||
-            llvm::isa<spechls::CancellableDelayOp>(op) || llvm::isa<spechls::RollbackableDelayOp>(op) ||
-            llvm::isa<spechls::MuOp>(op) || llvm::isa<spechls::CommitOp>(op))) {
-        if (startTimes.contains(op) && !llvm::isa<spechls::GammaOp>(op)) {
-          for (auto &opOperand : op->getOpOperands()) {
-            if (auto *pred = opOperand.get().getDefiningOp()) {
-              if (startTimes.contains(pred)) {
-                unsigned expectedDelays = startTimes[op] - startTimes[pred];
-                if (expectedDelays > 0) {
-                  llvm::SmallVector<mlir::Value> delayConditions;
-                  // Compute delays write-enable conditions
-                  delayConditions.resize(expectedDelays);
-                  bool first = true;
-                  for (auto &[gamma, inputsInfo] : unpipelineInfo->operationsCoordinate) {
-                    for (unsigned input = 0; input < gamma.getInputs().size(); ++input) {
-                      if (inputsInfo[input].contains(pred) && inputsInfo[input].contains(op)) {
-                        auto predInfo = inputsInfo[input][pred];
-                        auto opInfo = inputsInfo[input][op];
-                        int pipelineDelayId;
-                        for (pipelineDelayId = 0; pipelineDelayId < (static_cast<int>(opInfo.pipelineStage) -
-                                                                     static_cast<int>(predInfo.pipelineStage));
-                             ++pipelineDelayId) {
-                          mlir::Value cond = builder.create<circt::comb::ICmpOp>(
-                              mlir::UnknownLoc::get(ctx), circt::comb::ICmpPredicate::eq,
-                              gammaStallFields[gamma][input],
-                              builder.create<circt::hw::ConstantOp>(mlir::UnknownLoc::get(ctx), builder.getI32Type(),
-                                                                    0));
-                          if (first) {
-                            delayConditions[pipelineDelayId] = cond;
-                          } else {
-                            delayConditions[pipelineDelayId] = builder.create<circt::comb::OrOp>(
-                                mlir::UnknownLoc::get(ctx), delayConditions[pipelineDelayId], cond);
-                          }
-                        }
-                        for (int unpipelineDelayId = 0;
-                             unpipelineDelayId <
-                             (static_cast<int>(opInfo.unpipelineStage) - static_cast<int>(predInfo.unpipelineStage));
-                             ++unpipelineDelayId) {
-                          mlir::Value cond = builder.create<circt::comb::ICmpOp>(
-                              mlir::UnknownLoc::get(ctx), circt::comb::ICmpPredicate::eq,
-                              gammaStallFields[gamma][input],
-                              builder.create<circt::hw::ConstantOp>(mlir::UnknownLoc::get(ctx), builder.getI32Type(),
-                                                                    unpipelineDelayId + predInfo.unpipelineStage));
-                          if (first) {
-                            delayConditions[pipelineDelayId + unpipelineDelayId] = cond;
-                          } else {
-                            delayConditions[pipelineDelayId + unpipelineDelayId] = builder.create<circt::comb::OrOp>(
-                                mlir::UnknownLoc::get(ctx), delayConditions[pipelineDelayId + unpipelineDelayId], cond);
-                          }
-                        }
-                      } else {
-                        mlir::Value allCond = builder.create<circt::comb::ICmpOp>(
-                            mlir::UnknownLoc::get(ctx), circt::comb::ICmpPredicate::eq, gammaStallFields[gamma][input],
-                            builder.create<circt::hw::ConstantOp>(mlir::UnknownLoc::get(ctx), builder.getI32Type(), 0));
-                        if (first) {
-                          for (unsigned idx = 0; idx < expectedDelays; ++idx) {
-                            delayConditions[idx] = allCond;
-                          }
-                        } else {
-                          for (unsigned idx = 0; idx < expectedDelays; ++idx) {
-                            delayConditions[idx] = builder.create<circt::comb::OrOp>(mlir::UnknownLoc::get(ctx),
-                                                                                     delayConditions[idx], allCond);
-                          }
-                        }
-                      }
-                    }
-                    first = false;
-                  }
-
-                  mlir::Value current = opOperand.get();
-                  auto type = current.getType();
-                  for (auto we : delayConditions) {
-                    current =
-                        builder.create<spechls::DelayOp>(mlir::UnknownLoc::get(ctx), type, current, 1, we, nullptr);
-                  }
-                  opOperand.assign(current);
-                }
-              }
-            }
-          }
-        }
-      }
-    });
-    return llvm::success();
-
-    llvm::unique(rollbackDepths);
+    rollbackDepths = uniquifyDepths(rollbackDepths);
+    long maxDepth = 0;
+    for (auto &d : rollbackDepths) {
+      maxDepth = std::max(maxDepth, d);
+    }
+    for (auto [_, lat] : inputLatencies) {
+      for (auto d : lat)
+        maxDepth = std::max(maxDepth, static_cast<long>(d));
+    }
+    llvm::SmallVector<int64_t> arrayRollbackDepths;
+    for (long i = 1; i < maxDepth; ++i)
+      arrayRollbackDepths.push_back(i);
 
     // Rewire gamma condition and add gamma rollbacks
     for (auto gamma : sortedGammaNodes) {
-
-      gamma.getSelectMutable().assign(
-          builder.create<spechls::FieldOp>(mlir::UnknownLoc::get(ctx), "selSlowPath_", fsmCmd.getResult()));
-      auto rb = builder.create<spechls::RollbackOp>(
-          mlir::UnknownLoc::get(ctx), builder.getDenseI64ArrayAttr(rollbackDepths), 0, gamma.getResult(),
-          builder.create<spechls::FieldOp>(mlir::UnknownLoc::get(ctx), "gammaRollBack_", fsmCmd.getResult()),
-          rbweField);
-      gamma.getResult().replaceAllUsesExcept(rb.getResult(), rb);
+      auto gammaName = gammaNameMap[gamma];
+      auto field =
+          builder.create<spechls::FieldOp>(mlir::UnknownLoc::get(ctx), "selSlowPath_" + gammaName, fsmCmd.getResult());
+      gamma.getSelectMutable().assign(field.getResult());
+      if (!llvm::isa<spechls::ArrayType>(gamma.getResult().getType())) {
+        auto rollbackField = builder.create<spechls::FieldOp>(mlir::UnknownLoc::get(ctx), "gammaRollBack_" + gammaName,
+                                                              fsmCmd.getResult());
+        auto rb = builder.create<spechls::RollbackOp>(mlir::UnknownLoc::get(ctx),
+                                                      builder.getDenseI64ArrayAttr(rollbackDepths), 0,
+                                                      gamma.getResult(), rollbackField, rbweField);
+        gamma.getResult().replaceAllUsesExcept(rb.getResult(), rb);
+      }
     }
 
     // Rewire rollbackable/cancellable delays
-    task.getBodyBlock()->walk(
-        [&](spechls::RollbackableDelayOp delay) { delay.getRollbackMutable().assign(arrayRollBackField); });
-    task.getBodyBlock()->walk(
-        [&](spechls::CancellableDelayOp delay) { delay.getCancelMutable().assign(arrayRollBackField); });
+    task.getBodyBlock()->walk([&](spechls::RollbackableDelayOp delay) {
+      delay.setRollbackDepths(arrayRollbackDepths);
+      delay.getRollbackMutable().assign(arrayRollBackField);
+    });
+    task.getBodyBlock()->walk([&](spechls::CancellableDelayOp delay) {
+      delay.getCancelMutable().assign(arrayRollBackField);
+      delay.getCancelWeMutable().assign(trueCst.getResult());
+    });
 
     // Add mu rollbacks
     task.getBodyBlock()->walk([&](spechls::MuOp mu) {
-      auto rb =
-          builder.create<spechls::RollbackOp>(mlir::UnknownLoc::get(ctx), builder.getDenseI64ArrayAttr(rollbackDepths),
-                                              0, mu.getResult(), muRollBackField, rbweField);
+      if (mu == fsmStateMu)
+        return;
+      spechls::RollbackOp rb;
+      if (llvm::isa<spechls::ArrayType>(mu.getResult().getType())) {
+        auto trueCst = builder.create<circt::hw::ConstantOp>(mlir::UnknownLoc::get(ctx), builder.getI1Type(), 1);
+        rb = builder.create<spechls::RollbackOp>(mlir::UnknownLoc::get(ctx),
+                                                 builder.getDenseI64ArrayAttr(arrayRollbackDepths), 0, mu.getResult(),
+                                                 arrayRollBackField, trueCst.getResult());
+      } else {
+        rb = builder.create<spechls::RollbackOp>(mlir::UnknownLoc::get(ctx),
+                                                 builder.getDenseI64ArrayAttr(rollbackDepths), 0, mu.getResult(),
+                                                 muRollBackField, rbweField);
+      }
       mu.getResult().replaceAllUsesExcept(rb.getResult(), rb);
     });
 
-    // Add delays before commits and rewire commit condition
+    // rewire commit condition
+    auto commit = llvm::dyn_cast<spechls::CommitOp>(task.getBodyBlock()->getTerminator());
+    commit.setOperand(0, commitField);
+
+    for (auto [_, latencies] : inputLatencies) {
+      for (auto lat : latencies)
+        rewindDepths.push_back(lat);
+    }
+    rewindDepths = uniquifyDepths(rewindDepths);
+
+    // Insert rewind operations
+    for (auto arg : task.getBodyBlock()->getArguments()) {
+      if (!task.getArgs()[arg.getArgNumber()].getDefiningOp())
+        continue;
+      auto rewind = builder.create<spechls::RewindOp>(mlir::UnknownLoc::get(ctx), arg.getType(),
+                                                      builder.getDenseI64ArrayAttr(rewindDepths), arg, rewindField,
+                                                      nextInputField);
+      arg.replaceUsesWithIf(rewind.getResult(), [&](mlir::OpOperand &operand) -> bool {
+        if (operand.getOwner() == rewind) {
+          return false;
+        }
+        if (llvm::isa<spechls::MuOp>(operand.getOwner())) {
+          return false;
+        }
+        if (llvm::isa<spechls::DelayOp>(operand.getOwner()) &&
+            (operand.getOperandNumber()) == spechls::DelayOp::odsIndex_init) {
+          return false;
+        }
+        if (llvm::isa<spechls::RollbackableDelayOp>(operand.getOwner()) &&
+            (operand.getOperandNumber()) == spechls::RollbackableDelayOp::odsIndex_init) {
+          return false;
+        }
+        if (llvm::isa<spechls::CancellableDelayOp>(operand.getOwner()) &&
+            (operand.getOperandNumber()) == spechls::CancellableDelayOp::odsIndex_init) {
+          return false;
+        }
+
+        return true;
+      });
+    }
+
+    // Add delays before commits
     int maxResolveDelay = 0;
     for (int resolve : resolveDelays.values()) {
       maxResolveDelay = (maxResolveDelay < resolve) ? resolve : maxResolveDelay;
     }
-    auto commit = llvm::dyn_cast<spechls::CommitOp>(task.getBodyBlock()->getTerminator());
-    commit.setOperand(0, commitField);
     if (maxResolveDelay > 0) {
       for (unsigned i = 1; i < commit->getNumOperands(); ++i) {
         auto op = commit.getOperand(i);
+        if (llvm::isa_and_nonnull<circt::hw::ConstantOp>(op.getDefiningOp()))
+          continue;
         commit.setOperand(
             i, builder.create<spechls::DelayOp>(
                    mlir::UnknownLoc::get(ctx), op.getType(), op, maxResolveDelay,
@@ -978,15 +1124,36 @@ struct ExposeControlFlowSpeculationPass
       }
     }
 
-    llvm::unique(rewindDepths);
-
-    // Insert rewind operations
-    for (auto arg : task.getBodyBlock()->getArguments()) {
-      auto rewind = builder.create<spechls::RewindOp>(mlir::UnknownLoc::get(ctx), arg.getType(),
-                                                      builder.getDenseI64ArrayAttr(rewindDepths), arg, rewindField,
-                                                      nextInputField);
-      arg.replaceAllUsesExcept(rewind.getResult(), rewind);
+    // Compute unpipeline delay conditions
+    llvm::DenseSet<spechls::DelayOp> initializedDelays;
+    for (auto &[gamma, spec] : specGammas) {
+      --spec;
+      auto cond = resolveDelays[gamma];
+      if (!gamma->hasAttr("spechls.memspec")) {
+        for (unsigned i = 0; i < gamma.getInputs().size(); ++i) {
+          if (i != spec) {
+            auto stallField = gammaStallFields[gamma][i];
+            auto slows = extractSlowDelays(gamma, i, *unpipelineInfo);
+            for (auto &d : slows) {
+              auto step = unpipelineInfo->pipelineDelays[d];
+              mlir::Operation *newCond = builder.create<circt::comb::ICmpOp>(
+                  builder.getUnknownLoc(), circt::comb::ICmpPredicate::eq, stallField,
+                  builder.create<circt::hw::ConstantOp>(builder.getUnknownLoc(), builder.getI32Type(),
+                                                        (step < (cond - 1)) ? 0 : (step - cond + 1)));
+              if (initializedDelays.contains(d)) {
+                newCond =
+                    builder.create<circt::comb::OrOp>(builder.getUnknownLoc(), d.getEnable(), newCond->getResult(0));
+              } else {
+                initializedDelays.insert(d);
+              }
+              d.getEnableMutable().clear();
+              d.getEnableMutable().append(newCond->getResult(0));
+            }
+          }
+        }
+      }
     }
+
     return llvm::success();
   }
 };
