@@ -83,7 +83,8 @@ ConfigurationExcluderAnalysis::ConfigurationExcluderAnalysis(spechls::TaskOp tas
       mlir::Operation *op = worklist.front();
       worklist.pop();
       unsigned distance = llvm::TypeSwitch<mlir::Operation *, unsigned>(op)
-                              .Case([](spechls::DelayOp &delay) { return delay.getDepth(); })
+                              .Case<spechls::DelayOp, spechls::RollbackableDelayOp, spechls::CancellableDelayOp>(
+                                  [](auto &delay) { return delay.getDepth(); })
                               .Case([](spechls::MuOp &) { return 1; })
                               .Default([](mlir::Operation *) { return 0; });
       bool isGamma = llvm::isa<spechls::GammaOp>(op);
