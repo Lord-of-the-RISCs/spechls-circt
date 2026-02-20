@@ -91,4 +91,9 @@ def LowerDelaysPass: Pass<"lower-spechls-delays", "spechls::KernelOp"> {
   let dependentDialects = ["::spechls::SpecHLSDialect", "::circt::hw::HWDialect", "::circt::comb::CombDialect"];
 }
 
+
+def AffectProfilingIDPass : Pass<"affect-profilingID", "spechls::KernelOp"> {
+  let summary = "Add unique profile ID to each gamma.";
+  let dependentDialects = ["::spechls::SpecHLSDialect", "::circt::hw::HWDialect", "::circt::comb::CombDialect"];
+}
 #endif // SPECHLS_INCLUDED_DIALECT_SPECHLS_TRANSFORMS_PASSES_TD

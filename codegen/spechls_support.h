@@ -11,6 +11,9 @@
 #include <initializer_list>
 
 #include "ap_int.h"
+#include <vector>
+#include <string>
+#include <fstream>
 
 #ifndef __SYNTHESIS__
 #include <memory>
@@ -177,7 +180,32 @@ T rewind(T *buffer, T value, int offset, bool next_input) {
   return buffer[offset > 0 ? offset - 1 : 0];
 }
 
-template <typename T, typename... Ts>
+void registerProfile(unsigned int id, int val){
+  static std::vector<int> vals;
+  static std::ofstream out("profile.csv");
+
+  if (id+1 > vals.size())
+    vals.resize(id+1, -1);
+
+  if (vals[id] != -1){
+     //Have to print the complete vector
+     bool first = true;
+     for (int i = 0; i<vals.size(); i++){
+       if (first){
+         out  << vals[i];
+         first = false;
+       }
+       else
+         out  << "," << vals[i];
+       vals[i] = -1;
+     }
+     out << std::endl;
+  }
+  vals[id] = val;
+
+}
+
+template <typename T, unsigned int ProfilingID, typename... Ts>
 T gamma(unsigned int select, Ts... values) {
   T result = T{};
   unsigned int idx = 0;
@@ -186,6 +214,10 @@ T gamma(unsigned int select, Ts... values) {
       result = value;
   };
   (update(values), ...);
+
+  #ifdef PROFILE
+  registerProfile(ProfilingID, select);
+  #endif
   return result;
 }
 
