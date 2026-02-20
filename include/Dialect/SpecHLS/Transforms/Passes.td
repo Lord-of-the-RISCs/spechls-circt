@@ -101,6 +101,11 @@ def AnnotateTimingPass : Pass<"annotate-timing", "spechls::KernelOp"> {
     Option<"targetsFile", "targetsFile", "std::string", "", "Json file with targets timing.">,
   ];
 }
+def AffectProfilingIDPass : Pass<"affect-profilingID", "spechls::KernelOp"> {
+  let summary = "Add unique profile ID to each gamma.";
+  let dependentDialects = ["::spechls::SpecHLSDialect", "::circt::hw::HWDialect", "::circt::comb::CombDialect"];
+}
+
 
 def SplitWithSyncPass : Pass<"split-with-sync", "spechls::KernelOp"> {
   let summary = "Split operations with a combDelay longer than clock period into fake operations to make them takes at most one cycle.";

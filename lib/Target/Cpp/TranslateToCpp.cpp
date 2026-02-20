@@ -846,6 +846,11 @@ LogicalResult printOperation(CppEmitter &emitter, spechls::GammaOp gammaOp) {
   os << "gamma<";
   if (failed(emitter.emitType(gammaOp.getLoc(), gammaOp.getType())))
     return failure();
+  os << ", ";
+  if (gammaOp->getAttrOfType<mlir::IntegerAttr>("spechls.profilingId") != nullptr)
+    emitter.emitAttribute(gammaOp.getLoc(), gammaOp->getAttrOfType<mlir::IntegerAttr>("spechls.profilingId"));
+  else
+    os << "0";
   os << ">(";
   if (failed(emitter.emitOperands(*operation)))
     return failure();
