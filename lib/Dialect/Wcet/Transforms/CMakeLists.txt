@@ -30,6 +30,8 @@ add_circt_dialect_library(WcetTransforms
     ExtractControl.cpp
     EraseAnalyzedCore.cpp
     ConstantProp.cpp
+    InsertDummy.cpp
+    UnrollInstr.cpp
 
     DEPENDS
     WcetTransformsIncGen
@@ -37,6 +39,10 @@ add_circt_dialect_library(WcetTransforms
     WcetLUTToMuxPatternsIncGen
     WcetGammaBinarizationPatternsIncGen
     WcetConstantPropPatternsIncGen
+
+
+  LINK_LIBS PUBLIC
+  WcetUtils
 )
 target_include_directories(WcetTransforms
   PRIVATE

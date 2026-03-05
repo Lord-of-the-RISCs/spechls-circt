@@ -7,6 +7,7 @@
 
 #include "Analysis/Wcet/GraphWcetAnalysis.h"
 #include "Analysis/Wcet/LinearWcetAnalysis.h"
+#include "Analysis/Wcet/PenaltyGraphAnalysis.h"
 #include "CAPI/Dialect/Schedule.h"
 #include "CAPI/Dialect/SpecHLS.h"
 #include "CAPI/Dialect/Wcet.h"
@@ -115,5 +116,10 @@ size_t mlirWcetLongAnalysis(MlirModule module, mlir::SmallVector<size_t> &instr)
 size_t mlirWcetAnalysis(MlirModule module, mlir::SmallVector<size_t> &instrs) {
   auto mod = unwrap(module);
   return wcet::LinearAnalysis(mod, instrs).wcet;
+}
+
+size_t mlirWcetPgaAnalysis(MlirModule module, mlir::SmallVector<size_t> &instrs) {
+  auto mod = unwrap(module);
+  return wcet::PenaltyGraphAnalysis(mod, instrs).wcet;
 }
 }

@@ -81,8 +81,10 @@ public:
     PatternRewriter rewriter(ctx);
 
     longestPath(startPoint, rewriter, rewriter.getStringAttr("wcet.dists"));
+    core->dumpPretty();
 
-    // endPoint->setAttr("wcet.WCET", endPoint->getAttr("wcet.dists"));
+    // endPoint->dumpPretty();
+    endPoint->setAttr("wcet.WCET", endPoint->getAttr("wcet.dists"));
   }
 };
 

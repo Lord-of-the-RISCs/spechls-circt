@@ -304,7 +304,9 @@ LogicalResult wcet::GammaOp::canonicalize(wcet::GammaOp gamma, PatternRewriter &
     return failure();
   auto idxAttr = selectOp.getValueAttr();
   auto idx = idxAttr.getInt();
-  auto sidx = (size_t)(idx & ((1 << idxAttr.getType().getIntOrFloatBitWidth()) - 1));
+  size_t sidx = idx;
+  if (idx < 0)
+    sidx = (size_t)(idx & ((1 << idxAttr.getType().getIntOrFloatBitWidth()) - 1));
   if (sidx >= gamma.getInputs().size()) {
     return failure();
   }
@@ -348,8 +350,11 @@ LogicalResult wcet::LUTOp::canonicalize(wcet::LUTOp lut, PatternRewriter &rewrit
     return failure();
 
   auto idxAttr = selectOp.getValueAttr();
-  size_t idx = (size_t)(idxAttr.getInt() & ((1 << selectOp.getType().getIntOrFloatBitWidth()) - 1));
-  auto cnst = rewriter.create<circt::hw::ConstantOp>(rewriter.getUnknownLoc(), lut.getType(), lut.getContents()[idx]);
+  auto idx = idxAttr.getInt();
+  size_t sidx = idx;
+  if (idx < 0)
+    sidx = (size_t)(idx & ((1 << selectOp.getType().getIntOrFloatBitWidth()) - 1));
+  auto cnst = rewriter.create<circt::hw::ConstantOp>(rewriter.getUnknownLoc(), lut.getType(), lut.getContents()[sidx]);
   rewriter.replaceAllOpUsesWith(lut, cnst);
   return success();
 }

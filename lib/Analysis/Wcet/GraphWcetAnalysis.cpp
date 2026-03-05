@@ -19,6 +19,7 @@
 #include "mlir/Support/LLVM.h"
 #include "mlir/Transforms/Passes.h"
 #include "llvm/ADT/APInt.h"
+#include "llvm/Support/Casting.h"
 #include "llvm/Support/raw_ostream.h"
 #include <cstddef>
 #include <cstdint>
@@ -139,6 +140,7 @@ mlir::SmallVector<wcet::state> stateAnalysis(mlir::IRRewriter &rewriter, wcet::s
   if (failed(topPm.run(top))) {
     return {};
   }
+  top->dumpPretty();
 
   spechls::FSMOp fsm;
   newCore->walk([&](spechls::FSMOp f) { fsm = f; });
@@ -158,10 +160,19 @@ mlir::SmallVector<wcet::state> stateAnalysis(mlir::IRRewriter &rewriter, wcet::s
   mlir::SmallVector<std::optional<mlir::IntegerAttr>> dumResult;
   for (auto d : lastDum.getInputs()) {
     auto lastResultOp = dyn_cast_or_null<circt::hw::ConstantOp>(d.getDefiningOp());
+    auto lastBitCast = dyn_cast_or_null<circt::hw::BitcastOp>(d.getDefiningOp());
     if (lastResultOp)
       dumResult.push_back(lastResultOp.getValueAttr());
-    else
+    else if (lastBitCast) {
+      auto cnst = dyn_cast_or_null<circt::hw::ConstantOp>(lastBitCast.getInput().getDefiningOp());
+      if (cnst) {
+        dumResult.push_back(cnst.getValueAttr());
+      } else {
+        dumResult.push_back({});
+      }
+    } else {
       dumResult.push_back({});
+    }
   }
 
   SmallVector<wcet::state> result;
@@ -213,6 +224,7 @@ GraphAnalysis::GraphAnalysis(mlir::ModuleOp mod, mlir::SmallVector<size_t> instr
       rewriter.eraseOp(oldFetch);
     }
   });
+  llvm::errs() << "instrs size: " << instrs.size() << "\n";
 
   // Setup the initial state
   mlir::SmallVector<std::optional<mlir::IntegerAttr>> st;
@@ -224,6 +236,10 @@ GraphAnalysis::GraphAnalysis(mlir::ModuleOp mod, mlir::SmallVector<size_t> instr
   for (size_t i = 1; i < resultsType.size(); i++) {
     Type type = analyzedCore.getResultTypes()[i];
     stTypes.push_back(type);
+    // mlir::IntegerType it = dyn_cast_or_null<mlir::IntegerType>(type);
+    // if (it)
+    //   st.push_back(rewriter.getIntegerAttr(it, it.getWidth() > 1 ? 0 : 1));
+    // else
     st.push_back({});
   }
   state initState = StateStruct(0, 0, st);
@@ -233,12 +249,18 @@ GraphAnalysis::GraphAnalysis(mlir::ModuleOp mod, mlir::SmallVector<size_t> instr
   mlir::SmallVector<state> layers = {initState};
   mlir::SmallVector<state> lastLayers;
 
+  int nbState = 0;
   auto layer = 1;
+  // size_t count = 0;
   // Analysis' core
-  while (!layers.empty()) {
+  SmallVector<wcet::state> nextLayers;
+  while (!layers.empty() /* && count < instrs.size()*/) {
+    nextLayers.clear();
     mergeSameState(layers, succs, preds);
-    SmallVector<wcet::state> nextLayers;
+    llvm::errs() << "nb state: " << layers.size() << "\n";
+    nbState += layers.size();
     for (auto state : layers) {
+      llvm::errs() << "state pen: " << state.pen << "\n";
       mlir::SmallVector<wcet::state> succOfState = stateAnalysis(rewriter, state, stTypes, analyzedCore);
       for (auto succSt : succOfState) {
         succs[state].push_back(succSt);
@@ -253,8 +275,11 @@ GraphAnalysis::GraphAnalysis(mlir::ModuleOp mod, mlir::SmallVector<size_t> instr
     }
     layers = std::move(nextLayers);
     layer++;
+    // count++;
   }
+  llvm::errs() << "nb total state: " << nbState << "\n";
 
+  // lastLayers.append(nextLayers);
   auto lastState = StateStruct(0, layer, {});
   preds.try_emplace(lastState, lastLayers);
   for (auto state : lastLayers) {

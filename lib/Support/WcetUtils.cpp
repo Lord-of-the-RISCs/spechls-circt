@@ -131,7 +131,10 @@ SmallVector<int64_t> retrieveMultWcet(spechls::FSMOp &fsm) {
       continue;
     }
     auto idx = inOp.getValueAttr().getInt();
-    max = cast<IntegerAttr>(inPen[idx]).getInt();
+    size_t sidx = idx;
+    if (idx < 0)
+      sidx = (size_t)(idx & ((1 << inOp.getType().getIntOrFloatBitWidth()) - 1));
+    max = cast<IntegerAttr>(inPen[sidx]).getInt();
     //    llvm::errs() << "pen: " << max << "\n";
     gmv += max;
   }
@@ -162,8 +165,8 @@ SmallVector<std::optional<IntegerAttr>> generateNextState(IRRewriter &rewriter, 
     IntegerType it = dyn_cast_or_null<IntegerType>(stTypes[i]);
     if (!nbPred || nbPred.getInt() == 0) {
       if (it && it.getWidth() == 1 && !dumResult[i]) {
-        state.push_back({});
-        // state.push_back(rewriter.getIntegerAttr(stTypes[i], 1));
+        // state.push_back({});
+        state.push_back(rewriter.getIntegerAttr(stTypes[i], 1));
       } else {
         state.push_back(dumResult[i]);
       }

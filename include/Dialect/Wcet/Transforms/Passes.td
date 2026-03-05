@@ -123,4 +123,24 @@ def EraseAnalyzedCorePass : Pass<"erase-analyzed-core", "wcet::CoreOp"> {
   ];
 }
 
+def InsertDummyPass : Pass <"insert-dummy", "wcet::CoreOp"> {
+    let dependentDialects = [
+    "wcet::WcetDialect",
+  "::circt::hw::HWDialect",
+    "spechls::SpecHLSDialect"
+    ];
+  }
+
+  def UnrollInstrPass : Pass<"unroll-instr", "ModuleOp"> {
+    let dependentDialects = [
+    "::circt::hw::HWDialect",
+    "spechls::SpecHLSDialect",
+    "wcet::WcetDialect"
+    ];
+
+    let options = [
+      ListOption<"instrs", "instrs", "uint32_t", "BB's instructions">
+    ];
+    }
+
 #endif // SPECHLS_INCLUDED_DIALECT_WCET_TRANSFORMS_PASSES_TD

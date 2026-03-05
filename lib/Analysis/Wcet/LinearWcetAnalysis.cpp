@@ -120,7 +120,7 @@ std::optional<wcet::state> stateAnalysis(IRRewriter &rewriter, wcet::state &stat
   st = generateNextState(rewriter, analyzedCore, stTypes, dumResult, currentWcet);
 
   wcet::state res = wcet::StateStruct(currentWcet, state.layers + 1, st);
-  top->dumpPretty();
+  // top->dumpPretty();
   top->erase();
   return res;
 }
@@ -163,7 +163,7 @@ LinearAnalysis::LinearAnalysis(ModuleOp mod, SmallVector<size_t> instrs) {
       wcet::ConstArrayRead newFetch = wcet::ConstArrayRead::create(
           rewriter, rewriter.getUnknownLoc(), oldFetch.getType(), oldFetch.getIndex(), i64instrs, step);
       rewriter.replaceAllOpUsesWith(oldFetch, newFetch);
-      newFetch->dumpPretty();
+      // newFetch->dumpPretty();
       rewriter.eraseOp(oldFetch);
     }
   });

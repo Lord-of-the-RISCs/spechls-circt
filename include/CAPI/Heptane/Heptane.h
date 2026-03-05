@@ -14,6 +14,7 @@ void destroyMLIR(MlirModule module);
 void mlirDumpModule(MlirModule module);
 size_t mlirWcetLongAnalysis(MlirModule module, mlir::SmallVector<size_t> &instr);
 size_t mlirWcetAnalysis(MlirModule module, mlir::SmallVector<size_t> &instrs);
+size_t mlirWcetPgaAnalysis(MlirModule module, mlir::SmallVector<size_t> &instrs);
 }
 
 #endif // !HEPTANE_H
