@@ -6,4 +6,8 @@ add_circt_dialect_library(ScheduleTransforms
 
     DEPENDS
     ScheduleTransformsIncGen
+
+    LINK_LIBS PUBLIC
+    CIRCTSSP
+    CIRCTSSPTransforms
 )

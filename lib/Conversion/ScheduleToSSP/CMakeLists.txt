@@ -6,4 +6,5 @@ add_circt_conversion_library(ScheduleToSSP
 
   LINK_LIBS PUBLIC
   Schedule
+  CIRCTSSP
 )

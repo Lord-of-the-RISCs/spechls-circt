@@ -9,8 +9,9 @@ target_link_libraries(spechls-opt PRIVATE
     ScheduleTransforms
     WcetTransforms
     ScheduleToSSP
+    CIRCTTransforms
+    CIRCTScheduling
     MLIR
-    CIRCT
 
     Yosys::Yosys
 )

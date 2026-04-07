@@ -5,8 +5,10 @@ target_link_libraries(spechls-reduce PRIVATE
     Schedule
     ScheduleTransforms
     ScheduleToSSP
+    CIRCTComb
+    CIRCTHW
+    CIRCTSSP
     MLIR
-    CIRCT
 )
 install(TARGETS spechls-reduce DESTINATION bin)
 set_property(TARGET spechls-reduce PROPERTY INSTALL_RPATH "$ORIGIN/../lib")

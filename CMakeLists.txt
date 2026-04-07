@@ -14,6 +14,7 @@ list(APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake/modules")
 
 find_package(MLIR REQUIRED CONFIG)
 find_package(CIRCT REQUIRED CONFIG)
+find_package(Boost REQUIRED)
 find_package(Yosys REQUIRED)
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DYOSYS_PATH=\\\"${Yosys_INCLUDE_DIR}\\\"")

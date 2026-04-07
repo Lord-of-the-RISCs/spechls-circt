@@ -54,6 +54,19 @@ add_circt_dialect_library(SpecHLSTransforms
 
     LINK_LIBS PUBLIC
     SpecHLSAnalysis
+    CIRCTImportVerilog
+    CIRCTExportVerilog
+    CIRCTMooreToCore
+    CIRCTLLHDTransforms
+    CIRCTDebug
+    CIRCTLLHD
+    CIRCTLTL
+    CIRCTMoore
+    CIRCTSeq
+    CIRCTSim
+    CIRCTSynth
+    CIRCTSV
+    CIRCTVerif
 )
 target_include_directories(SpecHLSTransforms
     PRIVATE

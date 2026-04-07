@@ -6,6 +6,5 @@ add_circt_library(SpecHLSAnalysis
   OperationDelayAnalysis.cpp
 
   LINK_LIBS PUBLIC
-  CIRCT
   SpecHLS
 )

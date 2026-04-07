@@ -22,12 +22,11 @@
 #include <circt/Dialect/HW/HWOps.h>
 #include <circt/Dialect/HW/HWPasses.h>
 #include <circt/Dialect/HW/HWTypes.h>
-#include <circt/Dialect/LLHD/IR/LLHDDialect.h>
-#include <circt/Dialect/LLHD/Transforms/LLHDPasses.h>
+#include <circt/Dialect/LLHD/LLHDDialect.h>
+#include <circt/Dialect/LLHD/LLHDPasses.h>
 #include <circt/Dialect/LTL/LTLDialect.h>
 #include <circt/Dialect/Moore/MooreDialect.h>
 #include <circt/Dialect/Moore/MooreOps.h>
-#include <circt/Dialect/Moore/MoorePasses.h>
 #include <circt/Dialect/SV/SVDialect.h>
 #include <circt/Dialect/Sim/SimDialect.h>
 #include <circt/Dialect/Synth/SynthDialect.h>
@@ -158,8 +157,6 @@ void OptimizeControlLogicPass::runOnOperation() {
     std::string abcPath = YOSYS_PATH "/yosys-abc";
 
     auto lowerMoorePm = PassManager::on<ModuleOp>(ctx);
-    lowerMoorePm.addNestedPass<circt::moore::SVModuleOp>(circt::moore::createLowerConcatRefPass());
-    lowerMoorePm.addNestedPass<circt::moore::SVModuleOp>(circt::moore::createSimplifyProceduresPass());
     lowerMoorePm.addPass(mlir::createCanonicalizerPass());
     lowerMoorePm.addPass(circt::createConvertMooreToCorePass());
     lowerMoorePm.addNestedPass<::circt::hw::HWModuleOp>(circt::llhd::createSig2Reg());

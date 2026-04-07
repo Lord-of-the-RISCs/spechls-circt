@@ -84,7 +84,7 @@ MlirModule parseMLIR(const char *str) {
   // Register required dialects.
   mlirDialectHandleRegisterDialect(mlirGetDialectHandle__hw__(), context);
   mlirDialectHandleRegisterDialect(mlirGetDialectHandle__comb__(), context);
-  mlirDialectHandleRegisterDialect(mlirGetDialectHandle__ssp__(), context);
+  unwrap(context)->loadDialect<circt::ssp::SSPDialect>();
   mlirDialectHandleRegisterDialect(mlirGetDialectHandle__spechls__(), context);
   mlirDialectHandleRegisterDialect(mlirGetDialectHandle__schedule__(), context);
   mlirDialectHandleRegisterDialect(mlirGetDialectHandle__wcet__(), context);

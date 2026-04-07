@@ -36,6 +36,7 @@
 #include <circt/Dialect/SSP/SSPDialect.h>
 #include <circt/Scheduling/Algorithms.h>
 #include <circt/Scheduling/Problems.h>
+#include <cstdint>
 #include <limits>
 #include <mlir/IR/BuiltinOps.h>
 #include <mlir/IR/MLIRContext.h>
@@ -1010,16 +1011,16 @@ struct ExposeControlFlowSpeculationPass
     }
 
     rollbackDepths = uniquifyDepths(rollbackDepths);
-    long maxDepth = 0;
+    int64_t maxDepth = 0;
     for (auto &d : rollbackDepths) {
       maxDepth = std::max(maxDepth, d);
     }
     for (auto [_, lat] : inputLatencies) {
       for (auto d : lat)
-        maxDepth = std::max(maxDepth, static_cast<long>(d));
+        maxDepth = std::max(maxDepth, static_cast<int64_t>(d));
     }
     llvm::SmallVector<int64_t> arrayRollbackDepths;
-    for (long i = 1; i < maxDepth; ++i)
+    for (int64_t i = 1; i < maxDepth; ++i)
       arrayRollbackDepths.push_back(i);
 
     // Rewire gamma condition and add gamma rollbacks

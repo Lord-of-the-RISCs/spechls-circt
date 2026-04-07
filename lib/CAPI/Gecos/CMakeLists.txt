@@ -8,7 +8,19 @@ target_link_libraries(gecosapi PUBLIC
     SpecHLSTransforms
     SpecHLSToHW
     SpecHLSAnalysis
-    CIRCT
+    CIRCTTransforms
+    CIRCTScheduling
+    CIRCTCAPIComb
+    CIRCTCAPIDebug
+    CIRCTCAPIHW
+    CIRCTCAPILLHD
+    CIRCTCAPILTL
+    CIRCTCAPIMoore
+    CIRCTCAPISeq
+    CIRCTCAPISim
+    CIRCTCAPISV
+    CIRCTCAPISynth
+    CIRCTCAPIVerif
     MLIR
     MLIR-C
     SpecHLS
