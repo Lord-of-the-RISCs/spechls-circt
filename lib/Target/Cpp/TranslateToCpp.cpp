@@ -414,11 +414,10 @@ LogicalResult printMuInitialization(CppEmitter &emitter, spechls::KernelOp kerne
 
 LogicalResult printOperation(CppEmitter &emitter, ModuleOp moduleOp) {
   raw_indented_ostream &os = emitter.ostream();
-  
-  if (emitter.shouldGenerateCatapultCompatibleCode()){
+
+  if (emitter.shouldGenerateCatapultCompatibleCode()) {
     os << "#include <ac_int.h>\n";
-  }
-  else {
+  } else {
     os << "#include <ap_int.h>\n";
   }
   if (!emitter.shouldGenerateVitisHLSCompatibleCode())
