@@ -157,6 +157,7 @@ private:
      auto lut = rewriter.create<spechls::LUTOp>(loc, rewriter.getIntegerType(lutOutputWidth), lutIndex,
                                                 rewriter.getDenseI64ArrayAttr(lutContents));*/
 
+
     auto result = rewriter.create<spechls::GammaOp>(loc, root.getType(), root.getSymName(), newSel, inputs);
     return result;
   }
