@@ -243,7 +243,6 @@ LogicalResult printAllVariables(CppEmitter &emitter, spechls::KernelOp &kernelOp
     } else if (auto rollbackOp = dyn_cast<spechls::RollbackOp>(op)) {
       if (failed(emitter.emitType(op->getLoc(), rollbackOp.getType())))
         return failure();
-
       if (rollbackOp.getDepths().empty())
         os << " " << getRollbackBufferName(emitter, rollbackOp) << "[" << 0;
       else
@@ -438,16 +437,17 @@ LogicalResult printOperation(CppEmitter &emitter, ModuleOp moduleOp) {
   for (auto &&mop : moduleOp.getBodyRegion().front()) {
     if (auto kernelOp = dyn_cast<spechls::KernelOp>(mop)) {
       for (auto &&op : kernelOp.getBody().front()) {
-        if (auto rollbackOp = dyn_cast<spechls::RollbackOp>(op)) {
-          if (!rollbackOp.getDepths().empty())
-            maxRollback =
-                std::max(maxRollback, *std::max_element(rollbackOp.getDepths().begin(), rollbackOp.getDepths().end()));
+        if (auto rollbackOp = dyn_cast<spechls::RollbackOp>(op)){
+            if (!rollbackOp.getDepths().empty())
+              maxRollback =
+                  std::max(maxRollback, *std::max_element(rollbackOp.getDepths().begin(), rollbackOp.getDepths().end()));
         } else if (auto taskOp = dyn_cast<spechls::TaskOp>(op)) {
           for (auto &&op2 : taskOp.getBody().front()) {
-            if (auto rollbackOp2 = dyn_cast<spechls::RollbackOp>(op2)) {
-              if (!rollbackOp2.getDepths().empty())
-                maxRollback = std::max(
-                    maxRollback, *std::max_element(rollbackOp2.getDepths().begin(), rollbackOp2.getDepths().end()));
+            if (auto rollbackOp2 = dyn_cast<spechls::RollbackOp>(op2)){
+                if (!rollbackOp2.getDepths().empty()) 
+                  maxRollback = std::max(maxRollback,
+                                         *std::max_element(rollbackOp2.getDepths().begin(), rollbackOp2.getDepths().end()));
+
             }
           }
         }
@@ -1000,6 +1000,8 @@ LogicalResult printOperation(CppEmitter &emitter, spechls::RollbackOp rollbackOp
     size_t maxDepth = 0;
     if (!rollbackOp.getDepths().empty())
       maxDepth = *std::max_element(rollbackOp.getDepths().begin(), rollbackOp.getDepths().end());
+
+
     os << "unsigned int off = ";
     if (failed(emitter.emitOperand(rollbackOp.getRollback())))
       return failure();
