@@ -988,58 +988,67 @@ LogicalResult printOperation(CppEmitter &emitter, spechls::RollbackOp rollbackOp
 
   // Inline the rollback implementation to circumvent bugs in Vitis HLS.
   if (emitter.shouldGenerateVitisHLSCompatibleCode()) {
-    os << "\n{\n";
-    os.indent();
 
-    size_t maxDepth = 0;
-    if (!rollbackOp.getDepths().empty())
-         maxDepth = *std::max_element(rollbackOp.getDepths().begin(), rollbackOp.getDepths().end());
-    os << "unsigned int off = ";
-    if (failed(emitter.emitOperand(rollbackOp.getRollback())))
-      return failure();
-    os << " - " << rollbackOp.getOffset() << ";\n";
-    os << "if (";
-    if (failed(emitter.emitOperand(rollbackOp.getWriteCommand())))
-      return failure();
-    os << ") {\n";
-    os.indent();
-    os << "for (unsigned int i = " << maxDepth << "; i > 0; --i) {\n";
-    os.indent();
-    os << getRollbackBufferName(emitter, rollbackOp) << "[i] = " << getRollbackBufferName(emitter, rollbackOp)
-       << "[i - 1];\n";
-    os.unindent();
-    os << "}\n";
-
-    if (failed(emitter.emitAssignPrefix(*operation)))
-      return failure();
-    if (failed(emitter.emitOperand(rollbackOp.getInput())))
-      return failure();
-    os << ";\n";
-    for (auto &&depth : rollbackOp.getDepths()) {
-      os << "if (off == " << depth << ") {\n";
-      os.indent();
-      if (failed(emitter.emitAssignPrefix(*operation)))
-        return failure();
-      os << getRollbackBufferName(emitter, rollbackOp) << "[" << depth << "];\n";
-      os.unindent();
-      os << "}\n";
+    if (rollbackOp.getDepths().empty()){
+        //Special case with rollback not yet assigned, and no command
+        os << "\n";
+        os.indent();
+        if (failed(emitter.emitAssignPrefix(*operation)))
+          return failure();
+        if (failed(emitter.emitOperand(rollbackOp.getInput())))
+          return failure();
     }
-    os << getRollbackBufferName(emitter, rollbackOp) << "[0] = ";
-    if (failed(emitter.emitOperand(rollbackOp.getResult())))
-      return failure();
-    os << ";\n";
-    os.unindent();
-    os << "}\n";
-    os << "else {\n";
-    os.indent();
-    if (failed(emitter.emitOperand(rollbackOp.getResult())))
-      return failure();
-    os << " = " << getRollbackBufferName(emitter, rollbackOp) << "[0];\n";
-    os.unindent();
-    os << "}\n";
+    else {
+        os << "\n{\n";
+        os.indent();
+        size_t maxDepth = *std::max_element(rollbackOp.getDepths().begin(), rollbackOp.getDepths().end());
+        os << "unsigned int off = ";
+        if (failed(emitter.emitOperand(rollbackOp.getRollback())))
+          return failure();
+        os << " - " << rollbackOp.getOffset() << ";\n";
+        os << "if (";
+        if (failed(emitter.emitOperand(rollbackOp.getWriteCommand())))
+          return failure();
+        os << ") {\n";
+        os.indent();
+        os << "for (unsigned int i = " << maxDepth << "; i > 0; --i) {\n";
+        os.indent();
+        os << getRollbackBufferName(emitter, rollbackOp) << "[i] = " << getRollbackBufferName(emitter, rollbackOp)
+           << "[i - 1];\n";
+        os.unindent();
+        os << "}\n";
 
-    os.unindent();
-    os << "}";
+        if (failed(emitter.emitAssignPrefix(*operation)))
+          return failure();
+        if (failed(emitter.emitOperand(rollbackOp.getInput())))
+          return failure();
+        os << ";\n";
+        for (auto &&depth : rollbackOp.getDepths()) {
+          os << "if (off == " << depth << ") {\n";
+          os.indent();
+          if (failed(emitter.emitAssignPrefix(*operation)))
+            return failure();
+          os << getRollbackBufferName(emitter, rollbackOp) << "[" << depth << "];\n";
+          os.unindent();
+          os << "}\n";
+        }
+        os << getRollbackBufferName(emitter, rollbackOp) << "[0] = ";
+        if (failed(emitter.emitOperand(rollbackOp.getResult())))
+          return failure();
+        os << ";\n";
+        os.unindent();
+        os << "}\n";
+        os << "else {\n";
+        os.indent();
+        if (failed(emitter.emitOperand(rollbackOp.getResult())))
+          return failure();
+        os << " = " << getRollbackBufferName(emitter, rollbackOp) << "[0];\n";
+        os.unindent();
+        os << "}\n";
+
+        os.unindent();
+        os << "}";
+    }
   }
 
   return success();
