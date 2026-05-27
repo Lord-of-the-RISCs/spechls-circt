@@ -5,7 +5,6 @@
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 
-#include "Analysis/SpecHLS/OperationDelayAnalysis.h"
 #include "Dialect/SpecHLS/IR/SpecHLS.h"
 #include "Dialect/SpecHLS/IR/SpecHLSOps.h"
 #include "Dialect/SpecHLS/IR/SpecHLSTypes.h"
