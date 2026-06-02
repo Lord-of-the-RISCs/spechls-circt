@@ -7,4 +7,5 @@ add_circt_library(WcetAnalysis
   SpecHLS
   Wcet
   WcetUtils
+  WcetTransforms
 )
