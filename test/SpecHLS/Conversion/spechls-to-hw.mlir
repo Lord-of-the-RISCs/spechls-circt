@@ -1,4 +1,4 @@
-// RUN: spechls-opt -split-input-file --spechls-to-hw --canonicalize --cse %s | spechls-opt | FileCheck %s
+// RUN: spechls-opt -split-input-file --spechls-to-hw --canonicalize --cse %s | FileCheck %s
 
 // CHECK-LABEL: hw.module @kernel
 spechls.kernel @kernel() {
