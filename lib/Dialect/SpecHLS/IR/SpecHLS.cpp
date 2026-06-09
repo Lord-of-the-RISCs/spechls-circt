@@ -259,6 +259,96 @@ LogicalResult spechls::CommitOp::verify() {
   return success();
 }
 
+ParseResult spechls::OptimizedFuncOp::parse(OpAsmParser &parser, OperationState &result) {
+
+  SmallVector<OpAsmParser::Argument, 4> bodyArgs, optBodyArgs;
+  SmallVector<Type, 4> operandsType;
+  Type returnType;
+
+  if (parser.parseLParen())
+    return failure();
+
+  while (failed(parser.parseOptionalRParen())) {
+    OpAsmParser::UnresolvedOperand operand;
+    Type type;
+    if (parser.parseOperand(operand) || parser.parseColonType(type))
+      return failure();
+    operandsType.push_back(type);
+    if (parser.resolveOperand(operand, type, result.operands))
+      return failure();
+  }
+  if (parser.parseColonType(returnType))
+    return failure();
+  result.addTypes(returnType);
+
+  if (parser.parseOptionalAttrDictWithKeyword(result.attributes))
+    return failure();
+
+  if (parser.parseArgumentList(bodyArgs, OpAsmParser::Delimiter::Paren))
+    return failure();
+
+  if (bodyArgs.size() != operandsType.size())
+    return parser.emitError(parser.getNameLoc(), "Invalid number of optimized function body arguments.");
+
+  for (auto [arg, type] : llvm::zip(bodyArgs, operandsType)) {
+    arg.type = type;
+  }
+  auto *body = result.addRegion();
+
+  if (parser.parseRegion(*body, bodyArgs))
+    return failure();
+
+  if (parser.parseArgumentList(optBodyArgs, OpAsmParser::Delimiter::Paren))
+    return failure();
+
+  if (optBodyArgs.size() != operandsType.size())
+    return parser.emitError(parser.getNameLoc(), "Invalid number of optimized function optBody arguments.");
+
+  for (auto [arg, type] : llvm::zip(optBodyArgs, operandsType)) {
+    arg.type = type;
+  }
+  auto *optBody = result.addRegion();
+  if (parser.parseRegion(*optBody, optBodyArgs))
+    return failure();
+  return success();
+}
+
+void spechls::OptimizedFuncOp::print(OpAsmPrinter &printer) {
+  printer << " (";
+  llvm::interleaveComma(getArgs(), printer, [&](auto arg) { printer << arg << " : " << arg.getType(); });
+  printer << ") : ";
+  printer << getResult().getType() << " ";
+  printer.printOptionalAttrDictWithKeyword(getOperation()->getAttrs());
+  printer << "(";
+  llvm::interleaveComma(getBody().getArguments(), printer, [&](auto arg) { printer << arg; });
+  printer << ")";
+  printer.printRegion(getBody(), false);
+  printer << "(";
+  llvm::interleaveComma(getOptBody().getArguments(), printer, [&](auto arg) { printer << arg; });
+  printer << ")";
+  printer.printRegion(getOptBody(), false);
+}
+
+LogicalResult spechls::OptimizedFuncOp::verify() {
+  if (auto yield = llvm::dyn_cast<spechls::YieldOp>(getBodyBlock()->getTerminator())) {
+    if (yield.getValue().getType() != getResult().getType()) {
+      return emitOpError("Incompatible type between result and body yielded value: ")
+             << getResult().getType() << " vs " << yield.getValue().getType();
+    }
+  } else {
+    return emitOpError("Body terminator should be a YieldOp.");
+  }
+  if (auto yield = llvm::dyn_cast<spechls::YieldOp>(getOptBodyBlock()->getTerminator())) {
+    if (yield.getValue().getType() != getResult().getType()) {
+      return emitOpError("Incompatible type between result and optBody yielded value: ")
+             << getResult().getType() << " vs " << yield.getValue().getType();
+    }
+  } else {
+    return emitOpError("OptBody terminator should be a YieldOp.");
+  }
+  return success();
+}
+
 ParseResult spechls::GammaOp::parse(OpAsmParser &parser, OperationState &result) {
   // Parse the symbol name specifier.
   StringAttr symbolNameAttr;

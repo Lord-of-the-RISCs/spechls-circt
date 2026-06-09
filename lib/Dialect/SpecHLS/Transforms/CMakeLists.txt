@@ -43,6 +43,7 @@ add_circt_dialect_library(SpecHLSTransforms
     MergeTasks.cpp
     SplitWithSyncPass.cpp
     AffectProfilingID.cpp
+    InlineOptimizedFuncPass.cpp
 
     DEPENDS
     SpecHLSTransformsIncGen

@@ -145,4 +145,14 @@ def MergeTasksPass: Pass<"merge-tasks", "spechls::KernelOp"> {
   let dependentDialects = ["::spechls::SpecHLSDialect", "::circt::hw::HWDialect", "::circt::comb::CombDialect"];
 }
 
+def InlineOptimizedFuncBodyPass : Pass<"inline-optimized-func-body", "spechls::KernelOp"> {
+  let summary = "Inline all optimizedFunc ops body.";
+  let dependentDialects = ["::spechls::SpecHLSDialect", "::circt::hw::HWDialect", "::circt::comb::CombDialect"];
+}
+
+def InlineOptimizedFuncOptBodyPass : Pass<"inline-optimized-func-opt-body", "spechls::KernelOp"> {
+  let summary = "Inline all optimizedFunc ops optBody.";
+  let dependentDialects = ["::spechls::SpecHLSDialect", "::circt::hw::HWDialect", "::circt::comb::CombDialect"];
+}
+
 #endif // SPECHLS_INCLUDED_DIALECT_SPECHLS_TRANSFORMS_PASSES_TD

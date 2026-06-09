@@ -160,6 +160,36 @@ def SpecHLS_TaskOp : SpecHLSOp<"task", [SingleBlock, RegionKindInterface, Isolat
     let hasCanonicalizer = 1;
 }
 
+def SpecHLS_OptimizedFuncOp : SpecHLSOp<"optimizedFunc", [IsolatedFromAbove]> {
+    let arguments = (ins Variadic<AnyType>:$args);
+    let results = (outs AnyType:$result);
+    let regions = (region SizedRegion<1>:$body, SizedRegion<1>:$optBody);
+
+    let hasCustomAssemblyFormat = 1;
+    let hasVerifier = 1;
+
+    let extraClassDeclaration = [{
+        ::mlir::Block *getBodyBlock() {
+          return &getBody().front();
+        }
+        ::mlir::Block *getOptBodyBlock() {
+          return &getOptBody().front();
+        }
+        ::mlir::LogicalResult inlineBody(mlir::PatternRewriter &rewriter);
+        ::mlir::LogicalResult inlineOptBody(mlir::PatternRewriter &rewriter);
+    }];
+}
+
+def SpecHLS_YieldOp : SpecHLSOp<"yield", [HasParent<"OptimizedFuncOp">, Terminator]> {
+    let description = [{
+        Yield the return value of an optimized function.
+    }];
+    let arguments = (ins AnyType:$value);
+    let assemblyFormat = [{
+        $value `:` type($value) attr-dict
+    }];
+}
+
 def SpecHLS_CommitOp : SpecHLSOp<"commit", [HasParent<"TaskOp">, Terminator]> {
     let arguments = (ins
         Variadic<AnyType>:$value
