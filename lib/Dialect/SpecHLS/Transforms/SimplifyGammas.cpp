@@ -63,29 +63,25 @@ private:
     return *std::next(args.begin(), n);
   }
 
-    static mlir::Value zextTo(mlir::Location loc,
-                              mlir::PatternRewriter &rewriter,
-                              mlir::Value v,
-                              unsigned targetWidth) {
-      auto srcTy = llvm::cast<mlir::IntegerType>(v.getType());
-      unsigned srcWidth = srcTy.getWidth();
-      if (srcWidth == targetWidth)
-        return v;
-        
-      if (srcWidth > targetWidth){
-        return rewriter.create<circt::comb::ExtractOp>(loc, v, 0, targetWidth);
-      }
+  static mlir::Value zextTo(mlir::Location loc, mlir::PatternRewriter &rewriter, mlir::Value v, unsigned targetWidth) {
+    auto srcTy = llvm::cast<mlir::IntegerType>(v.getType());
+    unsigned srcWidth = srcTy.getWidth();
+    if (srcWidth == targetWidth)
+      return v;
 
-      assert(srcWidth < targetWidth && "zextTo only supports widening");
-
-      auto padWidth = targetWidth - srcWidth;
-      auto padTy = rewriter.getIntegerType(padWidth);
-      auto zeroPad = rewriter.create<circt::hw::ConstantOp>(
-          loc, padTy, rewriter.getIntegerAttr(padTy, 0));
-
-      // MSBs first for concat: zero padding on top, then original value.
-      return rewriter.create<circt::comb::ConcatOp>(loc, zeroPad, v);
+    if (srcWidth > targetWidth) {
+      return rewriter.create<circt::comb::ExtractOp>(loc, v, 0, targetWidth);
     }
+
+    assert(srcWidth < targetWidth && "zextTo only supports widening");
+
+    auto padWidth = targetWidth - srcWidth;
+    auto padTy = rewriter.getIntegerType(padWidth);
+    auto zeroPad = rewriter.create<circt::hw::ConstantOp>(loc, padTy, rewriter.getIntegerAttr(padTy, 0));
+
+    // MSBs first for concat: zero padding on top, then original value.
+    return rewriter.create<circt::comb::ConcatOp>(loc, zeroPad, v);
+  }
 
   static Operation *mergeGammaNodesImpl(PatternRewriter &rewriter, Operation *op) {
     auto root = cast<spechls::GammaOp>(op);
@@ -137,31 +133,29 @@ private:
 
     Location loc = root.getLoc();
     unsigned outW = lutOutputWidth;
-  assert(outW < 100  && "outw test");
-  assert(outW > 0 && "outw test");
+    assert(outW < 100 && "outw test");
+    assert(outW > 0 && "outw test");
     auto outTy = rewriter.getIntegerType(outW);
-    
-    
+
     auto rootCntrl = zextTo(loc, rewriter, root.getSelect(), outW);
     auto gCntrl = zextTo(loc, rewriter, g.getSelect(), outW);
-  
+
     auto cstI = rewriter.create<circt::hw::ConstantOp>(loc, outTy, rewriter.getIntegerAttr(outTy, idx));
-    auto cstShift = rewriter.create<circt::hw::ConstantOp>(loc, outTy, rewriter.getIntegerAttr(outTy, g.getInputs().size() - 1));
-    
-    
+    auto cstShift =
+        rewriter.create<circt::hw::ConstantOp>(loc, outTy, rewriter.getIntegerAttr(outTy, g.getInputs().size() - 1));
+
     auto isLt = rewriter.create<circt::comb::ICmpOp>(loc, circt::comb::ICmpPredicate::ult, rootCntrl, cstI);
     auto isEq = rewriter.create<circt::comb::ICmpOp>(loc, circt::comb::ICmpPredicate::eq, rootCntrl, cstI);
     auto aPlusB = rewriter.create<circt::comb::AddOp>(loc, outTy, mlir::ValueRange{rootCntrl, gCntrl});
     auto aPlusShift = rewriter.create<circt::comb::AddOp>(loc, outTy, mlir::ValueRange{rootCntrl, cstShift});
     auto geCase = rewriter.create<circt::comb::MuxOp>(loc, isEq, aPlusB, aPlusShift);
     auto newSel = rewriter.create<circt::comb::MuxOp>(loc, isLt, rootCntrl, geCase);
-   
-   
-   /* auto lutIndex = rewriter.create<circt::comb::ConcatOp>(
-        loc, rewriter.create<circt::comb::ExtractOp>(loc, root.getSelect(), 0, rootControlWidth),
-        rewriter.create<circt::comb::ExtractOp>(loc, g.getSelect(), 0, gControlWidth));
-    auto lut = rewriter.create<spechls::LUTOp>(loc, rewriter.getIntegerType(lutOutputWidth), lutIndex,
-                                               rewriter.getDenseI64ArrayAttr(lutContents));*/
+
+    /* auto lutIndex = rewriter.create<circt::comb::ConcatOp>(
+         loc, rewriter.create<circt::comb::ExtractOp>(loc, root.getSelect(), 0, rootControlWidth),
+         rewriter.create<circt::comb::ExtractOp>(loc, g.getSelect(), 0, gControlWidth));
+     auto lut = rewriter.create<spechls::LUTOp>(loc, rewriter.getIntegerType(lutOutputWidth), lutIndex,
+                                                rewriter.getDenseI64ArrayAttr(lutContents));*/
 
     auto result = rewriter.create<spechls::GammaOp>(loc, root.getType(), root.getSymName(), newSel, inputs);
     return result;

@@ -176,8 +176,8 @@ TimingAnalyser::TimingAnalyser()
 TimingAnalyserFactory::TimingAnalyserFactory() : defaultAnalyser{} {}
 
 mlir::LogicalResult TimingAnalyserFactory::registerAnalyers(std::string jsonFile) {
-    //Need to read float value correctly
-    std::setlocale(LC_NUMERIC, "C");
+  // Need to read float value correctly
+  std::setlocale(LC_NUMERIC, "C");
 
   std::ifstream file(jsonFile);
   if (!file.is_open()) {
