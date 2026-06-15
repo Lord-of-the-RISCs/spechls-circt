@@ -3,5 +3,6 @@ add_circt_translation_library(SpecHLSTargetCpp
 
     LINK_LIBS PUBLIC
     SpecHLS
+    SpecHLSSupport
     MLIRTranslateLib
 )

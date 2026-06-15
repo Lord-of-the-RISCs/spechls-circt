@@ -8,21 +8,24 @@
 #include "Dialect/SpecHLS/IR/SpecHLSOps.h"
 #include "Dialect/SpecHLS/IR/SpecHLSTypes.h"
 #include "Dialect/SpecHLS/Transforms/TopologicalSort.h"
+#include "Support/TransitiveClosure.h"
 #include "Target/Cpp/Export.h"
-#include "circt/Dialect/HW/HWTypes.h"
-#include "mlir/Dialect/Arith/IR/Arith.h"
-#include "llvm/ADT/SmallSet.h"
+#include "mlir/Transforms/Passes.h"
 
 #include <circt/Dialect/Comb/CombOps.h>
 #include <circt/Dialect/HW/HWOps.h>
+#include <circt/Dialect/HW/HWTypes.h>
 #include <llvm/ADT/STLExtras.h>
 #include <llvm/ADT/ScopedHashTable.h>
+#include <llvm/ADT/SmallSet.h>
+#include <llvm/ADT/SmallVector.h>
 #include <llvm/ADT/Twine.h>
 #include <llvm/ADT/TypeSwitch.h>
 #include <llvm/Support/FormatVariadic.h>
 #include <llvm/Support/LogicalResult.h>
 #include <llvm/Support/raw_ostream.h>
 #include <mlir/Analysis/TopologicalSortUtils.h>
+#include <mlir/Dialect/Arith/IR/Arith.h>
 #include <mlir/IR/Attributes.h>
 #include <mlir/IR/Block.h>
 #include <mlir/IR/BuiltinOps.h>
@@ -31,8 +34,10 @@
 #include <mlir/IR/Location.h>
 #include <mlir/IR/Operation.h>
 #include <mlir/IR/Visitors.h>
+#include <mlir/Pass/PassManager.h>
 #include <mlir/Support/IndentedOstream.h>
 #include <mlir/Support/LLVM.h>
+#include <mlir/Support/WalkResult.h>
 
 #include <algorithm>
 #include <stack>
@@ -1817,4 +1822,32 @@ StringRef CppEmitter::getOrCreateName(Value value) {
 LogicalResult spechls::translateToCpp(Operation *op, raw_ostream &os, TranslationToCppOptions options) {
   CppEmitter emitter(os, std::move(options));
   return emitter.emitOperation(*op, false);
+}
+
+LogicalResult spechls::translateFSMControl(mlir::Operation *op, llvm::raw_ostream &os,
+                                           TranslationToCppOptions options) {
+  bool hasFailed = false;
+  op->walk([&](spechls::FSMOp fsm) {
+    auto rewriter = mlir::IRRewriter(op->getContext());
+    auto kernel = outlineBackwardCone(fsm.getMispec(), rewriter);
+    if (kernel == nullptr) {
+      hasFailed = true;
+      return WalkResult::interrupt();
+    }
+    auto pm = mlir::PassManager::on<mlir::ModuleOp>(kernel->getContext());
+    pm.addPass(mlir::createCanonicalizerPass());
+    pm.addPass(mlir::createCSEPass());
+    if (failed(pm.run(kernel->getParentOp()))) {
+      hasFailed = true;
+      return WalkResult::interrupt();
+    }
+    if (failed(translateToCpp(kernel, os, options))) {
+      hasFailed = true;
+      return WalkResult::interrupt();
+    }
+    return WalkResult::advance();
+  });
+  if (hasFailed)
+    return mlir::failure();
+  return mlir::success();
 }

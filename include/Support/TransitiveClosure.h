@@ -7,13 +7,17 @@
 #ifndef SPECHLS_TRANSITIVE_CLOSURE_H
 #define SPECHLS_TRANSITIVE_CLOSURE_H
 
+#include <llvm/ADT/SmallVector.h>
 #include <llvm/Support/LogicalResult.h>
 #include <mlir/IR/BuiltinDialect.h>
 
+#include "Dialect/SpecHLS/IR/SpecHLSOps.h"
+
 namespace spechls {
 
-void computeBackwardCone(mlir::Value &value, llvm::DenseSet<mlir::Operation *> &cone,
-                         llvm::DenseSet<mlir::Operation *> &delays);
+void computeBackwardCone(mlir::Value value, llvm::SmallVector<mlir::Operation *> &cone,
+                         llvm::SmallVector<mlir::Operation *> &delays);
+KernelOp outlineBackwardCone(mlir::Value value, mlir::RewriterBase &rewriter);
 
 } // namespace spechls
 

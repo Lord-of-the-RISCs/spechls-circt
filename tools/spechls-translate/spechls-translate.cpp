@@ -46,6 +46,17 @@ int main(int argc, char **argv) {
         registry.insert<spechls::SpecHLSDialect, circt::comb::CombDialect, circt::hw::HWDialect,
                         mlir::arith::ArithDialect>();
       });
+  mlir::TranslateFromMLIRRegistration registrationFSMControl(
+      "spechls-to-fsm-control", "Translate SpecHLS to C++",
+      [](mlir::Operation *op, llvm::raw_ostream &os) {
+        return spechls::translateFSMControl(op, os,
+                                            {declareStructTypes, declareFunctions, lowerArraysAsValues, generateCpi,
+                                             vitisHlsCompatibility, catapultCompatibility});
+      },
+      [](mlir::DialectRegistry &registry) {
+        registry.insert<spechls::SpecHLSDialect, circt::comb::CombDialect, circt::hw::HWDialect,
+                        mlir::arith::ArithDialect>();
+      });
 
   return failed(mlir::mlirTranslateMain(argc, argv, "SpecHLS translation driver"));
 }

@@ -8,6 +8,8 @@
 #include <llvm/Support/raw_ostream.h>
 #include <mlir/IR/Operation.h>
 
+#include "Dialect/SpecHLS/IR/SpecHLSOps.h"
+
 namespace spechls {
 
 struct TranslationToCppOptions {
@@ -20,5 +22,8 @@ struct TranslationToCppOptions {
 };
 
 llvm::LogicalResult translateToCpp(mlir::Operation *op, llvm::raw_ostream &os, TranslationToCppOptions options);
+
+llvm::LogicalResult translateFSMControl(mlir::Operation *op, llvm::raw_ostream &os, TranslationToCppOptions options);
+KernelOp outlineBackwardCone(mlir::Value value);
 
 } // namespace spechls
