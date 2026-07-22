@@ -12,6 +12,7 @@
 
 #include "mlir/Rewrite/FrozenRewritePatternSet.h"
 #include "mlir/Support/LLVM.h"
+#include <cstdint>
 #include <mlir/Dialect/PDL/IR/PDL.h>
 #include <mlir/Dialect/PDLInterp/IR/PDLInterp.h>
 #include <mlir/IR/MLIRContext.h>
@@ -80,8 +81,8 @@ private:
     auto lutsCtrl = rewriter.create<circt::comb::ExtractOp>(
         rewriter.getUnknownLoc(), rewriter.getIntegerType(lut.getIndex().getType().getWidth() - 1), lut.getIndex(), 1);
 
-    SmallVector<long> oddLutContents;
-    SmallVector<long> evenLutContents;
+    SmallVector<int64_t> oddLutContents;
+    SmallVector<int64_t> evenLutContents;
     for (auto it : llvm::enumerate(lut.getContents())) {
       if (it.index() % 2 == 0)
         evenLutContents.push_back(it.value());
