@@ -1,0 +1,183 @@
+// Generated from transformed SpecHLS kernel slowfast. Do not edit.
+module SpeculatedModel {
+  // Dataflow exposure map: each parsed SSA result maps to the Uclid symbol below.
+  // [0] hw.constant -> 0bv32
+  // [1] spechls.mu<fsm_x0State> -> mu_fsm_x0State
+  // [3] spechls.fsm.trigger -> next_state=fsm_fsm_x0_next_state, nextInput=fsm_fsm_x0_nextInput, commit=fsm_fsm_x0_commit, muRollBack=fsm_fsm_x0_muRollBack, arrayRollBack=fsm_fsm_x0_arrayRollBack, rewind=fsm_fsm_x0_rewind, rbwe=fsm_fsm_x0_rbwe, gammaRollBack_x0=fsm_fsm_x0_gammaRollBack_x0, selSlowPath_x0=fsm_fsm_x0_selSlowPath_x0, stall_x0_0=fsm_fsm_x0_stall_x0_0, stall_x0_1=fsm_fsm_x0_stall_x0_1
+  // [4] spechls.rollback depths=[2] -> v_19
+  // [5] spechls.rollback depths=[2] -> v_20
+  // [6] hw.constant -> true
+  // [7] spechls.delay depth=2 -> delay_7_1
+  // [8] hw.constant -> 0bv32
+  // [9] comb.icmp -> v_21
+  // [10] hw.constant -> 0bv32
+  // [11] comb.icmp -> v_22
+  // [12] hw.constant -> true
+  // [13] spechls.delay depth=1 -> delay_13_0
+  // [14] spechls.delay depth=1 -> delay_14_0
+  // [15] hw.constant -> true
+  // [16] spechls.delay depth=1 -> delay_16_0
+  // [17] hw.constant -> true
+  // [18] spechls.mu<x> -> mu_x
+  // [19] spechls.call @cond -> v_23
+  // [20] spechls.sync -> v_24
+  // [21] spechls.call @fast -> v_25
+  // [22] spechls.call @slow -> v_26
+  // [23] spechls.sync -> v_27
+  // [24] spechls.sync -> v_28
+  // [25] spechls.gamma<x> -> v_29
+  // [26] spechls.commit -> commit_guard, commit_value
+  var input_0: bv32;
+  var mu_fsm_x0State: bv32;
+  var rollback_v_19_0: bv32;
+  var rollback_v_19_1: bv32;
+  var rollback_v_20_0: bv32;
+  var rollback_v_20_1: bv32;
+  var delay_7_0: bv32;
+  var delay_7_1: bv32;
+  var delay_13_0: bv32;
+  var delay_14_0: bv32;
+  var delay_16_0: boolean;
+  var mu_x: bv32;
+  var commit_guard: boolean;
+  var commit_value: bv32;
+  var committed_count: integer;
+  var committed_stream: [integer] bv32;
+  procedure write_committed(index: integer, value: bv32) modifies committed_stream; {
+    committed_stream[index] = value;
+  }
+
+  init {
+    input_0 = common.initial_input_bv32();
+    mu_fsm_x0State = 0bv32;
+    rollback_v_19_0 = 0bv32;
+    rollback_v_19_1 = 0bv32;
+    rollback_v_20_0 = 0bv32;
+    rollback_v_20_1 = 0bv32;
+    delay_7_0 = 0bv32;
+    delay_7_1 = 0bv32;
+    delay_13_0 = 0bv32;
+    delay_14_0 = 0bv32;
+    delay_16_0 = false;
+    mu_x = input_0;
+    commit_guard = false;
+    commit_value = 0bv32;
+    committed_count = 0;
+    committed_stream[0] = 0bv32;
+  }
+
+  procedure tick() modifies input_0, mu_fsm_x0State, rollback_v_19_0, rollback_v_19_1, rollback_v_20_0, rollback_v_20_1, delay_7_0, delay_7_1, delay_13_0, delay_14_0, delay_16_0, mu_x, commit_guard, commit_value, committed_count, committed_stream; {
+    var v_18: boolean;
+    var fsm_fsm_x0_next_state: bv32;
+    var fsm_fsm_x0_nextInput: boolean;
+    var fsm_fsm_x0_commit: boolean;
+    var fsm_fsm_x0_muRollBack: bv32;
+    var fsm_fsm_x0_arrayRollBack: bv32;
+    var fsm_fsm_x0_rewind: bv32;
+    var fsm_fsm_x0_rbwe: boolean;
+    var fsm_fsm_x0_gammaRollBack_x0: bv32;
+    var fsm_fsm_x0_selSlowPath_x0: bv32;
+    var fsm_fsm_x0_stall_x0_0: bv32;
+    var fsm_fsm_x0_stall_x0_1: bv32;
+    var v_19: bv32;
+    var v_20: bv32;
+    var v_21: boolean;
+    var v_22: boolean;
+    var v_23: boolean;
+    var v_24: boolean;
+    var v_25: bv32;
+    var v_26: bv32;
+    var v_27: bv32;
+    var v_28: bv32;
+    var v_29: bv32;
+    var next_mu_fsm_x0State: bv32;
+    var next_rollback_v_19_0: bv32;
+    var next_rollback_v_19_1: bv32;
+    var next_rollback_v_20_0: bv32;
+    var next_rollback_v_20_1: bv32;
+    var next_delay_7_0: bv32;
+    var next_delay_7_1: bv32;
+    var next_delay_13_0: bv32;
+    var next_delay_14_0: bv32;
+    var next_delay_16_0: boolean;
+    var next_mu_x: bv32;
+    var next_commit_guard: boolean;
+    var next_commit_value: bv32;
+    var next_committed_count: integer;
+    v_18 = (delay_16_0 == true);
+    fsm_fsm_x0_next_state = if (mu_fsm_x0State == 0bv32) then 1bv32 else if (mu_fsm_x0State == 1bv32) then 2bv32 else if (mu_fsm_x0State == 2bv32) then if (v_18) then 3bv32 else 2bv32 else if (mu_fsm_x0State == 3bv32) then 4bv32 else if (mu_fsm_x0State == 4bv32) then 2bv32 else mu_fsm_x0State;
+    fsm_fsm_x0_nextInput = if (mu_fsm_x0State == 0bv32) then false else if (mu_fsm_x0State == 1bv32) then false else if (mu_fsm_x0State == 2bv32) then true else if (mu_fsm_x0State == 3bv32) then false else if (mu_fsm_x0State == 4bv32) then false else false;
+    fsm_fsm_x0_commit = if (mu_fsm_x0State == 0bv32) then false else if (mu_fsm_x0State == 1bv32) then false else if (mu_fsm_x0State == 2bv32) then true else if (mu_fsm_x0State == 3bv32) then false else if (mu_fsm_x0State == 4bv32) then false else false;
+    fsm_fsm_x0_muRollBack = if (mu_fsm_x0State == 0bv32) then 0bv32 else if (mu_fsm_x0State == 1bv32) then 0bv32 else if (mu_fsm_x0State == 2bv32) then 0bv32 else if (mu_fsm_x0State == 3bv32) then 0bv32 else if (mu_fsm_x0State == 4bv32) then 0bv32 else 0bv32;
+    fsm_fsm_x0_arrayRollBack = if (mu_fsm_x0State == 0bv32) then 0bv32 else if (mu_fsm_x0State == 1bv32) then 0bv32 else if (mu_fsm_x0State == 2bv32) then 0bv32 else if (mu_fsm_x0State == 3bv32) then 0bv32 else if (mu_fsm_x0State == 4bv32) then 0bv32 else 0bv32;
+    fsm_fsm_x0_rewind = if (mu_fsm_x0State == 0bv32) then 0bv32 else if (mu_fsm_x0State == 1bv32) then 0bv32 else if (mu_fsm_x0State == 2bv32) then 0bv32 else if (mu_fsm_x0State == 3bv32) then 0bv32 else if (mu_fsm_x0State == 4bv32) then 0bv32 else 0bv32;
+    fsm_fsm_x0_rbwe = if (mu_fsm_x0State == 0bv32) then false else if (mu_fsm_x0State == 1bv32) then false else if (mu_fsm_x0State == 2bv32) then false else if (mu_fsm_x0State == 3bv32) then true else if (mu_fsm_x0State == 4bv32) then false else false;
+    fsm_fsm_x0_gammaRollBack_x0 = if (mu_fsm_x0State == 0bv32) then 0bv32 else if (mu_fsm_x0State == 1bv32) then 0bv32 else if (mu_fsm_x0State == 2bv32) then 0bv32 else if (mu_fsm_x0State == 3bv32) then 1bv32 else if (mu_fsm_x0State == 4bv32) then 0bv32 else 0bv32;
+    fsm_fsm_x0_selSlowPath_x0 = if (mu_fsm_x0State == 0bv32) then 0bv32 else if (mu_fsm_x0State == 1bv32) then 0bv32 else if (mu_fsm_x0State == 2bv32) then 0bv32 else if (mu_fsm_x0State == 3bv32) then 1bv32 else if (mu_fsm_x0State == 4bv32) then 1bv32 else 0bv32;
+    fsm_fsm_x0_stall_x0_0 = if (mu_fsm_x0State == 0bv32) then 0bv32 else if (mu_fsm_x0State == 1bv32) then 0bv32 else if (mu_fsm_x0State == 2bv32) then 0bv32 else if (mu_fsm_x0State == 3bv32) then 0bv32 else if (mu_fsm_x0State == 4bv32) then 0bv32 else 0bv32;
+    fsm_fsm_x0_stall_x0_1 = if (mu_fsm_x0State == 0bv32) then 0bv32 else if (mu_fsm_x0State == 1bv32) then 0bv32 else if (mu_fsm_x0State == 2bv32) then 0bv32 else if (mu_fsm_x0State == 3bv32) then 0bv32 else if (mu_fsm_x0State == 4bv32) then 0bv32 else 0bv32;
+    v_19 = if (fsm_fsm_x0_rbwe) then if (fsm_fsm_x0_gammaRollBack_x0 == 0bv32) then if (fsm_fsm_x0_selSlowPath_x0 == 0bv32) then common.fast(v_20) else delay_14_0 else rollback_v_19_1 else if (fsm_fsm_x0_selSlowPath_x0 == 0bv32) then common.fast(v_20) else delay_14_0;
+    v_20 = if (fsm_fsm_x0_rbwe) then if (fsm_fsm_x0_muRollBack == 0bv32) then mu_x else rollback_v_20_1 else mu_x;
+    v_21 = (fsm_fsm_x0_stall_x0_1 == 0bv32);
+    v_22 = (fsm_fsm_x0_stall_x0_1 == 0bv32);
+    v_23 = common.cond(v_20);
+    v_24 = v_23;
+    v_25 = common.fast(v_20);
+    v_26 = common.slow(v_20);
+    v_27 = delay_13_0;
+    v_28 = delay_14_0;
+    v_29 = if (fsm_fsm_x0_selSlowPath_x0 == 0bv32) then v_25 else v_28;
+    next_mu_fsm_x0State = mu_fsm_x0State;
+    next_rollback_v_19_0 = rollback_v_19_0;
+    next_rollback_v_19_1 = rollback_v_19_1;
+    next_rollback_v_20_0 = rollback_v_20_0;
+    next_rollback_v_20_1 = rollback_v_20_1;
+    next_delay_7_0 = delay_7_0;
+    next_delay_7_1 = delay_7_1;
+    next_delay_13_0 = delay_13_0;
+    next_delay_14_0 = delay_14_0;
+    next_delay_16_0 = delay_16_0;
+    next_mu_x = mu_x;
+    next_commit_guard = commit_guard;
+    next_commit_value = commit_value;
+    next_committed_count = committed_count;
+    next_mu_fsm_x0State = fsm_fsm_x0_next_state;
+    next_rollback_v_19_0 = if (fsm_fsm_x0_selSlowPath_x0 == 0bv32) then common.fast(v_20) else delay_14_0;
+    next_rollback_v_19_1 = rollback_v_19_0;
+    next_rollback_v_20_0 = mu_x;
+    next_rollback_v_20_1 = rollback_v_20_0;
+    next_delay_7_0 = if (true) then v_19 else delay_7_0;
+    next_delay_7_1 = if (true) then delay_7_0 else delay_7_1;
+    next_delay_13_0 = if ((fsm_fsm_x0_stall_x0_1 == 0bv32)) then common.slow(v_20) else delay_13_0;
+    next_delay_14_0 = if ((fsm_fsm_x0_stall_x0_1 == 0bv32)) then delay_13_0 else delay_14_0;
+    next_delay_16_0 = if (true) then common.cond(v_20) else delay_16_0;
+    next_mu_x = v_19;
+    next_commit_guard = fsm_fsm_x0_commit;
+    next_commit_value = delay_7_1;
+    if (next_commit_guard) {
+      next_committed_count = committed_count + 1;
+      call write_committed(committed_count + 1, next_commit_value);
+    } else {
+      next_committed_count = committed_count;
+      committed_stream = committed_stream;
+    }
+    mu_fsm_x0State = next_mu_fsm_x0State;
+    rollback_v_19_0 = next_rollback_v_19_0;
+    rollback_v_19_1 = next_rollback_v_19_1;
+    rollback_v_20_0 = next_rollback_v_20_0;
+    rollback_v_20_1 = next_rollback_v_20_1;
+    delay_7_0 = next_delay_7_0;
+    delay_7_1 = next_delay_7_1;
+    delay_13_0 = next_delay_13_0;
+    delay_14_0 = next_delay_14_0;
+    delay_16_0 = next_delay_16_0;
+    mu_x = next_mu_x;
+    commit_guard = next_commit_guard;
+    commit_value = next_commit_value;
+    committed_count = next_committed_count;
+  }
+
+  next {
+    call tick();
+  }
+}

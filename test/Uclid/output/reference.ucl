@@ -1,0 +1,66 @@
+// Generated from transformed SpecHLS kernel slowfast. Do not edit.
+module ReferenceModel {
+  // Dataflow exposure map: each parsed SSA result maps to the Uclid symbol below.
+  // [0] hw.constant -> true
+  // [1] spechls.mu<x> -> mu_x
+  // [2] spechls.call @cond -> v_3
+  // [3] spechls.call @fast -> v_4
+  // [4] spechls.call @slow -> v_5
+  // [5] spechls.gamma<x> -> v_2
+  // [6] spechls.commit -> commit_guard, commit_value
+  var input_0: bv32;
+  var mu_x: bv32;
+  var commit_guard: boolean;
+  var commit_value: bv32;
+  var committed_count: integer;
+  var committed_stream: [integer] bv32;
+  procedure write_committed(index: integer, value: bv32) modifies committed_stream; {
+    committed_stream[index] = value;
+  }
+
+  init {
+    input_0 = common.initial_input_bv32();
+    mu_x = input_0;
+    commit_guard = false;
+    commit_value = 0bv32;
+    committed_count = 0;
+    committed_stream[0] = 0bv32;
+  }
+
+  procedure tick() modifies input_0, mu_x, commit_guard, commit_value, committed_count, committed_stream; {
+    var v_3: boolean;
+    var v_4: bv32;
+    var v_5: bv32;
+    var v_2: bv32;
+    var next_mu_x: bv32;
+    var next_commit_guard: boolean;
+    var next_commit_value: bv32;
+    var next_committed_count: integer;
+    v_3 = common.cond(mu_x);
+    v_4 = common.fast(mu_x);
+    v_5 = common.slow(mu_x);
+    v_2 = if (v_3) then v_5 else v_4;
+    next_mu_x = mu_x;
+    next_commit_guard = commit_guard;
+    next_commit_value = commit_value;
+    next_committed_count = committed_count;
+    next_mu_x = v_2;
+    next_commit_guard = true;
+    next_commit_value = v_2;
+    if (next_commit_guard) {
+      next_committed_count = committed_count + 1;
+      call write_committed(committed_count + 1, next_commit_value);
+    } else {
+      next_committed_count = committed_count;
+      committed_stream = committed_stream;
+    }
+    mu_x = next_mu_x;
+    commit_guard = next_commit_guard;
+    commit_value = next_commit_value;
+    committed_count = next_committed_count;
+  }
+
+  next {
+    call tick();
+  }
+}

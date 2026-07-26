@@ -1,0 +1,50 @@
+module common {
+  function initial_input_bv32(): bv32;
+  function cond(a0: bv32): boolean;
+  function fast(a0: bv32): bv32;
+  function slow(a0: bv32): bv32;
+}
+module main {
+  instance reference: ReferenceModel();
+  instance speculated: SpeculatedModel();
+
+  var cycle: integer;
+  var ref_x: [integer] bv32;
+  var spec_x: [integer] bv32;
+
+  procedure record_reference(index: integer, value: bv32) modifies ref_x; {
+    ref_x[index] = value;
+  }
+  procedure record_speculated(index: integer, value: bv32) modifies spec_x; {
+    spec_x[index] = value;
+  }
+
+  init {
+    cycle = 0;
+    ref_x[0] = 0bv32;
+    spec_x[0] = 0bv32;
+  }
+
+  next {
+    next(speculated);
+    next(reference);
+    cycle' = cycle + 1;
+    call record_reference(cycle + 1, reference.commit_value);
+    call record_speculated(cycle + 1, speculated.commit_value);
+  }
+
+  // If both executions agree at cycle n, the source value at n + 1 must
+  // reappear in the speculative execution within the bounded recovery window.
+  // Internal speculative cycles are ignored; only visible commits are sampled.
+  invariant bounded_stuttering_bisimulation:
+    speculated.commit_guard && ref_x[cycle] == spec_x[cycle] ==>
+      (exists (k: integer) :: 0 <= k && k <= 5 &&
+        ref_x[cycle + 1] == spec_x[cycle + k]);
+
+  control {
+    vobj = induction(12);
+    check;
+    print_results;
+    vobj.print_cex(cycle, ref_x, spec_x, reference.commit_value, speculated.commit_value);
+  }
+}
