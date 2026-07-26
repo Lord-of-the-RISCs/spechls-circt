@@ -1,0 +1,13 @@
+{
+  "initial_state": "Init_0",
+  "inputs": ["mispec_0"],
+  "states": [
+    {"name": "Init_0", "commands": {"nextInput": false, "commit": false, "rewind": false, "rbwe": false, "resolveStage": -1, "rewindDepth": 0, "slowPath_g0": -1}, "transitions": [{"destination": "Proceed"}]},
+    {"name": "Proceed", "commands": {"nextInput": true, "commit": true, "rewind": false, "rbwe": false, "resolveStage": -1, "rewindDepth": 0, "slowPath_g0": -1}, "transitions": [{"destination": "Proceed"}, {"destination": "Rollback_0_0", "selectors": [[0, 2]]}]},
+    {"name": "Rollback_0_0", "commands": {"nextInput": false, "commit": false, "rewind": true, "rbwe": true, "resolveStage": 3, "rewindDepth": 1, "slowPath_g0": 2}, "transitions": [{"destination": "Proceed"}]}
+  ],
+  "recovery_scenarios": [
+    {"kind": "initial", "speculation_ids": [0], "selectors": [2], "release_windows": [1], "poisoned_speculation_ids": [], "remaining_cycles": -1, "destination_speculation_ids": [], "destination_selectors": []}
+  ],
+  "unsupported_dimensions": []
+}
