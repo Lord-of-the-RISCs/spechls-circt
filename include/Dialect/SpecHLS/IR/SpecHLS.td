@@ -426,23 +426,87 @@ def SpecHLS_FieldOp : SpecHLSOp<"field", [Pure, DeclareOpInterfaceMethods<InferT
     let hasFolder = 1;
 }
 
-def SpecHLS_FSMOp : SpecHLSOp<"fsm",
-        [Pure, TypesMatchWith<"State input and output types must match", "state", "result", "$_self">,
-         SameVariadicOperandSize]> {
+def SpecHLS_FSMStateOp : SpecHLSOp<"fsm.state", [Pure, NoTerminator]> {
+    let summary = "One state in a clockless speculative FSM";
+    let description = [{
+        Mirrors CIRCT's `fsm.state`: the output region contains the named
+        outputs for this state, while transitions are prioritized successors.
+    }];
+    let arguments = (ins StrAttr:$name);
+    let regions = (region AnyRegion:$output, AnyRegion:$transitions);
+    let assemblyFormat = [{ $name attr-dict `output` $output `transitions` $transitions }];
+}
+
+def SpecHLS_FSMOutputOp : SpecHLSOp<"fsm.output", [HasParent<"FSMStateOp">, Terminator]> {
+    let summary = "Named outputs asserted by an FSM state";
+    let arguments = (ins StrArrayAttr:$names, DenseI64ArrayAttr:$values);
+    let assemblyFormat = [{ $names $values attr-dict }];
+    let hasVerifier = 1;
+}
+
+def SpecHLS_FSMTransitionOp : SpecHLSOp<"fsm.transition", [Pure, NoTerminator]> {
+    let summary = "A transition owned by an FSM state";
+    let description = [{
+        Mirrors CIRCT's `fsm.transition`. The optional guard region evaluates to
+        an i1 through `spechls.fsm.return`; an empty guard is unconditional.
+    }];
+    let arguments = (ins StrAttr:$target, StrAttr:$kind);
+    let regions = (region AnyRegion:$guard);
+    let assemblyFormat = [{ $target $kind attr-dict (`guard` $guard^)? }];
+    let hasVerifier = 1;
+}
+
+def SpecHLS_FSMInputOp : SpecHLSOp<"fsm.input", [Pure]> {
+    let summary = "Read one flat FSM machine input port";
+    let arguments = (ins I64Attr:$index);
+    let results = (outs AnyType:$result);
+    let assemblyFormat = [{ $index attr-dict `:` type($result) }];
+}
+
+def SpecHLS_FSMReturnOp : SpecHLSOp<"fsm.return", [HasParent<"FSMTransitionOp">, Terminator]> {
+    let summary = "Return a guard predicate from an FSM transition";
+    let arguments = (ins I1:$condition);
+    let assemblyFormat = [{ $condition attr-dict }];
+}
+
+def SpecHLS_FSMInstanceOp : SpecHLSOp<"fsm.instance", []> {
+    let summary = "Bind a task-local controller name to an FSM machine declaration";
+    let description = [{
+        This is deliberately state-free. The task owns state explicitly through
+        `spechls.mu`, while an `fsm.trigger` evaluates one machine step.
+    }];
+    let arguments = (ins StrAttr:$name, FlatSymbolRefAttr:$machine);
+    let assemblyFormat = [{ $name $machine attr-dict }];
+    let hasVerifier = 1;
+}
+
+def SpecHLS_FSMTriggerOp : SpecHLSOp<"fsm.trigger", [Pure]> {
+    let summary = "Evaluate one clockless FSM instance step";
+    let description = [{
+        Inputs and results are intentionally flat. The trigger's first input and
+        result are conventionally the current and next controller state.
+    }];
+    let arguments = (ins StrAttr:$instance, Variadic<AnyType>:$inputs);
+    let results = (outs Variadic<AnyType>:$results);
+    let assemblyFormat = [{ $instance `(` $inputs `)` attr-dict `:` functional-type($inputs, $results) }];
+    let hasVerifier = 1;
+}
+
+def SpecHLS_FSMOp : SpecHLSOp<"fsm.machine", [Pure, Symbol, NoTerminator]> {
+    let summary = "Reusable clockless FSM machine declaration";
+    let description = [{
+        Machines are module-level declarations. Their function type lists flat
+        input and output ports; task-local state is supplied explicitly through
+        `spechls.fsm.trigger` and is not owned by the machine.
+    }];
     let arguments = (ins
-        StrAttr:$name,
-        StrArrayAttr:$gammaNames,
-        DenseI64ArrayAttr:$condDelays,
-        DenseI64ArrayAttr:$fastIndices,
-        I64ArrayArrayAttr:$inputDelays,
-        SpecHLS_StructType:$mispec,
-        SpecHLS_StructType:$state
+        SymbolNameAttr:$sym_name,
+        TypeAttrOf<FunctionType>:$function_type
     );
-    let results = (outs SpecHLS_StructType:$result);
+    let regions = (region AnyRegion:$body);
 
     let assemblyFormat = [{
-        $name `<` $gammaNames `>` $condDelays $fastIndices $inputDelays `,` $mispec `,` $state attr-dict
-            `:` type($mispec) `,` type($state)
+        $sym_name attr-dict `:` $function_type $body
     }];
 }
 

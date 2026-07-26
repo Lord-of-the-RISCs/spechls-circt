@@ -363,13 +363,6 @@ LogicalResult printAllFunctionPrototypes(CppEmitter &emitter, ModuleOp moduleOp)
         return failure();
       }
       declaredFunctions.insert(callee);
-    } else if (auto fsmOp = dyn_cast<spechls::FSMOp>(op)) {
-      std::string callee = ("fsm_" + fsmOp.getName() + "_next").str();
-      if (failed(emitter.emitFunctionPrototype(
-              op->getLoc(), callee, {fsmOp.getMispec().getType(), fsmOp.getState().getType()}, fsmOp.getType()))) {
-        return failure();
-      }
-      declaredFunctions.insert(callee);
     }
     return WalkResult::advance();
   });
@@ -377,6 +370,170 @@ LogicalResult printAllFunctionPrototypes(CppEmitter &emitter, ModuleOp moduleOp)
     return failure();
 
   return success();
+}
+
+LogicalResult printExplicitFSMDefinitions(CppEmitter &emitter, ModuleOp moduleOp) {
+  raw_indented_ostream &os = emitter.ostream();
+  LogicalResult result = success();
+  moduleOp.walk([&](spechls::FSMOp fsm) {
+    llvm::SmallVector<spechls::FSMStateOp> states;
+    llvm::StringMap<unsigned> stateIds;
+    if (fsm.getBody().empty()) {
+      result = fsm.emitOpError("machine declaration requires an FSM state table");
+      return;
+    }
+    for (auto &op : fsm.getBody().front()) {
+      if (auto state = dyn_cast<spechls::FSMStateOp>(op)) {
+        stateIds[state.getName()] = states.size();
+        states.push_back(state);
+      }
+    }
+    if (states.empty()) {
+      result = fsm.emitOpError("explicit FSM body must contain at least one spechls.fsm.state");
+      return;
+    }
+
+    auto emitType = [&](Type type) { return emitter.emitType(fsm.getLoc(), type); };
+    auto functionType = fsm.getFunctionType();
+    auto inputTypes = functionType.getInputs();
+    auto resultTypes = functionType.getResults();
+    if (inputTypes.empty() || resultTypes.empty()) {
+      result = fsm.emitOpError("requires state input and result ports");
+      return;
+    }
+    auto emitGuard = [&](Value value, auto &&emitGuard) -> LogicalResult {
+      if (auto input = value.getDefiningOp<spechls::FSMInputOp>()) {
+        auto index = input.getIndex();
+        if (index < 0 || static_cast<size_t>(index) >= inputTypes.size()) {
+          input.emitOpError("references an input port not provided by this FSM machine");
+          return failure();
+        }
+        os << (index == 0 ? "state" : "input" + std::to_string(index));
+        return success();
+      }
+      if (auto constant = value.getDefiningOp<arith::ConstantIntOp>()) {
+        os << cast<IntegerAttr>(constant.getValue()).getValue().getZExtValue();
+        return success();
+      }
+      if (auto compare = value.getDefiningOp<arith::CmpIOp>()) {
+        if (compare.getPredicate() != arith::CmpIPredicate::eq) {
+          compare.emitOpError("only equality predicates are supported in FSM guards");
+          return failure();
+        }
+        if (failed(emitGuard(compare.getLhs(), emitGuard)))
+          return failure();
+        os << " == ";
+        return emitGuard(compare.getRhs(), emitGuard);
+      }
+      if (auto andOp = value.getDefiningOp<circt::comb::AndOp>()) {
+        os << "(";
+        for (auto [index, operand] : llvm::enumerate(andOp.getInputs())) {
+          if (index)
+            os << " && ";
+          if (failed(emitGuard(operand, emitGuard)))
+            return failure();
+        }
+        os << ")";
+        return success();
+      }
+      if (auto *definingOp = value.getDefiningOp())
+        definingOp->emitOpError("unsupported FSM guard predicate");
+      else
+        fsm.emitOpError("FSM guard predicate must be defined inside the transition guard region");
+      return failure();
+    };
+
+    os << "static void fsm_" << fsm.getSymName() << "_trigger(";
+    for (unsigned index = 0; index < inputTypes.size(); ++index) {
+      if (index)
+        os << ", ";
+      if (failed(emitType(inputTypes[index]))) {
+        result = failure();
+        return;
+      }
+      os << " " << (index == 0 ? "state" : "input" + std::to_string(index));
+    }
+    for (unsigned index = 0; index < resultTypes.size(); ++index) {
+      os << ", ";
+      if (failed(emitType(resultTypes[index]))) {
+        result = failure();
+        return;
+      }
+      os << " &" << (index == 0 ? "nextState" : "output" + std::to_string(index - 1));
+    }
+    os << ") {\n";
+    os.indent();
+    for (unsigned index = 1; index < resultTypes.size(); ++index)
+      os << "output" << index - 1 << " = {};\n";
+    os << "switch (state) {\n";
+    os.indent();
+    for (unsigned stateId = 0; stateId < states.size(); ++stateId) {
+      if (states[stateId].getOutput().empty()) {
+        result = states[stateId].emitOpError("requires an fsm.output region");
+        return;
+      }
+      auto output = dyn_cast<spechls::FSMOutputOp>(states[stateId].getOutput().front().getTerminator());
+      if (!output) {
+        result = states[stateId].emitOpError("output region must terminate with spechls.fsm.output");
+        return;
+      }
+      auto commands = output.getValues();
+      if (commands.size() != resultTypes.size() - 1) {
+        result = output.emitOpError("output vector does not match FSM result ports");
+        return;
+      }
+      os << "case " << stateId << ":\n";
+      os.indent();
+      for (unsigned index = 0; index < commands.size(); ++index)
+        os << "output" << index << " = " << commands[index] << ";\n";
+      os << "break;\n";
+      os.unindent();
+    }
+    os << "default: break;\n";
+    os.unindent();
+    os << "}\nnextState = state;\nswitch (nextState) {\n";
+    os.indent();
+    for (unsigned stateId = 0; stateId < states.size(); ++stateId) {
+      auto state = states[stateId];
+      os << "case " << stateId << ":\n";
+      os.indent();
+      llvm::SmallVector<spechls::FSMTransitionOp> outgoing;
+      if (!state.getTransitions().empty())
+        for (auto &op : state.getTransitions().front())
+          if (auto transition = dyn_cast<spechls::FSMTransitionOp>(op))
+            outgoing.push_back(transition);
+      llvm::stable_sort(outgoing, [](auto left, auto right) {
+        return !left.getGuard().empty() && right.getGuard().empty();
+      });
+      for (unsigned transitionId = 0; transitionId < outgoing.size(); ++transitionId) {
+        auto transition = outgoing[transitionId];
+        auto target = stateIds.find(transition.getTarget());
+        if (target == stateIds.end()) {
+          result = transition.emitOpError("names an unknown FSM state");
+          return;
+        }
+        os << (transitionId == 0 ? "if" : "else if") << " (";
+        if (!transition.getGuard().empty()) {
+          auto guardReturn = dyn_cast<spechls::FSMReturnOp>(transition.getGuard().front().getTerminator());
+          if (!guardReturn || failed(emitGuard(guardReturn.getCondition(), emitGuard))) {
+            result = failure();
+            return;
+          }
+        } else {
+          os << "true";
+        }
+        os << ") nextState = " << target->second << ";\n";
+      }
+      os << "break;\n";
+      os.unindent();
+    }
+    os << "default: nextState = 0; break;\n";
+    os.unindent();
+    os << "}\n";
+    os.unindent();
+    os << "}\n\n";
+  });
+  return result;
 }
 
 LogicalResult printDelayInitialization(CppEmitter &emitter, spechls::KernelOp kernelOp) {
@@ -461,6 +618,8 @@ LogicalResult printOperation(CppEmitter &emitter, ModuleOp moduleOp) {
       return failure();
     os << "\n";
   }
+  if (failed(printExplicitFSMDefinitions(emitter, moduleOp)))
+    return failure();
 
   if (emitter.shouldGenerateCpi()) {
     os << R"+(
@@ -707,7 +866,8 @@ LogicalResult printOperation(CppEmitter &emitter, spechls::TaskOp taskOp) {
   mlir::sortTopologically(&taskOp.getBody().front(), spechls::topologicalSortCriterion);
 
   SmallVector<spechls::DelayOp> delays;
-  Value fsmCommand{};
+  Value fsmNextInput{};
+  Value fsmCommit{};
   for (auto &&op : taskOp.getBody().front()) {
     if (isa<spechls::CommitOp>(op)) {
       // Print delay push operations just before the end of the task.
@@ -728,7 +888,13 @@ LogicalResult printOperation(CppEmitter &emitter, spechls::TaskOp taskOp) {
     } else if (auto delayOp = dyn_cast<spechls::DelayOp>(op)) {
       delays.push_back(delayOp);
     } else if (auto fsmCommandOp = dyn_cast<spechls::FSMCommandOp>(op)) {
-      fsmCommand = fsmCommandOp.getResult();
+      fsmNextInput = fsmCommandOp.getResult();
+      fsmCommit = fsmCommandOp.getResult();
+    } else if (auto trigger = dyn_cast<spechls::FSMTriggerOp>(op)) {
+      if (trigger.getNumResults() >= 3) {
+        fsmNextInput = trigger.getResult(1);
+        fsmCommit = trigger.getResult(2);
+      }
     }
 
     if (failed(emitter.emitOperation(op, true))) {
@@ -741,9 +907,9 @@ LogicalResult printOperation(CppEmitter &emitter, spechls::TaskOp taskOp) {
       os << "fifo_write(" << getFifoBufferName(emitter, out.second) << ", " << emitter.getOrCreateName(out.first)
          << ");\n";
     }
-    if (fsmCommand && !fifoInputs.empty()) {
+    if (fsmNextInput && !fifoInputs.empty()) {
       os << "if (";
-      if (failed(emitter.emitOperand(fsmCommand)))
+      if (failed(emitter.emitOperand(fsmNextInput)))
         return failure();
       os << ".nextInput) {\n";
       os.indent();
@@ -751,7 +917,7 @@ LogicalResult printOperation(CppEmitter &emitter, spechls::TaskOp taskOp) {
     for (auto &&in : fifoInputs) {
       os << "fifo_read(" << getFifoBufferName(emitter, in) << ");\n";
     }
-    if (fsmCommand && !fifoInputs.empty()) {
+    if (fsmNextInput && !fifoInputs.empty()) {
       os.unindent();
       os << "}\n";
     }
@@ -767,9 +933,9 @@ LogicalResult printOperation(CppEmitter &emitter, spechls::TaskOp taskOp) {
     }
   }
 
-  if (fsmCommand && emitter.shouldGenerateCpi()) {
+  if (fsmCommit && emitter.shouldGenerateCpi()) {
     os << "if (";
-    if (failed(emitter.emitOperand(fsmCommand)))
+    if (failed(emitter.emitOperand(fsmCommit)))
       return failure();
     os << ".commit)\n";
     os.indent();
@@ -932,9 +1098,25 @@ LogicalResult printOperation(CppEmitter &emitter, spechls::FSMCommandOp fsmComma
 }
 
 LogicalResult printOperation(CppEmitter &emitter, spechls::FSMOp fsmOp) {
-  Operation *operation = fsmOp.getOperation();
-  std::string callee = ("fsm_" + fsmOp.getName() + "_next").str();
-  return printCallOp(emitter, operation, callee);
+  return success();
+}
+
+LogicalResult printOperation(CppEmitter &emitter, spechls::FSMInstanceOp instanceOp) {
+  return success();
+}
+
+LogicalResult printOperation(CppEmitter &emitter, spechls::FSMTriggerOp triggerOp) {
+  raw_ostream &os = emitter.ostream();
+  os << "fsm_" << triggerOp.getInstance() << "_trigger(";
+  if (failed(emitter.emitOperands(*triggerOp)))
+    return failure();
+  for (auto result : triggerOp.getResults()) {
+    os << ", ";
+    if (failed(emitter.emitOperand(result)))
+      return failure();
+  }
+  os << ")";
+  return success();
 }
 
 LogicalResult printOperation(CppEmitter &emitter, spechls::RewindOp rewindOp) {
@@ -1461,7 +1643,8 @@ LogicalResult CppEmitter::emitOperation(Operation &op, bool trailingSemicolon) {
           .Case<circt::hw::BitcastOp>([&](auto op) { return printOperation(*this, op); })
           // SpecHLS ops.
           .Case<spechls::AlphaOp, spechls::CallOp, spechls::CancelOp, spechls::CommitOp, spechls::DelayOp,
-                spechls::ExitOp, spechls::FIFOOp, spechls::FSMCommandOp, spechls::FSMOp, spechls::GammaOp,
+                 spechls::ExitOp, spechls::FIFOOp, spechls::FSMCommandOp, spechls::FSMOp, spechls::FSMInstanceOp,
+                 spechls::FSMTriggerOp, spechls::GammaOp,
                 spechls::LoadOp, spechls::LUTOp, spechls::PackOp, spechls::PrintOp, spechls::RewindOp,
                 spechls::RollbackOp, spechls::UnpackOp>([&](auto op) { return printOperation(*this, op); })
           .Case<spechls::KernelOp, spechls::TaskOp>([&](auto op) {
@@ -1469,7 +1652,7 @@ LogicalResult CppEmitter::emitOperation(Operation &op, bool trailingSemicolon) {
             return printOperation(*this, op);
           })
           // Inlined operations.
-          .Case<circt::hw::ConstantOp, spechls::FieldOp, spechls::MuOp, spechls::SyncOp>([&](auto op) {
+           .Case<circt::hw::ConstantOp, spechls::FieldOp, spechls::MuOp, spechls::SyncOp>([&](auto op) {
             skipLineEnding = true;
             return success();
           })
@@ -1746,9 +1929,11 @@ std::string CppEmitter::getValueNamePrefix(Value value) {
   if (isa<spechls::FIFOOp>(op))
     return "fifo";
   if (auto fsmOp = dyn_cast<spechls::FSMOp>(op))
-    return ("fsm_" + fsmOp.getName() + "_next").str();
+    return fsmOp.getSymName().str();
   if (auto fsmCommandOp = dyn_cast<spechls::FSMCommandOp>(op))
     return ("fsm_" + fsmCommandOp.getName() + "_command").str();
+  if (auto triggerOp = dyn_cast<spechls::FSMTriggerOp>(op))
+    return ("fsm_" + triggerOp.getInstance() + "_result").str();
   if (auto gammaOp = dyn_cast<spechls::GammaOp>(op))
     return gammaOp.getSymName().str();
   if (isa<spechls::LoadOp>(op))
@@ -1826,28 +2011,7 @@ LogicalResult spechls::translateToCpp(Operation *op, raw_ostream &os, Translatio
 
 LogicalResult spechls::translateFSMControl(mlir::Operation *op, llvm::raw_ostream &os,
                                            TranslationToCppOptions options) {
-  bool hasFailed = false;
-  op->walk([&](spechls::FSMOp fsm) {
-    auto rewriter = mlir::IRRewriter(op->getContext());
-    auto kernel = outlineBackwardCone(fsm.getMispec(), rewriter);
-    if (kernel == nullptr) {
-      hasFailed = true;
-      return WalkResult::interrupt();
-    }
-    auto pm = mlir::PassManager::on<mlir::ModuleOp>(kernel->getContext());
-    pm.addPass(mlir::createCanonicalizerPass());
-    pm.addPass(mlir::createCSEPass());
-    if (failed(pm.run(kernel->getParentOp()))) {
-      hasFailed = true;
-      return WalkResult::interrupt();
-    }
-    if (failed(translateToCpp(kernel, os, options))) {
-      hasFailed = true;
-      return WalkResult::interrupt();
-    }
-    return WalkResult::advance();
-  });
-  if (hasFailed)
-    return mlir::failure();
-  return mlir::success();
+  // FSM declarations no longer capture task values. The regular C++ emitter
+  // lowers their flat trigger calls together with the owning task.
+  return translateToCpp(op, os, options);
 }

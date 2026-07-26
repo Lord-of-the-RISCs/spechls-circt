@@ -1,0 +1,230 @@
+/*
+ * Tight bisimulation harness for the speculative slow/fast loop.
+ *
+ * This model keeps two traces:
+ *   - trace_x: sequential reference execution (one architectural step whenever
+ *              the loop does not exit).
+   *   - trace_y: architecturally committed output of the speculative machine.
+   *   - trace_prediction: private fast-path predictions before resolution.
+ *
+ * The proof obligation is prefix equality between committed states of trace_y
+ * and the same prefix of trace_x, while keeping control-flow invariants strong
+ * enough to avoid vacuous proofs.
+ */
+module main {
+
+  // Role: abstract implementations used by the specification.
+  // Goal: keep the proof parametric in arithmetic semantics.
+  function slow(a: integer): integer;
+  function fast(a: integer): integer;
+  function cond(a: integer): boolean;
+  function exit(a: integer): boolean;
+
+  // Role: canonical untimed transition relation.
+  // Goal: define the architectural one-step semantics we compare against.
+  define step(x: integer): integer =
+    if (cond(x)) then slow(x) else fast(x);
+
+  type trace_t = [integer] integer;
+  var trace_x: trace_t;
+  var trace_y: trace_t;
+  var trace_prediction: trace_t;
+
+  // Role: write one committed value in the speculative trace.
+  // Goal: model commit points of the pipelined/speculative machine.
+  procedure commit_y(idx: integer, value: integer) modifies trace_y; {
+    trace_y[idx] = value;
+  }
+
+  // Role: write one step in the untimed reference trace.
+  // Goal: model the sequential baseline used in the bisimulation relation.
+  procedure commit_x(idx: integer, value: integer) modifies trace_x; {
+    trace_x[idx] = value;
+  }
+
+  // Role: retain a predicted fast result before its delayed condition resolves.
+  // Goal: distinguish speculative work from the guarded architectural commit.
+  procedure predict_y(idx: integer, value: integer) modifies trace_prediction; {
+    trace_prediction[idx] = value;
+  }
+
+  type t_state = enum { STEP0, STALL, ROLLBACK, END };
+  var cs: t_state;
+
+  var i: integer;
+  var i_x: integer;
+  var commit: boolean;
+  var cpt: bv3;
+
+  // Role: keep explicit speculative metadata while waiting for slow latency.
+  // Goal: couple control state and data state so STALL/ROLLBACK are not free.
+  var pending_valid: boolean;
+  var pending_input: integer;
+  var pending_fast: integer;
+  var pending_cond: boolean;
+
+  init {
+    trace_x[0] = 0;
+    trace_y[0] = 0;
+    trace_prediction[0] = 0;
+
+    cs = STEP0;
+    i = 0;
+    i_x = 0;
+
+    commit = false;
+    cpt = 0bv3;
+    pending_valid = false;
+    pending_input = 0;
+    pending_fast = 0;
+    pending_cond = false;
+  }
+
+  next {
+    // Reference trace: always takes one architectural step when active.
+    i_x' = if (!exit(trace_x[i_x])) then i_x + 1 else i_x;
+    if (!exit(trace_x[i_x])) {
+      call commit_x(i_x + 1, step(trace_x[i_x]));
+    }
+
+    // Speculative machine: predict fast first, then expose a resolved value.
+    case
+      cs == STEP0: {
+        if (!exit(trace_y[i])) {
+          // The fast result is private speculation and not an architectural
+          // trace_y commit until the existing FSM resolves its condition.
+          call predict_y(i + 1, fast(trace_y[i]));
+          if (cond(trace_y[i])) {
+            i' = i;
+            cs' = STALL;
+            cpt' = 2bv3;
+            pending_valid' = true;
+            pending_input' = trace_y[i];
+            pending_fast' = fast(trace_y[i]);
+            pending_cond' = true;
+            commit' = false;
+          } else {
+            i' = i + 1;
+            call commit_y(i + 1, fast(trace_y[i]));
+            cs' = STEP0;
+            cpt' = 0bv3;
+            pending_valid' = false;
+            pending_input' = pending_input;
+            pending_fast' = pending_fast;
+            pending_cond' = false;
+            commit' = true;
+          }
+        } else {
+          i' = i;
+          cs' = END;
+          commit' = false;
+          cpt' = 0bv3;
+          pending_valid' = false;
+          pending_input' = pending_input;
+          pending_fast' = pending_fast;
+          pending_cond' = pending_cond;
+        }
+      }
+
+      cs == STALL: {
+        i' = i;
+        pending_valid' = pending_valid;
+        pending_input' = pending_input;
+        pending_fast' = pending_fast;
+        pending_cond' = pending_cond;
+        commit' = false;
+        if (cpt == 0bv3) {
+          cs' = ROLLBACK;
+          cpt' = 0bv3;
+        } else {
+          cs' = STALL;
+          cpt' = cpt - 1bv3;
+        }
+      }
+
+      cs == ROLLBACK: {
+        // Slow value becomes architecturally visible at commit.
+        i' = i + 1;
+        commit' = true;
+        call commit_y(i + 1, slow(pending_input));
+        cs' = STEP0;
+        cpt' = 0bv3;
+        pending_valid' = false;
+        pending_input' = pending_input;
+        pending_fast' = pending_fast;
+        pending_cond' = pending_cond;
+      }
+
+      cs == END: {
+        i' = i;
+        cs' = END;
+        commit' = false;
+        cpt' = 0bv3;
+        pending_valid' = false;
+        pending_input' = pending_input;
+        pending_fast' = pending_fast;
+        pending_cond' = pending_cond;
+      }
+
+      default: {
+        i' = i;
+        cs' = END;
+        commit' = false;
+        cpt' = 0bv3;
+        pending_valid' = false;
+        pending_input' = pending_input;
+        pending_fast' = pending_fast;
+        pending_cond' = pending_cond;
+      }
+    esac;
+  }
+
+  // -------------------------------------------------------------------------
+  // Tight safety invariants (control/data coupling + bisimulation relation).
+  // -------------------------------------------------------------------------
+
+  invariant idx_nonneg: i >= 0 && i_x >= 0;
+  invariant idx_order: i <= i_x;
+
+  invariant x_local_step:
+    (i_x > 0) ==> trace_x[i_x] == step(trace_x[i_x - 1]);
+  invariant y_local_step:
+    (i > 0) ==> trace_y[i] == step(trace_y[i - 1]);
+
+  invariant x_prefix_step:
+    (forall (k: integer) :: (0 < k && k <= i_x) ==> trace_x[k] == step(trace_x[k - 1]));
+  invariant y_prefix_step:
+    (forall (k: integer) :: (0 < k && k <= i) ==> trace_y[k] == step(trace_y[k - 1]));
+
+  invariant trace_prefix_eq:
+    (forall (k: integer) :: (0 <= k && k <= i) ==> trace_x[k] == trace_y[k]);
+
+  invariant stall_requires_pending:
+    (cs == STALL) ==> pending_valid;
+  invariant rollback_requires_pending:
+    (cs == ROLLBACK) ==> pending_valid;
+  invariant rollback_counter_zero:
+    (cs == ROLLBACK) ==> cpt == 0bv3;
+  invariant stall_counter_bound:
+    (cs == STALL) ==> cpt <= 2bv3;
+
+  invariant pending_matches_guard:
+    pending_valid ==> pending_cond == cond(pending_input);
+  invariant pending_matches_fast_data:
+    pending_valid ==> pending_fast == fast(pending_input);
+
+  invariant commit_only_in_step0:
+    commit ==> cs == STEP0;
+  invariant end_is_quiescent:
+    (cs == END) ==> (!commit && !pending_valid && cpt == 0bv3);
+  invariant end_implies_exit:
+    (cs == END) ==> exit(trace_y[i]);
+
+  control {
+    // We use k-induction with horizon above the stall/rollback latency.
+    vobj = induction(12);
+    check;
+    print_results;
+    vobj.print_cex(i, i_x, cs, cpt, commit, pending_valid, pending_fast, trace_x, trace_y);
+  }
+}

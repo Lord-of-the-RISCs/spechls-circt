@@ -1,0 +1,130 @@
+/*
+ * Dans cette exemple j'ai essayé prouver l'equivalence des trace de mainère inductive en
+ * utilisant la théorie des tableaux. Il faut un peu taper au marteau pour qu'il y arrive mais
+ * ça passe.
+ *
+*/
+ module main {
+
+	function slow(a: integer): integer;
+	function fast(a: integer): integer;
+	function cond(a: integer): boolean;
+	function exit(a: integer): boolean;
+
+	define step(x:integer) : integer =
+		if (cond(x)) then slow(x) else fast(x);
+
+
+	procedure commit_y(i: integer, x : integer) modifies trace_y; {
+		trace_y[i]=x;
+	}
+
+	procedure commit_x(i: integer, x : integer) modifies trace_x; {
+		trace_x[i]=x;
+	}
+
+	var x,y,i,i_x: integer;
+	var commit : boolean;
+	var cpt : bv3;
+
+	type trace_t = [integer] integer;
+	var trace_x : trace_t;
+	var trace_y : trace_t;
+
+	type t_state = enum { START, STEP0,STEP1,LOOP,END,STALL,ROLLBACK};
+	var cs : t_state;
+
+	init {
+
+
+		trace_x[0]=0;
+		trace_y[0]=0;
+		cs = STEP0;
+		cpt=0bv3;
+		commit=false;
+		i=0;
+		i_x=0;
+	}
+
+	next {
+
+		if (!exit(trace_x[i_x])) {
+			i_x' = i_x + 1;
+			call commit_x(i_x+1,step(trace_x[i_x]));
+		}
+
+		case
+			cs==STEP0 :{
+				if (!exit(trace_x[i_x])) {
+					if (cond(trace_y[i])) {
+						cpt' = 2bv3;
+						cs'=STALL;
+						commit'=false;
+					} else {
+						i'=i+1;
+						commit'=true;
+						call commit_y(i+1,fast(trace_y[i]));
+					}
+				} else {
+					cs'=END;
+				}
+
+			}
+			cs==STALL:{
+				commit'=false;
+				if (cpt==0bv3) {
+					cs'=ROLLBACK;
+				} else {
+					cpt' = cpt - 1bv3;
+				}
+			}
+			cs==ROLLBACK:{
+				i'=i+1;
+				commit'=true;
+				call commit_y(i+1,slow(trace_y[i]));
+				cs'=STEP0;
+			}
+			default:{
+				cs'=END;
+				commit'=false;
+			}
+		esac;
+	}
+
+
+	invariant monotony1 : (i<=i_x) ;
+	invariant monotony2 : (i>=0) ;
+	invariant monotony3 : (i>=0) ;
+
+	// Je pense que cet invariant est bon, car il faut une induction sur au
+	// moins 5 cycles pour le valider.
+	invariant inv__y : (i>0) ==> trace_y[i]==step(trace_y[i-1]);
+	invariant inv__all_y : (forall (k:integer) :: (k<i-1 && k>0 ==> trace_y[k]==step(trace_y[k-1])));
+
+	// cet invariant est trivial
+	invariant inv__x : (i_x>0) ==> trace_x[i_x]==step(trace_x[i_x-1]);
+
+	// Prouve d'abord sur i_x et étend/restreint ensuite sur i en exploitant i<i_x
+	invariant inv__all_x : (forall (k:integer) :: (k<i_x-1 && k>0 ==> trace_x[k]==step(trace_x[k-1])));
+	invariant inv__all_x_i : (forall (k:integer) :: (k<i-1 && k>0 ==> trace_x[k]==step(trace_x[k-1])));
+
+	// Relation induction sur l'égalite des éléments des traces
+	invariant inv__almost : (i>0) ==> trace_y[i-1]==trace_x[i-1] ==> trace_y[i]==trace_x[i];
+	// Condition initiales
+	invariant inv__almost_start : trace_y[0]==trace_x[0];
+
+	// Induction finale : too good to be true ?
+	invariant equ_final : (forall (k:integer) :: (k<i-1 && k>0 && i>0 ==> trace_y[k]==trace_x[k]));
+
+	invariant equ_final2 : cs==END ==> trace_y[i]==trace_x[i];
+
+
+	control {
+		// 3*durée du stall
+		vobj = induction(10);
+		check;
+		print_results;
+		vobj.print_cex(x,y,i,i_x,cs,cpt,trace_x,trace_y,commit);
+	}
+
+}

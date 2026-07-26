@@ -16,6 +16,19 @@ find_package(MLIR REQUIRED CONFIG)
 find_package(CIRCT REQUIRED CONFIG)
 find_package(Yosys REQUIRED)
 
+# Some local package builds export component libraries but omit the umbrella
+# targets expected by add_circt_dialect_library.
+get_property(MLIR_ALL_LIBS GLOBAL PROPERTY MLIR_ALL_LIBS)
+get_property(CIRCT_ALL_LIBS GLOBAL PROPERTY CIRCT_ALL_LIBS)
+if(NOT TARGET MLIR)
+  add_library(MLIR INTERFACE)
+endif()
+set_target_properties(MLIR PROPERTIES INTERFACE_LINK_LIBRARIES "${MLIR_ALL_LIBS}")
+if(NOT TARGET CIRCT)
+  add_library(CIRCT INTERFACE)
+endif()
+set_target_properties(CIRCT PROPERTIES INTERFACE_LINK_LIBRARIES "${CIRCT_ALL_LIBS}")
+
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DYOSYS_PATH=\\\"${Yosys_INCLUDE_DIR}\\\"")
 
 message(STATUS "Using MLIRConfig.cmake in: ${MLIR_DIR}")

@@ -49,6 +49,52 @@ void spechls::SpecHLSDialect::initialize() {
 // Operations
 //===--------------------------------------------------------------------------------------------------------------===//
 
+LogicalResult spechls::FSMTransitionOp::verify() {
+  if (!getGuard().empty() &&
+      !llvm::isa<spechls::FSMReturnOp>(getGuard().front().getTerminator()))
+    return emitOpError("guard region must terminate with spechls.fsm.return");
+  return success();
+}
+
+LogicalResult spechls::FSMOutputOp::verify() {
+  if (getNames().size() != getValues().size())
+    return emitOpError("requires names and values to have equal lengths");
+  return success();
+}
+
+LogicalResult spechls::FSMInstanceOp::verify() {
+  auto machine = StringAttr::get(getContext(), getMachine());
+  if (!SymbolTable::lookupNearestSymbolFrom<spechls::FSMOp>(*this, machine))
+    return emitOpError("references an unknown FSM machine '") << getMachine() << "'";
+  return success();
+}
+
+LogicalResult spechls::FSMTriggerOp::verify() {
+  auto task = (*this)->getParentOfType<spechls::TaskOp>();
+  if (!task)
+    return emitOpError("must be nested in spechls.task");
+
+  spechls::FSMInstanceOp instance;
+  for (auto &op : *task.getBodyBlock()) {
+    auto candidate = dyn_cast<spechls::FSMInstanceOp>(op);
+    if (candidate && candidate.getName() == getInstance()) {
+      instance = candidate;
+      break;
+    }
+  }
+  if (!instance)
+    return emitOpError("references an unknown task-local FSM instance '") << getInstance() << "'";
+
+  auto machineRef = StringAttr::get(getContext(), instance.getMachine());
+  auto machine = SymbolTable::lookupNearestSymbolFrom<spechls::FSMOp>(*this, machineRef);
+  if (!machine)
+    return emitOpError("instance references an unknown FSM machine '") << instance.getMachine() << "'";
+  auto type = machine.getFunctionType();
+  if (!llvm::equal(getOperandTypes(), type.getInputs()) || !llvm::equal(getResultTypes(), type.getResults()))
+    return emitOpError("types must match the referenced FSM machine ports");
+  return success();
+}
+
 Type spechls::StructType::parse(AsmParser &parser) {
   Location loc = parser.getEncodedSourceLoc(parser.getCurrentLocation());
 
