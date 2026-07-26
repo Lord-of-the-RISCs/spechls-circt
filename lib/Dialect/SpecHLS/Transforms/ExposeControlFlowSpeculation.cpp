@@ -18,12 +18,14 @@
 #include "circt/Dialect/SSP/SSPOps.h"
 #include "circt/Scheduling/Problems.h"
 #include "circt/Support/LLVM.h"
+#include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/BuiltinAttributes.h"
 #include "mlir/IR/BuiltinTypeInterfaces.h"
 #include "mlir/IR/IRMapping.h"
 #include "mlir/IR/Location.h"
 #include "mlir/IR/Operation.h"
+#include "mlir/IR/SymbolTable.h"
 #include "mlir/IR/Value.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/TypeSwitch.h"
@@ -587,19 +589,6 @@ struct ExposeControlFlowSpeculationPass
       return llvm::failure();
     }
 
-    spechls::SpeculationExplorationAnalysis exploration(task, clockPeriod, probabilityThreshold, traceFileName);
-    bool needSpeculation = false;
-    for (int config : exploration.configuration) {
-      if (config > 0) {
-        needSpeculation = true;
-        break;
-      }
-    }
-    if (!needSpeculation)
-      return llvm::success();
-
-    task->setAttr("spechls.speculativeTask", mlir::UnitAttr::get(ctx));
-
     auto constraint = generateResourceConstraint(task);
     llvm::SmallVector<spechls::GammaOp> gammas;
     llvm::DenseMap<spechls::GammaOp, unsigned> specGammas, resolveDelays;
@@ -607,14 +596,37 @@ struct ExposeControlFlowSpeculationPass
     llvm::SmallVector<int64_t> rollbackDepths;
     llvm::SmallVector<int64_t> rewindDepths;
 
-    task.getBodyBlock()->walk([&](spechls::GammaOp gamma) {
-      gammas.push_back(gamma);
-      int pid = gamma->getAttrOfType<mlir::IntegerAttr>("spechls.profilingId").getInt();
-      int confElt = exploration.configuration[exploration.pidToEid[pid]];
-      if (confElt != 0) {
-        specGammas.try_emplace(gamma, confElt);
-      }
-    });
+    if (useExistingSpeculation) {
+      bool invalidSelection = false;
+      task.getBodyBlock()->walk([&](spechls::GammaOp gamma) {
+        gammas.push_back(gamma);
+        auto selection = gamma->getAttrOfType<mlir::IntegerAttr>("spechls.speculation");
+        if (!selection)
+          return;
+        int64_t input = selection.getInt();
+        if (input <= 0 || input >= gamma->getNumOperands()) {
+          gamma.emitOpError("has an invalid spechls.speculation input index");
+          invalidSelection = true;
+          return;
+        }
+        specGammas.try_emplace(gamma, static_cast<unsigned>(input));
+      });
+      if (invalidSelection)
+        return llvm::failure();
+    } else {
+      spechls::SpeculationExplorationAnalysis exploration(task, clockPeriod, probabilityThreshold, traceFileName);
+      task.getBodyBlock()->walk([&](spechls::GammaOp gamma) {
+        gammas.push_back(gamma);
+        int pid = gamma->getAttrOfType<mlir::IntegerAttr>("spechls.profilingId").getInt();
+        int confElt = exploration.configuration[exploration.pidToEid[pid]];
+        if (confElt != 0)
+          specGammas.try_emplace(gamma, confElt);
+      });
+    }
+    if (specGammas.empty())
+      return llvm::success();
+
+    task->setAttr("spechls.speculativeTask", mlir::UnitAttr::get(ctx));
 
     llvm::DenseMap<circt::ssp::OperationOp, mlir::Operation *> reverseAssociation;
     llvm::DenseMap<mlir::Operation *, circt::ssp::OperationOp> association;
@@ -843,57 +855,60 @@ struct ExposeControlFlowSpeculationPass
     auto sortedGammaNodes =
         sortGammas(llvm::SmallVector<spechls::GammaOp>(specGammas.keys()), resolveDelays, inputLatencies);
 
+    // This standard MLIR attribute is the handoff between configuration
+    // selection and FSM construction. It deliberately uses builtin
+    // dictionaries/arrays so xDSL and native MLIR can consume the same IR.
+    llvm::DenseMap<spechls::GammaOp, unsigned> speculationIds;
+    for (unsigned index = 0; index < sortedGammaNodes.size(); ++index)
+      speculationIds.try_emplace(sortedGammaNodes[index], index);
+    llvm::SmallVector<mlir::Attribute> configurationEntries;
+    for (auto gamma : sortedGammaNodes) {
+      llvm::SmallVector<mlir::Attribute> slowPaths;
+      unsigned fastSelector = specGammas[gamma] - 1;
+      for (unsigned selector = 0; selector < inputLatencies[gamma].size(); ++selector) {
+        if (selector == fastSelector)
+          continue;
+        slowPaths.push_back(mlir::DictionaryAttr::get(
+            ctx, {mlir::NamedAttribute(builder.getStringAttr("selector"), builder.getI64IntegerAttr(selector)),
+                  mlir::NamedAttribute(builder.getStringAttr("latency"),
+                                       builder.getI64IntegerAttr(inputLatencies[gamma][selector])),
+                  mlir::NamedAttribute(builder.getStringAttr("rewind"), builder.getI64IntegerAttr(0)),
+                  mlir::NamedAttribute(builder.getStringAttr("rbwe"), builder.getI64IntegerAttr(1)),
+                  mlir::NamedAttribute(builder.getStringAttr("rollback_mu_ids"), builder.getArrayAttr({})),
+                  mlir::NamedAttribute(builder.getStringAttr("rollback_array_ids"), builder.getArrayAttr({})),
+                  mlir::NamedAttribute(builder.getStringAttr("rollback_gamma_ids"), builder.getArrayAttr({})),
+                  mlir::NamedAttribute(builder.getStringAttr("rollback_depth"),
+                                       builder.getI64IntegerAttr(inputLatencies[gamma][selector]))}));
+      }
+      llvm::SmallVector<mlir::Attribute> poisoned;
+      for (auto dependency : poisonMap[gamma])
+        if (dependency != gamma)
+          if (auto id = speculationIds.find(dependency); id != speculationIds.end())
+          poisoned.push_back(builder.getI64IntegerAttr(id->second));
+      configurationEntries.push_back(mlir::DictionaryAttr::get(
+          ctx, {mlir::NamedAttribute(builder.getStringAttr("gamma_id"), builder.getStringAttr(gamma.getSymName())),
+                mlir::NamedAttribute(builder.getStringAttr("cond_latency"),
+                                     builder.getI64IntegerAttr(resolveDelays[gamma])),
+                mlir::NamedAttribute(builder.getStringAttr("fast_selector"), builder.getI64IntegerAttr(fastSelector)),
+                mlir::NamedAttribute(builder.getStringAttr("poison_speculation_ids"),
+                                     builder.getArrayAttr(poisoned)),
+                mlir::NamedAttribute(builder.getStringAttr("slow_paths"), builder.getArrayAttr(slowPaths))}));
+    }
+    task->setAttr("spechls.speculation_config", builder.getArrayAttr(configurationEntries));
+
     builder.setInsertionPointToStart(task.getBodyBlock());
 
     llvm::SmallVector<mlir::Attribute> gammaNames;
     llvm::SmallVector<int64_t> condDelays, fastIndices;
     llvm::SmallVector<mlir::Attribute> inputDelays;
-    llvm::SmallVector<mlir::Value> mispecInputs, fsmInitialValues;
-    llvm::SmallVector<std::string> mispecTypeFieldNames, fsmTypeFieldNames, fsmCmdTypeFieldNames;
-    llvm::SmallVector<mlir::Type> mispecTypeFieldTypes, fsmTypeFieldTypes, fsmCmdTypeFieldTypes;
+    llvm::SmallVector<mlir::Value> mispecInputs;
+    llvm::SmallVector<std::string> fsmCmdTypeFieldNames;
+    llvm::SmallVector<mlir::Type> fsmCmdTypeFieldTypes;
     std::string fsmName = "fsm_";
     llvm::StringMap<int> namesId;
-
-    fsmTypeFieldNames.push_back("array_rollback");
-    fsmTypeFieldTypes.push_back(builder.getI32Type());
-    fsmInitialValues.push_back(
-        builder.create<circt::hw::ConstantOp>(mlir::UnknownLoc::get(ctx), builder.getI32Type(), 0));
-    fsmTypeFieldNames.push_back("mu_rollback");
-    fsmTypeFieldTypes.push_back(builder.getI32Type());
-    fsmInitialValues.push_back(
-        builder.create<circt::hw::ConstantOp>(mlir::UnknownLoc::get(ctx), builder.getI32Type(), 0));
-    fsmTypeFieldNames.push_back("rewindCpt");
-    fsmTypeFieldTypes.push_back(builder.getI32Type());
-    fsmInitialValues.push_back(
-        builder.create<circt::hw::ConstantOp>(mlir::UnknownLoc::get(ctx), builder.getI32Type(), 0));
-    fsmTypeFieldNames.push_back("rewind");
-    fsmTypeFieldTypes.push_back(builder.getI32Type());
-    fsmInitialValues.push_back(
-        builder.create<circt::hw::ConstantOp>(mlir::UnknownLoc::get(ctx), builder.getI32Type(), 0));
-    fsmTypeFieldNames.push_back("state");
-    fsmTypeFieldTypes.push_back(builder.getI32Type());
-    fsmInitialValues.push_back(
-        builder.create<circt::hw::ConstantOp>(mlir::UnknownLoc::get(ctx), builder.getI32Type(), 0));
-    fsmTypeFieldNames.push_back("rbwe");
-    fsmTypeFieldTypes.push_back(builder.getI1Type());
-    fsmInitialValues.push_back(
-        builder.create<circt::hw::ConstantOp>(mlir::UnknownLoc::get(ctx), builder.getI1Type(), 1));
-    fsmTypeFieldNames.push_back("rewindDepth");
-    fsmTypeFieldTypes.push_back(builder.getI32Type());
-    fsmInitialValues.push_back(
-        builder.create<circt::hw::ConstantOp>(mlir::UnknownLoc::get(ctx), builder.getI32Type(), 0));
-
-    unsigned maxCond = 0u;
-    for (auto &[gamma, resolve] : resolveDelays) {
+    unsigned maxCond = 0;
+    for (auto &[gamma, resolve] : resolveDelays)
       maxCond = std::max(maxCond, resolve);
-    }
-
-    for (unsigned i = 0; i < maxCond; ++i) {
-      fsmTypeFieldNames.push_back("delayed_commit_" + std::to_string(i));
-      fsmTypeFieldTypes.push_back(builder.getI1Type());
-      fsmInitialValues.push_back(
-          builder.create<circt::hw::ConstantOp>(mlir::UnknownLoc::get(ctx), builder.getI1Type(), 0));
-    }
 
     fsmCmdTypeFieldNames.push_back("nextInput");
     fsmCmdTypeFieldTypes.push_back(builder.getI1Type());
@@ -922,25 +937,7 @@ struct ExposeControlFlowSpeculationPass
       }
       gammaNameMap.try_emplace(g, name);
       gammaNames.push_back(builder.getStringAttr(name));
-      mispecTypeFieldNames.push_back("mispec_" + name);
       fsmName += name;
-
-      fsmTypeFieldNames.push_back("commit_" + name);
-      fsmTypeFieldTypes.push_back(builder.getI1Type());
-      fsmInitialValues.push_back(
-          builder.create<circt::hw::ConstantOp>(mlir::UnknownLoc::get(ctx), builder.getI1Type(), 0));
-      fsmTypeFieldNames.push_back("selSlowPath_" + name);
-      fsmTypeFieldTypes.push_back(builder.getI32Type());
-      fsmInitialValues.push_back(
-          builder.create<circt::hw::ConstantOp>(mlir::UnknownLoc::get(ctx), builder.getI32Type(), specGammas[g] - 1));
-      fsmTypeFieldNames.push_back("rollback_" + name);
-      fsmTypeFieldTypes.push_back(builder.getI32Type());
-      fsmInitialValues.push_back(
-          builder.create<circt::hw::ConstantOp>(mlir::UnknownLoc::get(ctx), builder.getI32Type(), 0));
-      fsmTypeFieldNames.push_back("slowPath_" + name);
-      fsmTypeFieldTypes.push_back(builder.getI32Type());
-      fsmInitialValues.push_back(
-          builder.create<circt::hw::ConstantOp>(mlir::UnknownLoc::get(ctx), builder.getI32Type(), 0));
 
       fsmCmdTypeFieldNames.push_back("gammaRollBack_" + name);
       fsmCmdTypeFieldTypes.push_back(builder.getI32Type());
@@ -949,10 +946,6 @@ struct ExposeControlFlowSpeculationPass
       for (unsigned index = 0; index < g.getInputs().size(); ++index) {
         fsmCmdTypeFieldNames.push_back("stall_" + name + "_" + std::to_string(index));
         fsmCmdTypeFieldTypes.push_back(builder.getI32Type());
-        fsmTypeFieldNames.push_back("stall_" + name + "_" + std::to_string(index));
-        fsmTypeFieldTypes.push_back(builder.getI32Type());
-        fsmInitialValues.push_back(
-            builder.create<circt::hw::ConstantOp>(mlir::UnknownLoc::get(ctx), builder.getI32Type(), 0));
       }
 
       condDelays.push_back(resolveDelays[g]);
@@ -963,48 +956,265 @@ struct ExposeControlFlowSpeculationPass
       }
       inputDelays.push_back(builder.getArrayAttr(inputs));
       mispecInputs.push_back(g.getSelect());
-      mispecTypeFieldTypes.push_back(g.getSelect().getType());
     }
-    auto mispecType = spechls::StructType::get(ctx, fsmName + "_mispec", mispecTypeFieldNames, mispecTypeFieldTypes);
-    auto mispecPack = builder.create<spechls::PackOp>(mlir::UnknownLoc::get(ctx), mispecType, mispecInputs);
-    auto fsmType = spechls::StructType::get(ctx, fsmName + "_state", fsmTypeFieldNames, fsmTypeFieldTypes);
-    auto fsmInit = builder.create<spechls::PackOp>(mlir::UnknownLoc::get(ctx), fsmType, fsmInitialValues);
-
+    auto module = kernel->getParentOfType<mlir::ModuleOp>();
+    if (SymbolTable::lookupSymbolIn(module, fsmName))
+      fsmName += "_" + task.getSymName().str();
+    auto initialState = builder.create<circt::hw::ConstantOp>(mlir::UnknownLoc::get(ctx), builder.getI32Type(), 0);
     auto fsmStateMu = builder.create<spechls::MuOp>(mlir::UnknownLoc::get(ctx),
-                                                    builder.getStringAttr(fsmName + "State"), fsmInit, fsmInit);
+                                                     builder.getStringAttr(fsmName + "State"), initialState, initialState);
+    llvm::SmallVector<mlir::Type> machineInputs{builder.getI32Type()};
+    for (auto input : mispecInputs)
+      machineInputs.push_back(input.getType());
+    llvm::SmallVector<mlir::Type> machineResults{builder.getI32Type()};
+    machineResults.append(fsmCmdTypeFieldTypes);
+    auto machineType = builder.getFunctionType(machineInputs, machineResults);
 
-    // startTimes.try_emplace(fsmStateMu, 0);
-    // startTimesInCycle.try_emplace(fsmStateMu, 0.0);
+    // The controller declaration is reusable and state-free. Its state lives
+    // in the task-local mu and all selectors are independent input ports.
+    OpBuilder moduleBuilder(ctx);
+    moduleBuilder.setInsertionPoint(kernel);
+    auto fsm = moduleBuilder.create<spechls::FSMOp>(mlir::UnknownLoc::get(ctx), builder.getStringAttr(fsmName), machineType);
+    builder.create<spechls::FSMInstanceOp>(mlir::UnknownLoc::get(ctx), builder.getStringAttr(fsmName),
+                                           FlatSymbolRefAttr::get(ctx, fsmName));
+    llvm::SmallVector<mlir::Value> triggerInputs{fsmStateMu.getResult()};
+    triggerInputs.append(mispecInputs);
+    auto fsmTrigger = builder.create<spechls::FSMTriggerOp>(mlir::UnknownLoc::get(ctx), machineResults,
+                                                             builder.getStringAttr(fsmName), triggerInputs);
+    fsmStateMu.getLoopValueMutable().assign(fsmTrigger.getResult(0));
 
-    auto fsm = builder.create<spechls::FSMOp>(
-        mlir::UnknownLoc::get(ctx), fsmType, builder.getStringAttr(fsmName), builder.getArrayAttr(gammaNames),
-        builder.getDenseI64ArrayAttr(condDelays), builder.getDenseI64ArrayAttr(fastIndices),
-        builder.getArrayAttr(inputDelays), mispecPack, fsmStateMu);
+    // Retain the state table in the declaration without coupling its ports to
+    // speculation-specific aggregate types.
+    auto &fsmBody = fsm.getBody();
+    fsmBody.emplaceBlock();
+    OpBuilder fsmBuilder(ctx);
+    fsmBuilder.setInsertionPointToStart(&fsmBody.front());
+    llvm::StringMap<spechls::FSMStateOp> fsmStates;
+    auto commandValues = [&](bool nextInput, bool commit) {
+      llvm::SmallVector<int64_t> values(fsmCmdTypeFieldNames.size(), 0);
+      for (unsigned index = 0; index < fsmCmdTypeFieldNames.size(); ++index) {
+        if (fsmCmdTypeFieldNames[index] == "nextInput")
+          values[index] = nextInput;
+        else if (fsmCmdTypeFieldNames[index] == "commit")
+          values[index] = commit;
+      }
+      return values;
+    };
+    auto addState = [&](llvm::StringRef name, llvm::ArrayRef<int64_t> commands) {
+      fsmBuilder.setInsertionPointToEnd(&fsmBody.front());
+      auto state = fsmBuilder.create<spechls::FSMStateOp>(mlir::UnknownLoc::get(ctx), fsmBuilder.getStringAttr(name));
+      state.getOutput().emplaceBlock();
+      fsmBuilder.setInsertionPointToStart(&state.getOutput().front());
+      llvm::SmallVector<mlir::Attribute> outputNames;
+      for (auto &fieldName : fsmCmdTypeFieldNames)
+        outputNames.push_back(fsmBuilder.getStringAttr(fieldName));
+      fsmBuilder.create<spechls::FSMOutputOp>(mlir::UnknownLoc::get(ctx), fsmBuilder.getArrayAttr(outputNames),
+                                              fsmBuilder.getDenseI64ArrayAttr(commands));
+      state.getTransitions().emplaceBlock();
+      fsmStates[name] = state;
+    };
+    auto addTransition = [&](llvm::StringRef source, llvm::StringRef target, llvm::ArrayRef<int64_t> inputIds,
+                              llvm::ArrayRef<int64_t> selectors, llvm::StringRef kind = "normal") {
+      auto sourceState = fsmStates.lookup(source);
+      assert(sourceState && "FSM transition source must be created before its transition");
+      fsmBuilder.setInsertionPointToEnd(&sourceState.getTransitions().front());
+      auto transition = fsmBuilder.create<spechls::FSMTransitionOp>(mlir::UnknownLoc::get(ctx),
+                                                                      fsmBuilder.getStringAttr(target),
+                                                                      fsmBuilder.getStringAttr(kind));
+      if (inputIds.empty())
+        return;
+      auto &guard = transition.getGuard();
+      guard.emplaceBlock();
+      fsmBuilder.setInsertionPointToStart(&guard.front());
+      mlir::Value predicate;
+      for (auto [inputId, selector] : llvm::zip_equal(inputIds, selectors)) {
+        auto inputType = llvm::cast<mlir::IntegerType>(machineInputs[inputId + 1]);
+        auto input = fsmBuilder.create<spechls::FSMInputOp>(mlir::UnknownLoc::get(ctx), inputType,
+                                                              fsmBuilder.getI64IntegerAttr(inputId + 1));
+        auto selected = fsmBuilder.create<mlir::arith::ConstantIntOp>(mlir::UnknownLoc::get(ctx), selector,
+                                                                        inputType.getWidth());
+        auto match = fsmBuilder.create<mlir::arith::CmpIOp>(mlir::UnknownLoc::get(ctx),
+                                                             mlir::arith::CmpIPredicate::eq, input, selected);
+        if (predicate)
+          predicate = fsmBuilder.create<circt::comb::AndOp>(mlir::UnknownLoc::get(ctx), predicate,
+                                                             match.getResult()).getResult();
+        else
+          predicate = match.getResult();
+      }
+      fsmBuilder.create<spechls::FSMReturnOp>(mlir::UnknownLoc::get(ctx), predicate);
+    };
 
-    fsmStateMu.getLoopValueMutable().assign(fsm.getResult());
+    unsigned initCount = std::max(1u, maxCond);
+    for (unsigned index = 0; index < initCount; ++index) {
+      auto name = "Init_" + std::to_string(index);
+      addState(name, commandValues(false, false));
+      addTransition(name, index + 1 < initCount ? "Init_" + std::to_string(index + 1) : "Proceed", {}, {});
+    }
+    addState("Proceed", commandValues(true, true));
+    addTransition("Proceed", "Proceed", {}, {});
+    struct BodyPath {
+      unsigned gammaIndex;
+      unsigned pathIndex;
+      unsigned selector;
+      unsigned latency;
+      unsigned condLatency;
+      std::string gammaName;
+    };
+    auto orderedBefore = [&](const BodyPath &left, const BodyPath &right) {
+      auto leftGamma = sortedGammaNodes[left.gammaIndex];
+      auto rightGamma = sortedGammaNodes[right.gammaIndex];
+      // Mirror the Java recovery worklist's poison-aware ordering before
+      // falling back to condition latency and stable speculation ID order.
+      if (poisonMap[leftGamma].contains(rightGamma))
+        return true;
+      if (poisonMap[rightGamma].contains(leftGamma))
+        return false;
+      if (left.condLatency != right.condLatency)
+        return left.condLatency < right.condLatency;
+      return left.gammaIndex < right.gammaIndex;
+    };
+    llvm::SmallVector<llvm::SmallVector<BodyPath>> alternatives(sortedGammaNodes.size());
+    for (unsigned gammaIndex = 0; gammaIndex < sortedGammaNodes.size(); ++gammaIndex) {
+      auto gamma = sortedGammaNodes[gammaIndex];
+      unsigned pathIndex = 0;
+      for (unsigned selector = 0; selector < gamma.getInputs().size(); ++selector) {
+        if (selector == fastIndices[gammaIndex])
+          continue;
+        alternatives[gammaIndex].push_back(
+            {gammaIndex, pathIndex++, selector, inputLatencies[gamma][selector], resolveDelays[gamma], gammaNameMap[gamma]});
+      }
+    }
 
-    auto fsmCmdType = spechls::StructType::get(ctx, fsmName + "_cmdType", fsmCmdTypeFieldNames, fsmCmdTypeFieldTypes);
+    // Enumerate the Java-style canonical combinations. The same limit used by
+    // the xDSL builder prevents an exponential controller table from escaping
+    // into the IR.
+    llvm::SmallVector<llvm::SmallVector<BodyPath>> plans(1);
+    for (auto &paths : alternatives) {
+      auto previous = plans;
+      for (auto &plan : previous)
+        for (auto &path : paths) {
+          auto combined = plan;
+          combined.push_back(path);
+          llvm::sort(combined, orderedBefore);
+          plans.push_back(std::move(combined));
+          if (plans.size() > 257)
+            break;
+        }
+      if (plans.size() > 257)
+        break;
+    }
+    if (plans.size() > 257)
+      return llvm::failure();
 
-    auto fsmCmd = builder.create<spechls::FSMCommandOp>(mlir::UnknownLoc::get(ctx), fsmCmdType,
-                                                        builder.getStringAttr(fsmName), fsmStateMu.getResult());
+    auto planKey = [](llvm::ArrayRef<BodyPath> plan) {
+      std::string key;
+      for (auto &path : plan)
+        key += std::to_string(path.gammaIndex) + ":" + std::to_string(path.selector) + ";";
+      return key;
+    };
+    auto commandsFor = [&](llvm::ArrayRef<BodyPath> plan, bool rollback) {
+      auto commands = commandValues(false, false);
+      for (auto &path : plan) {
+        for (unsigned index = 0; index < fsmCmdTypeFieldNames.size(); ++index) {
+          if (fsmCmdTypeFieldNames[index] == "selSlowPath_" + path.gammaName)
+            commands[index] = path.selector;
+          if (rollback && (fsmCmdTypeFieldNames[index] == "rbwe" ||
+                           fsmCmdTypeFieldNames[index] == "gammaRollBack_" + path.gammaName))
+            commands[index] = 1;
+        }
+      }
+      return commands;
+    };
+    llvm::StringMap<std::string> planStarts;
+    llvm::SmallVector<std::string> recoveryStates;
+    auto addRecoveryChain = [&](llvm::StringRef prefix, llvm::ArrayRef<BodyPath> plan) {
+      auto tail = plan.back();
+      unsigned stalls = tail.latency > tail.condLatency ? tail.latency - tail.condLatency - 1 : 0;
+      unsigned fills = tail.condLatency > 0 ? tail.condLatency - 1 : 0;
+      llvm::SmallVector<std::string> names;
+      for (unsigned index = 0; index < stalls; ++index)
+        names.push_back(prefix.str() + "_Stall_" + std::to_string(index));
+      names.push_back(prefix.str() + "_Rollback");
+      for (unsigned index = 0; index < fills; ++index)
+        names.push_back(prefix.str() + "_Fill_" + std::to_string(index));
+      for (auto &name : names) {
+        bool rollback = name.find("Rollback") != std::string::npos;
+        addState(name, commandsFor(plan, rollback));
+        recoveryStates.push_back(name);
+      }
+      for (unsigned index = 0; index + 1 < names.size(); ++index)
+        addTransition(names[index], names[index + 1], {}, {});
+      addTransition(names.back(), "Proceed", {}, {});
+      return names.front();
+    };
 
-    auto nextInputField = builder.create<spechls::FieldOp>(mlir::UnknownLoc::get(ctx), "nextInput", fsmCmd.getResult());
-    auto commitField = builder.create<spechls::FieldOp>(mlir::UnknownLoc::get(ctx), "commit", fsmCmd.getResult());
-    auto muRollBackField =
-        builder.create<spechls::FieldOp>(mlir::UnknownLoc::get(ctx), "muRollBack", fsmCmd.getResult());
-    auto arrayRollBackField =
-        builder.create<spechls::FieldOp>(mlir::UnknownLoc::get(ctx), "arrayRollBack", fsmCmd.getResult());
-    auto rewindField = builder.create<spechls::FieldOp>(mlir::UnknownLoc::get(ctx), "rewind", fsmCmd.getResult());
-    auto rbweField = builder.create<spechls::FieldOp>(mlir::UnknownLoc::get(ctx), "rbwe", fsmCmd.getResult());
-    llvm::DenseMap<spechls::GammaOp, llvm::SmallVector<spechls::FieldOp>> gammaStallFields;
+    unsigned combinedIndex = 0;
+    for (auto &plan : plans) {
+      if (plan.empty())
+        continue;
+      auto prefix = plan.size() == 1 ? std::to_string(plan.front().gammaIndex) + "_" + std::to_string(plan.front().pathIndex)
+                                     : "Combined_" + std::to_string(combinedIndex++);
+      auto start = addRecoveryChain(prefix, plan);
+      planStarts[planKey(plan)] = start;
+      llvm::SmallVector<int64_t> inputs, selectors;
+      for (auto &path : plan) {
+        inputs.push_back(path.gammaIndex);
+        selectors.push_back(path.selector);
+      }
+      addTransition("Proceed", start, inputs, selectors);
+    }
+
+    // A recovery can observe a later mis-speculation. Materialize both the
+    // explicit NEW_MISPEC hop and the direct CANCELED redirect used by the
+    // Java worklist; both preserve exact selector guards in the IR table.
+    unsigned newMispecIndex = 0;
+    for (auto &plan : plans) {
+      if (plan.empty())
+        continue;
+      llvm::DenseSet<unsigned> active;
+      for (auto &path : plan)
+        active.insert(path.gammaIndex);
+      for (auto &paths : alternatives)
+        for (auto &path : paths) {
+          if (active.contains(path.gammaIndex))
+            continue;
+          auto destinationPlan = plan;
+          destinationPlan.push_back(path);
+          llvm::sort(destinationPlan, orderedBefore);
+          auto destination = planStarts.lookup(planKey(destinationPlan));
+          if (destination.empty())
+            continue;
+          auto newState = "NewMispec_" + std::to_string(newMispecIndex++);
+          addState(newState, commandsFor(llvm::ArrayRef<BodyPath>(&path, 1), false));
+          addTransition(newState, destination, {}, {});
+          for (auto &state : recoveryStates) {
+            addTransition(state, newState, {static_cast<int64_t>(path.gammaIndex)},
+                          {static_cast<int64_t>(path.selector)}, "new_mispec");
+            addTransition(state, destination, {static_cast<int64_t>(path.gammaIndex)},
+                          {static_cast<int64_t>(path.selector)}, "canceled");
+          }
+        }
+    }
+
+    auto command = [&](llvm::StringRef name) -> mlir::Value {
+      for (auto [index, fieldName] : llvm::enumerate(fsmCmdTypeFieldNames))
+        if (fieldName == name)
+          return fsmTrigger.getResult(index + 1);
+      llvm_unreachable("unknown FSM command port");
+    };
+    auto nextInput = command("nextInput");
+    auto commitEnable = command("commit");
+    auto muRollBack = command("muRollBack");
+    auto arrayRollBack = command("arrayRollBack");
+    auto rewind = command("rewind");
+    auto rbwe = command("rbwe");
+    llvm::DenseMap<spechls::GammaOp, llvm::SmallVector<mlir::Value>> gammaStallFields;
     for (unsigned id = 0; id < sortedGammaNodes.size(); ++id) {
       auto gamma = sortedGammaNodes[id];
       auto name = llvm::dyn_cast<mlir::StringAttr>(gammaNames[id]).str();
-      llvm::SmallVector<spechls::FieldOp> fields;
+      llvm::SmallVector<mlir::Value> fields;
       for (unsigned i = 0; i < gamma.getInputs().size(); ++i) {
-        auto field = builder.create<spechls::FieldOp>(mlir::UnknownLoc::get(ctx),
-                                                      "stall_" + name + "_" + std::to_string(i), fsmCmd.getResult());
-        fields.push_back(field);
+        fields.push_back(command("stall_" + name + "_" + std::to_string(i)));
       }
       gammaStallFields.try_emplace(gamma, fields);
     }
@@ -1025,15 +1235,11 @@ struct ExposeControlFlowSpeculationPass
     // Rewire gamma condition and add gamma rollbacks
     for (auto gamma : sortedGammaNodes) {
       auto gammaName = gammaNameMap[gamma];
-      auto field =
-          builder.create<spechls::FieldOp>(mlir::UnknownLoc::get(ctx), "selSlowPath_" + gammaName, fsmCmd.getResult());
-      gamma.getSelectMutable().assign(field.getResult());
+      gamma.getSelectMutable().assign(command("selSlowPath_" + gammaName));
       if (!llvm::isa<spechls::ArrayType>(gamma.getResult().getType())) {
-        auto rollbackField = builder.create<spechls::FieldOp>(mlir::UnknownLoc::get(ctx), "gammaRollBack_" + gammaName,
-                                                              fsmCmd.getResult());
         auto rb = builder.create<spechls::RollbackOp>(mlir::UnknownLoc::get(ctx),
-                                                      builder.getDenseI64ArrayAttr(rollbackDepths), 0,
-                                                      gamma.getResult(), rollbackField, rbweField);
+                                                       builder.getDenseI64ArrayAttr(rollbackDepths), 0, gamma.getResult(),
+                                                       command("gammaRollBack_" + gammaName), rbwe);
         gamma.getResult().replaceAllUsesExcept(rb.getResult(), rb);
       }
     }
@@ -1041,10 +1247,10 @@ struct ExposeControlFlowSpeculationPass
     // Rewire rollbackable/cancellable delays
     task.getBodyBlock()->walk([&](spechls::RollbackableDelayOp delay) {
       delay.setRollbackDepths(arrayRollbackDepths);
-      delay.getRollbackMutable().assign(arrayRollBackField);
+      delay.getRollbackMutable().assign(arrayRollBack);
     });
     task.getBodyBlock()->walk([&](spechls::CancellableDelayOp delay) {
-      delay.getCancelMutable().assign(arrayRollBackField);
+      delay.getCancelMutable().assign(arrayRollBack);
       delay.getCancelWeMutable().assign(trueCst.getResult());
     });
 
@@ -1057,18 +1263,18 @@ struct ExposeControlFlowSpeculationPass
         auto trueCst = builder.create<circt::hw::ConstantOp>(mlir::UnknownLoc::get(ctx), builder.getI1Type(), 1);
         rb = builder.create<spechls::RollbackOp>(mlir::UnknownLoc::get(ctx),
                                                  builder.getDenseI64ArrayAttr(arrayRollbackDepths), 0, mu.getResult(),
-                                                 arrayRollBackField, trueCst.getResult());
+                                                  arrayRollBack, trueCst.getResult());
       } else {
         rb = builder.create<spechls::RollbackOp>(mlir::UnknownLoc::get(ctx),
                                                  builder.getDenseI64ArrayAttr(rollbackDepths), 0, mu.getResult(),
-                                                 muRollBackField, rbweField);
+                                                  muRollBack, rbwe);
       }
       mu.getResult().replaceAllUsesExcept(rb.getResult(), rb);
     });
 
     // rewire commit condition
     auto commit = llvm::dyn_cast<spechls::CommitOp>(task.getBodyBlock()->getTerminator());
-    commit.setOperand(0, commitField);
+    commit.setOperand(0, commitEnable);
 
     for (auto [_, latencies] : inputLatencies) {
       for (auto lat : latencies)
@@ -1080,11 +1286,10 @@ struct ExposeControlFlowSpeculationPass
     for (auto arg : task.getBodyBlock()->getArguments()) {
       if (!task.getArgs()[arg.getArgNumber()].getDefiningOp())
         continue;
-      auto rewind = builder.create<spechls::RewindOp>(mlir::UnknownLoc::get(ctx), arg.getType(),
-                                                      builder.getDenseI64ArrayAttr(rewindDepths), arg, rewindField,
-                                                      nextInputField);
-      arg.replaceUsesWithIf(rewind.getResult(), [&](mlir::OpOperand &operand) -> bool {
-        if (operand.getOwner() == rewind) {
+      auto rewindOp = builder.create<spechls::RewindOp>(mlir::UnknownLoc::get(ctx), arg.getType(),
+                                                         builder.getDenseI64ArrayAttr(rewindDepths), arg, rewind, nextInput);
+      arg.replaceUsesWithIf(rewindOp.getResult(), [&](mlir::OpOperand &operand) -> bool {
+        if (operand.getOwner() == rewindOp) {
           return false;
         }
         if (llvm::isa<spechls::MuOp>(operand.getOwner())) {

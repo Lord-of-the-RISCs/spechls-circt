@@ -1,0 +1,112 @@
+// Generated from transformed SpecHLS kernel slowfast. Do not edit.
+module main {
+  function cond(a0: bv32): boolean;
+  function fast(a0: bv32): bv32;
+  function slow(a0: bv32): bv32;
+  // Dataflow exposure map: each parsed SSA result maps to the Uclid symbol below.
+  // [0] hw.constant -> v_7()
+  // [1] spechls.mu<fsm_x0State> -> mu_fsm_x0State
+  // [3] spechls.fsm.trigger -> next_state=v_8(), nextInput=v_11(), commit=v_12(), muRollBack=v_13(), arrayRollBack=v_14(), rewind=v_15(), rbwe=v_16(), gammaRollBack_x0=v_17(), selSlowPath_x0=v_18(), stall_x0_0=v_19(), stall_x0_1=v_20()
+  // [4] spechls.rollback depths=[2] -> v_21()
+  // [5] spechls.rollback depths=[2] -> v_23()
+  // [6] hw.constant -> v_24()
+  // [7] spechls.delay depth=2 -> delay_7_1
+  // [8] hw.constant -> v_25()
+  // [9] comb.icmp -> v_26()
+  // [10] hw.constant -> v_27()
+  // [11] comb.icmp -> v_28()
+  // [12] hw.constant -> v_29()
+  // [13] spechls.delay depth=1 -> delay_13_0
+  // [14] spechls.delay depth=1 -> delay_14_0
+  // [15] hw.constant -> v_32()
+  // [16] spechls.delay depth=1 -> delay_16_0
+  // [17] hw.constant -> v_34()
+  // [18] spechls.mu<x> -> mu_x
+  // [19] spechls.call @cond -> v_35()
+  // [20] spechls.sync -> v_33()
+  // [21] spechls.call @fast -> v_36()
+  // [22] spechls.call @slow -> v_30()
+  // [23] spechls.sync -> v_31()
+  // [24] spechls.sync -> v_37()
+  // [25] spechls.gamma<x> -> v_22()
+  // [26] spechls.commit -> commit_0() enable, commit_1() value
+  var input_0: bv32;
+  var mu_fsm_x0State: bv32;
+  var rollback_v_21_0: bv32;
+  var rollback_v_21_1: bv32;
+  var rollback_v_23_0: bv32;
+  var rollback_v_23_1: bv32;
+  var delay_7_0: bv32;
+  var delay_7_1: bv32;
+  var delay_13_0: bv32;
+  var delay_14_0: bv32;
+  var delay_16_0: boolean;
+  var mu_x: bv32;
+  define v_7() : bv32 = 0bv32;
+  define v_9() : boolean = true;
+  define v_10() : boolean = (delay_16_0 == v_9());
+  define v_8() : bv32 = if (mu_fsm_x0State == 0bv32) then 1bv32 else if (mu_fsm_x0State == 1bv32) then 2bv32 else if (mu_fsm_x0State == 2bv32) then if (v_10()) then 3bv32 else 2bv32 else if (mu_fsm_x0State == 3bv32) then 4bv32 else if (mu_fsm_x0State == 4bv32) then 2bv32 else mu_fsm_x0State;
+  define v_11() : boolean = if (mu_fsm_x0State == 0bv32) then false else if (mu_fsm_x0State == 1bv32) then false else if (mu_fsm_x0State == 2bv32) then true else if (mu_fsm_x0State == 3bv32) then false else if (mu_fsm_x0State == 4bv32) then false else false;
+  define v_12() : boolean = if (mu_fsm_x0State == 0bv32) then false else if (mu_fsm_x0State == 1bv32) then false else if (mu_fsm_x0State == 2bv32) then true else if (mu_fsm_x0State == 3bv32) then false else if (mu_fsm_x0State == 4bv32) then false else false;
+  define v_13() : bv32 = if (mu_fsm_x0State == 0bv32) then 0bv32 else if (mu_fsm_x0State == 1bv32) then 0bv32 else if (mu_fsm_x0State == 2bv32) then 0bv32 else if (mu_fsm_x0State == 3bv32) then 0bv32 else if (mu_fsm_x0State == 4bv32) then 0bv32 else 0bv32;
+  define v_14() : bv32 = if (mu_fsm_x0State == 0bv32) then 0bv32 else if (mu_fsm_x0State == 1bv32) then 0bv32 else if (mu_fsm_x0State == 2bv32) then 0bv32 else if (mu_fsm_x0State == 3bv32) then 0bv32 else if (mu_fsm_x0State == 4bv32) then 0bv32 else 0bv32;
+  define v_15() : bv32 = if (mu_fsm_x0State == 0bv32) then 0bv32 else if (mu_fsm_x0State == 1bv32) then 0bv32 else if (mu_fsm_x0State == 2bv32) then 0bv32 else if (mu_fsm_x0State == 3bv32) then 0bv32 else if (mu_fsm_x0State == 4bv32) then 0bv32 else 0bv32;
+  define v_16() : boolean = if (mu_fsm_x0State == 0bv32) then false else if (mu_fsm_x0State == 1bv32) then false else if (mu_fsm_x0State == 2bv32) then false else if (mu_fsm_x0State == 3bv32) then true else if (mu_fsm_x0State == 4bv32) then false else false;
+  define v_17() : bv32 = if (mu_fsm_x0State == 0bv32) then 0bv32 else if (mu_fsm_x0State == 1bv32) then 0bv32 else if (mu_fsm_x0State == 2bv32) then 0bv32 else if (mu_fsm_x0State == 3bv32) then 1bv32 else if (mu_fsm_x0State == 4bv32) then 0bv32 else 0bv32;
+  define v_18() : bv32 = if (mu_fsm_x0State == 0bv32) then 0bv32 else if (mu_fsm_x0State == 1bv32) then 0bv32 else if (mu_fsm_x0State == 2bv32) then 0bv32 else if (mu_fsm_x0State == 3bv32) then 1bv32 else if (mu_fsm_x0State == 4bv32) then 1bv32 else 0bv32;
+  define v_19() : bv32 = if (mu_fsm_x0State == 0bv32) then 0bv32 else if (mu_fsm_x0State == 1bv32) then 0bv32 else if (mu_fsm_x0State == 2bv32) then 0bv32 else if (mu_fsm_x0State == 3bv32) then 0bv32 else if (mu_fsm_x0State == 4bv32) then 0bv32 else 0bv32;
+  define v_20() : bv32 = if (mu_fsm_x0State == 0bv32) then 0bv32 else if (mu_fsm_x0State == 1bv32) then 0bv32 else if (mu_fsm_x0State == 2bv32) then 0bv32 else if (mu_fsm_x0State == 3bv32) then 0bv32 else if (mu_fsm_x0State == 4bv32) then 0bv32 else 0bv32;
+  define v_23() : bv32 = if (v_16()) then if (v_13() == 0bv32) then mu_x else rollback_v_23_1 else mu_x;
+  define v_24() : boolean = true;
+  define v_25() : bv32 = 0bv32;
+  define v_26() : boolean = (v_20() == v_25());
+  define v_27() : bv32 = 0bv32;
+  define v_28() : boolean = (v_20() == v_27());
+  define v_29() : boolean = true;
+  define v_32() : boolean = true;
+  define v_34() : boolean = true;
+  define v_35() : boolean = cond(v_23());
+  define v_33() : boolean = v_35();
+  define v_36() : bv32 = fast(v_23());
+  define v_30() : bv32 = slow(v_23());
+  define v_31() : bv32 = delay_13_0;
+  define v_37() : bv32 = delay_14_0;
+  define v_22() : bv32 = if (v_18() == 0bv32) then v_36() else v_37();
+  define v_21() : bv32 = if (v_16()) then if (v_17() == 0bv32) then v_22() else rollback_v_21_1 else v_22();
+  define commit_0() : boolean = v_12();
+  define commit_1() : bv32 = delay_7_1;
+
+  init {
+    mu_fsm_x0State = v_7();
+    rollback_v_21_0 = 0bv32;
+    rollback_v_21_1 = 0bv32;
+    rollback_v_23_0 = 0bv32;
+    rollback_v_23_1 = 0bv32;
+    delay_7_0 = 0bv32;
+    delay_7_1 = 0bv32;
+    delay_13_0 = 0bv32;
+    delay_14_0 = 0bv32;
+    delay_16_0 = false;
+    mu_x = input_0;
+  }
+
+  next {
+    mu_fsm_x0State' = v_8();
+    rollback_v_21_0' = v_22();
+    rollback_v_21_1' = rollback_v_21_0;
+    rollback_v_23_0' = mu_x;
+    rollback_v_23_1' = rollback_v_23_0;
+    delay_7_0' = if (v_24()) then v_21() else delay_7_0;
+    delay_7_1' = if (v_24()) then delay_7_0 else delay_7_1;
+    delay_13_0' = if (v_26()) then v_30() else delay_13_0;
+    delay_14_0' = if (v_28()) then v_31() else delay_14_0;
+    delay_16_0' = if (v_32()) then v_33() else delay_16_0;
+    mu_x' = v_21();
+  }
+
+  control {
+    vobj = induction(4);
+    check;
+    print_results;
+  }
+}

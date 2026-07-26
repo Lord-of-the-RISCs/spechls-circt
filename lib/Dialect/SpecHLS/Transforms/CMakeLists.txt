@@ -39,6 +39,7 @@ add_circt_dialect_library(SpecHLSTransforms
     AnnotateTiming.cpp
     LowerComplexOperations.cpp
     ExposeControlFlowSpeculation.cpp
+    InferSpeculationFSM.cpp
     LinearizeTask.cpp
     MergeTasks.cpp
     SplitWithSyncPass.cpp
@@ -59,4 +60,13 @@ add_circt_dialect_library(SpecHLSTransforms
 target_include_directories(SpecHLSTransforms
     PRIVATE
     ${CMAKE_CURRENT_BINARY_DIR}
+)
+
+# Yosys headers use exceptions; keep that requirement limited to translation
+# units that include them instead of changing LLVM-wide compile settings.
+set_source_files_properties(
+    YosysSetup.cpp
+    OptimizeControlLogic.cpp
+    PROPERTIES
+    COMPILE_OPTIONS "-std=gnu++20;-fexceptions"
 )

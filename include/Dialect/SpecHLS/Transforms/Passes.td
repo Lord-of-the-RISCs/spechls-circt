@@ -123,7 +123,7 @@ def LowerComplexOperationsPass: Pass<"lower-complex-operation", "spechls::Kernel
 
 def ExposeControlFlowSpeculationPass: Pass<"expose-control-flow-speculation", "spechls::KernelOp"> {
   let summary = "Add speculation mechanism into a task.";
-  let dependentDialects = ["::spechls::SpecHLSDialect", "::circt::hw::HWDialect", "::circt::comb::CombDialect", "::circt::ssp::SSPDialect"];
+  let dependentDialects = ["::spechls::SpecHLSDialect", "::circt::hw::HWDialect", "::circt::comb::CombDialect", "::circt::ssp::SSPDialect", "::mlir::arith::ArithDialect"];
   let options = [
     Option<"targetTask", "targetTask", "std::string", "", "Name of task to inline">,
     Option<"clockPeriod", "clockPeriod", "double", "10.0", "Target clock for scheduling.">,
@@ -131,8 +131,14 @@ def ExposeControlFlowSpeculationPass: Pass<"expose-control-flow-speculation", "s
     Option<"targetsFile", "targetsFile", "std::string", "", "Json file with targets timing.">,
     Option<"probabilityThreshold", "probabilityThreshold", "double", "0.0", "Minimum probability of speculation configurations">,
     Option<"traceFileName", "traceFileName", "std::string", "", "Profiling trace file.">,
+    Option<"useExistingSpeculation", "use-existing-speculation", "bool", "false", "Use spechls.speculation attributes instead of exploring a configuration.">,
     Option<"wcetModel", "wcetModel", "bool", "false", "Stop speculation insertion at the generation of the wcet module.">
   ];
+}
+
+def InferSpeculationFSMPass: Pass<"infer-speculation-fsm", "spechls::KernelOp"> {
+  let summary = "Build an explicit speculative FSM from spechls.speculation_config.";
+  let dependentDialects = ["::spechls::SpecHLSDialect", "::circt::hw::HWDialect", "::mlir::arith::ArithDialect"];
 }
 
 def LinearizeTaskPass: Pass<"linearize-task", "spechls::KernelOp"> {
