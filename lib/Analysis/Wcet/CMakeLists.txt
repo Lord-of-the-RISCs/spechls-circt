@@ -4,7 +4,7 @@ add_circt_library(WcetAnalysis
   PenaltyGraphAnalysis.cpp
 
   LINK_LIBS PUBLIC
-  CIRCT
+#  CIRCT
   SpecHLS
   Wcet
   WcetUtils

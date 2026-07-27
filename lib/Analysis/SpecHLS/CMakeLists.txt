@@ -5,6 +5,6 @@ add_circt_library(SpecHLSAnalysis
   SpeculationExplorationAnalysis.cpp
 
   LINK_LIBS PUBLIC
-  CIRCT
+  # CIRCT
   SpecHLS
 )

@@ -1,6 +1,37 @@
 add_library(heptaneapi SHARED
   Heptane.cpp
 )
+
+if(${SPECHLS_LINK_DYLIB})
+  set(LIBS MLIR CIRCT)
+else()
+  set(LIBS
+    MLIRIR
+    CIRCTHW
+    CIRCTCAPIComb
+    CIRCTCAPIHW
+    CIRCTCAPIDebug
+    CIRCTCAPIFIRRTL
+    CIRCTCAPIFSM
+    CIRCTCAPISynth
+    CIRCTCAPISim
+    CIRCTCAPIVerif
+    CIRCTCAPISV
+    CIRCTCAPIArc
+    CIRCTCAPILTL
+    CIRCTCAPILLHD
+    CIRCTCAPIMoore
+    CIRCTCAPISeq
+    CIRCTCAPISSP
+    CIRCTCAPIHWArith
+    CIRCTImportVerilog
+    CIRCTExportVerilog
+    CIRCTMooreToCore
+    CIRCTLLHDTransforms
+    CIRCTMooreTransforms
+  )
+endif()
+
 target_link_libraries(heptaneapi PUBLIC
     ScheduleCAPI
     SpecHLSCAPI
@@ -8,8 +39,6 @@ target_link_libraries(heptaneapi PUBLIC
     ScheduleToSSP
     SpecHLSTransforms
     SpecHLSToHW
-    CIRCT
-    MLIR
     MLIR-C
     SpecHLS
     SpecHLSToHW
@@ -19,8 +48,8 @@ target_link_libraries(heptaneapi PUBLIC
     WcetTransforms
     WcetAnalysis
     WcetUtils
-
     Yosys::Yosys
+    ${LIBS}
 )
 
 install(TARGETS heptaneapi)

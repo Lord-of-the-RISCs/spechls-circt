@@ -1,5 +1,33 @@
 add_executable(spechls-opt spechls-opt.cpp)
 
+if(${SPECHLS_LINK_DYLIB})
+  set(LIBS MLIR CIRCT)
+else()
+  set(LIBS
+    MLIRIR
+    MLIRAnalysis
+    MLIRArithDialect
+    MLIRMlirOptMain
+    CIRCTHW
+    CIRCTComb
+    CIRCTSV
+    CIRCTSeq
+    CIRCTSSP
+    CIRCTSSPTransforms
+    CIRCTMoore
+    CIRCTMooreTransforms
+    CIRCTSim
+    CIRCTDebug
+    CIRCTSynth
+    CIRCTVerif
+    CIRCTLLHD
+    CIRCTLLHDTransforms
+    CIRCTImportVerilog
+    CIRCTExportVerilog
+    CIRCTMooreToCore
+  )
+endif()
+
 target_link_libraries(spechls-opt PRIVATE
     SpecHLS
     SpecHLSTransforms
@@ -9,8 +37,7 @@ target_link_libraries(spechls-opt PRIVATE
     ScheduleTransforms
     WcetTransforms
     ScheduleToSSP
-    MLIR
-    CIRCT
+    ${LIBS}
 
     Yosys::Yosys
 )

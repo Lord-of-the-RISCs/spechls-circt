@@ -42,6 +42,8 @@ if(NOT "${USE_ALTERNATE_LINKER}" STREQUAL "")
   set_alternate_linker("${USE_ALTERNATE_LINKER}")
 endif()
 
+option(SPECHLS_LINK_DYLIB "Link with shared libraries" OFF)
+
 # Set output directories to lib for libraries, and bin for binaries
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
