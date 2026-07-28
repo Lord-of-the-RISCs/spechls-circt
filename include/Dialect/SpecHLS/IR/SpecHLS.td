@@ -160,13 +160,32 @@ def SpecHLS_TaskOp : SpecHLSOp<"task", [SingleBlock, RegionKindInterface, Isolat
     let hasCanonicalizer = 1;
 }
 
-def SpecHLS_OptimizedFuncOp : SpecHLSOp<"optimizedFunc", [IsolatedFromAbove]> {
+def SpecHLS_OptimizedFuncOp : SpecHLSOp<"optimizedFunc", [IsolatedFromAbove, Pure]> {
     let arguments = (ins Variadic<AnyType>:$args);
     let results = (outs AnyType:$result);
     let regions = (region SizedRegion<1>:$body, SizedRegion<1>:$optBody);
 
     let hasCustomAssemblyFormat = 1;
     let hasVerifier = 1;
+    let hasCanonicalizeMethod = 1;
+
+
+    let skipDefaultBuilders = 1;
+    let builders = [
+        OpBuilder<(ins "::mlir::Type":$result, "::mlir::ValueRange":$inputs), [{
+            $_state.addOperands(inputs);
+            ::mlir::Region *body = $_state.addRegion();
+            body->emplaceBlock();
+            ::mlir::Region *optBody = $_state.addRegion();
+            optBody->emplaceBlock();
+            for(auto&& input : inputs) {
+              body->addArgument(input.getType(), $_builder.getUnknownLoc());
+              optBody->addArgument(input.getType(), $_builder.getUnknownLoc());
+            }
+            if (result)
+                $_state.addTypes(result);
+        }]>
+    ];
 
     let extraClassDeclaration = [{
         ::mlir::Block *getBodyBlock() {

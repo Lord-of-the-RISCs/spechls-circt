@@ -11,6 +11,7 @@
 #include "Dialect/SpecHLS/Transforms/TopologicalSort.h"
 #include "mlir/Analysis/TopologicalSortUtils.h"
 #include "mlir/IR/Builders.h"
+#include "mlir/IR/BuiltinAttributes.h"
 #include "mlir/IR/IRMapping.h"
 #include "mlir/IR/Location.h"
 #include "mlir/IR/MLIRContext.h"
@@ -33,6 +34,7 @@ using namespace mlir;
 namespace spechls {
 #define GEN_PASS_DEF_INLINEOPTIMIZEDFUNCBODYPASS
 #define GEN_PASS_DEF_INLINEOPTIMIZEDFUNCOPTBODYPASS
+#define GEN_PASS_DEF_INLINERECURSIVEOPTFUNCPASS
 #include "Dialect/SpecHLS/Transforms/Passes.h.inc"
 
 } // namespace spechls
@@ -83,6 +85,24 @@ struct InlineOptimizedFuncOptBodyPass
     patternList.add<InlinePattern>(ctx, true);
     patterns = std::move(patternList);
     if (failed(applyPatternsGreedily(kernel, patterns)))
+      return signalPassFailure();
+  }
+};
+
+struct InlineRecursiveOptFuncPass : public spechls::impl::InlineRecursiveOptFuncPassBase<InlineRecursiveOptFuncPass> {
+  using InlineRecursiveOptFuncPassBase::InlineRecursiveOptFuncPassBase;
+
+  void runOnOperation() override {
+    auto *ctx = &getContext();
+    auto func = getOperation();
+
+    mlir::FrozenRewritePatternSet patterns;
+    RewritePatternSet patternList{ctx};
+    patternList.add<InlinePattern>(ctx, true);
+    patterns = std::move(patternList);
+    if (failed(applyPatternsGreedily(func.getOptBody(), patterns)))
+      return signalPassFailure();
+    if (failed(applyPatternsGreedily(func.getBody(), patterns)))
       return signalPassFailure();
   }
 };

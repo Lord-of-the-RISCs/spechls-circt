@@ -8,6 +8,7 @@
 #define SPECHLS_DIALECT_TRANSFORMS_INLINING_H
 
 #include "Dialect/SpecHLS/IR/SpecHLSOps.h"
+#include "mlir/Support/WalkResult.h"
 
 #include <llvm/ADT/UniqueVector.h>
 #include <mlir/IR/IRMapping.h>
@@ -31,7 +32,7 @@ mlir::LogicalResult inlineBlock(spechls::OptimizedFuncOp *op, mlir::Block *block
 
   op->getResult().replaceAllUsesWith(mapper.lookup(llvm::cast<spechls::YieldOp>(block->getTerminator()).getValue()));
   rewriter.eraseOp(*op);
-  return mlir::failure();
+  return mlir::success();
 }
 
 } // namespace
@@ -40,7 +41,7 @@ mlir::LogicalResult spechls::OptimizedFuncOp::inlineBody(mlir::PatternRewriter &
   return inlineBlock(this, getBodyBlock(), rewriter);
 }
 
-::mlir::LogicalResult spechls::OptimizedFuncOp::inlineOptBody(mlir::PatternRewriter &rewriter) {
+mlir::LogicalResult spechls::OptimizedFuncOp::inlineOptBody(mlir::PatternRewriter &rewriter) {
   return inlineBlock(this, getOptBodyBlock(), rewriter);
 }
 
