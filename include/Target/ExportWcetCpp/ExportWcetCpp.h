@@ -9,13 +9,16 @@
 
 #include "mlir/IR/BuiltinOps.h"
 #include "mlir/Support/LLVM.h"
-#include "llvm/Support/raw_os_ostream.h"
 
 namespace spechls {
 
+struct WcetTranslateOptions {
+  int selectVersions;
+};
+
 /// Translate every wcet.core op found in \p module into self-contained
 /// C++ file that implements the CoreAnalysis interface, written to \p os.
-mlir::LogicalResult exportWcetCpp(mlir::ModuleOp module, llvm::raw_os_ostream &os);
+mlir::LogicalResult exportWcetCpp(mlir::ModuleOp module, llvm::raw_ostream &os, WcetTranslateOptions options);
 
 ///  Register the "export-wcet-cpp" TranslateFromMlir command-line option.
 ///  Call this before mlir::MlirTranslateMain().

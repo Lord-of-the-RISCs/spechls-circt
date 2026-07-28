@@ -19,17 +19,14 @@
 #include "mlir/IR/BuiltinOps.h"
 #include "mlir/IR/Operation.h"
 #include "mlir/IR/Value.h"
-// #include "mlir/Support/LLVM.h"
 #include "mlir/Support/LLVM.h"
 #include "mlir/Support/LogicalResult.h"
 #include "mlir/Tools/mlir-translate/Translation.h"
-#include "llvm/ADT/ScopedHashTable.h"
 #include "llvm/ADT/TypeSwitch.h"
 #include "llvm/Support/raw_ostream.h"
 
 #include <cstddef>
 #include <map>
-#include <set>
 #include <string>
 #include <vector>
 
@@ -86,10 +83,20 @@ static std::string mlirTypeReset(Type t) {
 
 class WcetCppEmitter {
 public:
-  explicit WcetCppEmitter(raw_ostream &os) : os(os) {}
+  explicit WcetCppEmitter(raw_ostream &os, spechls::WcetTranslateOptions options) : os(os) {
+    if (options.selectVersions == 1) {
+      version = Version::V1;
+    } else {
+      version = Version::V2;
+    }
+  }
+
   LogicalResult translate(ModuleOp module);
 
 private:
+  enum Version { V1, V2 };
+
+  Version version;
   raw_ostream &os;
 
   // SSA value -> C++ variable name
@@ -316,7 +323,8 @@ LogicalResult WcetCppEmitter::translateWcetCore(wcet::CoreOp coreOp) {
   emitInFsmStruct();
   emitFsmFunction();
   emitCoreFunction(coreOp);
-  emitCoreNextFunction(coreOp);
+  if (version == Version::V2)
+    emitCoreNextFunction(coreOp);
   emitSetupAnalysis();
   emitSetupNextState(commitOp);
   emitIsEqual();
@@ -344,13 +352,20 @@ void WcetCppEmitter::emitFileHeader(StringRef className) {
   os << "#include <vector>\n\n";
   os << "class " << className << " : public CoreAnalysis {\n";
   os << "public:\n\n";
-  os << "  std::vector<outState> coreAnalysis(const inState &in) override {\n";
-  os << "    _inFSM fsmIn = _core(*((_inState *)in));\n";
-  os << "    return _fsm(*((_inState *)in), fsmIn);\n";
-  os << "  }\n\n";
-  os << "  unsigned int getPen(const outState &out) override {\n";
-  os << "    return ((_outState *)out)->pen;\n";
-  os << "  }\n\n";
+  os << "\tstd::vector<outState> coreAnalysis(const inState &in) override {\n";
+  switch (version) {
+  case Version::V1:
+    os << "\t\tstd::vector<outState> outs = _core(*((_inState *)in));\n";
+    os << "\t\treturn outs;\n";
+    break;
+  case Version::V2:
+    os << "\t\t_inFSM fsmIn = _core(*((_inState *)in));\n";
+    os << "\t\treturn _fsm(*((_inState *)in), fsmIn);\n";
+  }
+  os << "\t}\n\n";
+  os << "\tunsigned int getPen(const outState &out) override {\n";
+  os << "\t\treturn ((_outState *)out)->pen;\n";
+  os << "\t}\n\n";
 }
 
 // ---------------------------------------------------------------------------
@@ -597,57 +612,70 @@ static std::vector<Operation *> topoSort(Block &block) {
 // ---------------------------------------------------------------------------
 
 void WcetCppEmitter::emitCoreFunction(wcet::CoreOp coreOp) {
-  os << "  _inFSM _core(_inState &in) {\n";
+  switch (version) {
+  case Version::V1:
+    os << "\tstd::vector<outState> _core(_inState &in) {\n";
+    break;
+  case Version::V2:
+    os << "\t_inFSM _core(_inState &in) {\n";
+  }
 
   // Get the backward cone of all speculation ctrl signals
 
   std::vector<Operation *> ops;
   // get the FSM's ctrl
-  spechls::PackOp fsmCtrls;
-  coreOp->walk(
-      [&](spechls::FSMOp fsm) { fsmCtrls = mlir::dyn_cast_or_null<spechls::PackOp>(fsm.getMispec().getDefiningOp()); });
-  if (fsmCtrls == nullptr)
-    return;
-
-  // For each ctrl signals add ops
-  for (auto ctrl : fsmCtrls.getInputs()) {
-    std::vector<mlir::Operation *> stack;
-    stack.push_back(ctrl.getDefiningOp());
-    while (!stack.empty()) {
-      mlir::Operation *cOp = stack.back();
-      stack.pop_back();
-      if (std::find(ops.begin(), ops.end(), cOp) != ops.end())
-        continue;
-      ops.insert(ops.begin(), cOp);
-      for (auto nOp : cOp->getOperands()) {
-        if (nOp.getDefiningOp() != nullptr)
-          stack.insert(stack.begin(), nOp.getDefiningOp());
-      }
-    }
-  }
+  // spechls::PackOp fsmCtrls;
+  // coreOp->walk(
+  //     [&](spechls::FSMOp fsm) { fsmCtrls = mlir::dyn_cast_or_null<spechls::PackOp>(fsm.getMispec().getDefiningOp());
+  //     });
+  // if (fsmCtrls == nullptr)
+  //   return;
+  //
+  // // For each ctrl signals add ops
+  // for (auto ctrl : fsmCtrls.getInputs()) {
+  //   std::vector<mlir::Operation *> stack;
+  //   stack.push_back(ctrl.getDefiningOp());
+  //   while (!stack.empty()) {
+  //     mlir::Operation *cOp = stack.back();
+  //     stack.pop_back();
+  //     if (std::find(ops.begin(), ops.end(), cOp) != ops.end())
+  //       continue;
+  //     ops.insert(ops.begin(), cOp);
+  //     for (auto nOp : cOp->getOperands()) {
+  //       if (nOp.getDefiningOp() != nullptr)
+  //         stack.insert(stack.begin(), nOp.getDefiningOp());
+  //     }
+  //   }
+  // }
 
   // Build logics to compute speculation's ctrl
-  // std::vector<Operation *> ops = topoSort(coreOp.getBody().front());
+  ops = topoSort(coreOp.getBody().front());
   for (Operation *op : ops) {
     if (failed(emitOp(op)))
       op->emitWarning("wcet-cpp-export: unhandled op ") << op->getName();
   }
   // Build baseOut from the wcet.commit operands (positionally mapped to outArgs)
-  // os << "\n    // Build base output state from wcet.commit\n";
-  // os << "    _outState baseOut;\n";
-  // for (unsigned i = 0; i < outArgs.size() && i < commitOperands.size(); ++i)
-  //   os << "    baseOut." << outArgs[i].name << " = " << nameOf(commitOperands[i]) << ";\n";
-
+  if (version == Version::V1) {
+    os << "\n    // Build base output state from wcet.commit\n";
+    os << "    _outState baseOut;\n";
+    for (unsigned i = 0; i < outArgs.size() && i < commitOperands.size(); ++i)
+      os << "    baseOut." << outArgs[i].name << " = " << nameOf(commitOperands[i]) << ";\n";
+  }
   // Build _inFSM from the spechls.pack operands
   os << "\n    // Build FSM input from spechls.pack\n";
   os << "    _inFSM fsmIn;\n";
   for (unsigned i = 0; i < fsmInfo.packFieldNames.size() && i < fsmInfo.packOperandValues.size(); ++i)
     os << "    fsmIn." << fsmInfo.packFieldNames[i] << " = " << nameOf(fsmInfo.packOperandValues[i]) << ";\n";
 
-  // Call _fsm and return its result
-  os << "\n    return fsmIn;\n";
+  switch (version) {
+  case Version::V1:
+    os << "\n\t\treturn _fsm(baseOut, fsmIn);\n";
+    break;
+  case Version::V2:
+    os << "\n\t\treturn fsmIn;\n";
+  }
 
-  os << "  }\n\n";
+  os << "\t}\n\n";
 }
 
 void WcetCppEmitter::emitCoreNextFunction(wcet::CoreOp coreOp) {
@@ -756,7 +784,7 @@ LogicalResult WcetCppEmitter::emitHwBitcast(hw::BitcastOp op) {
     auto i = dyn_cast<IntegerType>(t);
     return i && i.getWidth() == 1;
   };
-  auto isBool = [](Type t) { return isa<IntegerType>(t) && cast<IntegerType>(t).getWidth() == 1; };
+  // auto isBool = [](Type t) { return isa<IntegerType>(t) && cast<IntegerType>(t).getWidth() == 1; };
   // For our purposes i1 and bool map to the same abstract_bool in C++,
   // but we distinguish signed vs unsigned for wider types.
   auto isSigned = [](Type t) {
@@ -863,7 +891,7 @@ LogicalResult WcetCppEmitter::emitCombExtract(comb::ExtractOp op) {
   auto srcType = cast<IntegerType>(op.getInput().getType());
   auto resType = cast<IntegerType>(op.getType());
   std::string srcCtype = mlirTypeToCpp(srcType);
-  unsigned srcWidth = srcType.getWidth();
+  // unsigned srcWidth = srcType.getWidth();
   unsigned low = op.getLowBit();
   unsigned width = resType.getWidth();
   uint64_t mask = (width == 64) ? ~0ULL : ((1ULL << width) - 1);
@@ -1357,12 +1385,18 @@ void WcetCppEmitter::emitClassFooter(StringRef className) {
 // fsm() function
 // ---------------------------------------------------------------------------
 void WcetCppEmitter::emitFsmFunction() {
-  os << "  std::vector<outState> _fsm(_inState inState, _inFSM in) {\n";
+  switch (version) {
+  case Version::V2:
+    os << "\tstd::vector<outState> _fsm(_inState inState, _inFSM in) {\n";
+    break;
+  case Version::V1:
+    os << "\tstd::vector<outState> _fsm(_outState baseOut, _inFSM in) {\n";
+  }
 
   // --- Penalty tables ---
   for (unsigned g = 0; g < fsmInfo.gammaNames.size(); ++g) {
     auto &pens = fsmInfo.penTables[g];
-    os << "    unsigned int pen_" << fsmInfo.gammaNames[g] << "[" << pens.size() << "] = {";
+    os << "\t\tunsigned int pen_" << fsmInfo.gammaNames[g] << "[" << pens.size() << "] = {";
     for (unsigned i = 0; i < pens.size(); ++i) {
       if (i)
         os << ", ";
@@ -1376,56 +1410,74 @@ void WcetCppEmitter::emitFsmFunction() {
   for (unsigned g = 0; g < fsmInfo.gammaNames.size(); ++g) {
     auto &gname = fsmInfo.gammaNames[g];
     unsigned n = fsmInfo.penTables[g].size();
-    os << "    std::map<unsigned int, unsigned int> pens_" << gname << ";\n";
-    os << "    if (!in." << gname << ".unknown) {\n";
-    os << "      pens_" << gname << "[in." << gname << ".value] = pen_" << gname << "[in." << gname << ".value];\n";
-    os << "    } else {\n";
-    os << "      for (unsigned int i = 0; i < " << n << "; i++)\n";
-    os << "        pens_" << gname << "[i] = pen_" << gname << "[i];\n";
-    os << "    }\n\n";
+    switch (version) {
+    case Version::V2:
+      os << "\t\tstd::map<unsigned int, unsigned int> pens_" << gname << ";\n";
+      os << "\t\tif (!in." << gname << ".unknown) {\n";
+      os << "\t\t  pens_" << gname << "[in." << gname << ".value] = pen_" << gname << "[in." << gname << ".value];\n";
+      os << "\t\t} else {\n";
+      os << "\t\t  for (unsigned int i = 0; i < " << n << "; i++)\n";
+      os << "\t\t    pens_" << gname << "[i] = pen_" << gname << "[i];\n";
+      os << "\t\t}\n\n";
+      break;
+    case Version::V1:
+      os << "\t\tstd::vector<unsigned int> pens_" << gname << ";\n";
+      os << "\t\tif (!in." << gname << ".unknown) {\n";
+      os << "\t\t  pens_" << gname << ".push_back(pen_" << gname << "[in." << gname << ".value]);\n";
+      os << "\t\t} else {\n";
+      os << "\t\t  for (unsigned int i = 0; i < " << n << "; i++)\n";
+      os << "\t\t    pens_" << gname << ".push_back(pen_" << gname << "[i]);\n";
+      os << "\t\t}\n\n";
+    }
   }
 
-  // --- Cartesian product → unique penalty set ---
-  // for (unsigned g = 0; g < fsmInfo.gammaNames.size(); ++g)
-  //   os << "    for (unsigned int p" << g << " : pens_" << fsmInfo.gammaNames[g] << ") {\n";
-  // os << "      pens.insert(";
-  // for (unsigned g = 0; g < fsmInfo.gammaNames.size(); ++g) {
-  //   if (g)
-  //     os << " + ";
-  //   os << "p" << g;
-  // }
-  // os << ");\n";
-  // for (unsigned g = 0; g < fsmInfo.gammaNames.size(); ++g)
-  //   os << "    }\n";
-  // os << "\n";
-
-  // --- Build one _outState per unique penalty ---
-  os << "    std::vector<outState> res;\n";
-  // "    for (unsigned int p : pens) {\n"
-  // "      _outState *out = new _outState();\n";
-
-  for (unsigned g = 0; g < fsmInfo.gammaNames.size(); g++) {
-    os << "   for(std::pair<unsigned int, unsigned int> " << fsmInfo.gammaNames[g].substr(0, 3) << " : pens_"
-       << fsmInfo.gammaNames[g] << ") {\n";
+  // --- Cartesian product -> unique penalty set ---
+  if (Version::V1 == version) {
+    os << "\t\tstd::unordered_set<unsigned int> pens;\n";
+    for (unsigned g = 0; g < fsmInfo.gammaNames.size(); ++g)
+      os << "\t\tfor (unsigned int p" << g << " : pens_" << fsmInfo.gammaNames[g] << ") {\n";
+    os << "\t\t\tpens.insert(";
+    for (unsigned g = 0; g < fsmInfo.gammaNames.size(); ++g) {
+      if (g)
+        os << " + ";
+      os << "p" << g;
+    }
+    os << ");\n";
+    for (unsigned g = 0; g < fsmInfo.gammaNames.size(); ++g)
+      os << "\t\t}\n";
+    os << "\n";
   }
-
-  os << "unsigned int p = " << fsmInfo.gammaNames[0].substr(0, 3) << ".second";
-  for (unsigned g = 1; g < fsmInfo.gammaNames.size(); g++) {
-    os << " + " << fsmInfo.gammaNames[g].substr(0, 3) << ".second";
-  }
-  os << ";\n";
-
-  os << "_outState baseOut = _core_next(inState";
-  for (unsigned g = 0; g < fsmInfo.gammaNames.size(); g++) {
-    os << ", " << fsmInfo.gammaNames[g].substr(0, 3) << ".first";
-  }
-  os << ");\n";
-  os << "      _outState *out = new _outState();\n";
 
   std::vector<const ArgInfo *> sortedDelayIns;
   for (auto &a : inArgs)
     if (a.isDelay)
       sortedDelayIns.push_back(&a);
+
+  // --- Build one _outState per unique penalty ---
+  os << "    std::vector<outState> res;\n";
+  switch (version) {
+  case Version::V1:
+    os << "\t\tfor (unsigned int p : pens) {\n";
+    break;
+  case Version::V2:
+    for (unsigned g = 0; g < fsmInfo.gammaNames.size(); g++) {
+      os << "   for(std::pair<unsigned int, unsigned int> " << fsmInfo.gammaNames[g].substr(0, 3) << " : pens_"
+         << fsmInfo.gammaNames[g] << ") {\n";
+    }
+
+    os << "unsigned int p = " << fsmInfo.gammaNames[0].substr(0, 3) << ".second";
+    for (unsigned g = 1; g < fsmInfo.gammaNames.size(); g++) {
+      os << " + " << fsmInfo.gammaNames[g].substr(0, 3) << ".second";
+    }
+    os << ";\n";
+    os << "_outState baseOut = _core_next(inState";
+    for (unsigned g = 0; g < fsmInfo.gammaNames.size(); g++) {
+      os << ", " << fsmInfo.gammaNames[g].substr(0, 3) << ".first";
+    }
+    os << ");\n";
+  }
+
+  os << "\t\t\t_outState *out = new _outState();\n";
 
   unsigned delayOutIdx = 0;
   for (auto &out : outArgs) {
@@ -1482,18 +1534,18 @@ void WcetCppEmitter::emitFsmFunction() {
   os << "out->pen = p;\n"
      << "res.push_back(out);\n";
 
-  for (unsigned g = 0; g < fsmInfo.gammaNames.size(); g++) {
-    os << "}\n";
+  switch (version) {
+  case Version::V1:
+    os << "\t\t}\n\n";
+    break;
+  case Version::V2:
+    for (unsigned g = 0; g < fsmInfo.gammaNames.size(); g++) {
+      os << "}\n";
+    }
   }
 
-  // Build a sorted list of input delay args by delayPos
-  // They are already in delayPos order since we assigned delayPos sequentially
-
-  // Identify output delay fields (by name pattern "delay*")
-  // and pair them with their corresponding input delay (same positional index)
-
-  os << "    return res;\n"
-        "  }\n\n";
+  os << "\t\treturn res;\n"
+        "\t}\n\n";
 }
 
 } // namespace
@@ -1504,15 +1556,19 @@ void WcetCppEmitter::emitFsmFunction() {
 
 namespace spechls {
 
-LogicalResult exportWcetCpp(ModuleOp module, raw_ostream &os) {
-  WcetCppEmitter emitter(os);
+mlir::LogicalResult exportWcetCpp(mlir::ModuleOp module, llvm::raw_ostream &os, WcetTranslateOptions options) {
+
+  WcetCppEmitter emitter(os, std::move(options));
   return emitter.translate(module);
 }
 
 void registerExportWcetCpp() {
+  static llvm::cl::opt<int> selectVersion("translate-version",
+                                          llvm::cl::desc("Select the export version (default V2)."), llvm::cl::init(2));
   mlir::TranslateFromMLIRRegistration reg(
       "export-wcet-cpp", "Translate wcet.core to a C++ CoreAnalysis implementation",
-      [](ModuleOp module, raw_ostream &os) { return exportWcetCpp(module, os); },
+      [](ModuleOp module, raw_ostream &os) { return exportWcetCpp(module, os, {selectVersion}); },
+
       [](mlir::DialectRegistry &registry) {
         // Register all dialects we consume
         registry.insert<hw::HWDialect, comb::CombDialect, spechls::SpecHLSDialect, wcet::WcetDialect>();
