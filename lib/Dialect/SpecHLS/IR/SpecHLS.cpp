@@ -7,6 +7,7 @@
 
 #include "Dialect/SpecHLS/IR/SpecHLSOps.h"
 
+#include "circt/Dialect/HW/HWOps.h"
 #include "circt/Support/LLVM.h"
 #include "mlir/IR/BuiltinTypeInterfaces.h"
 #include "mlir/IR/OpDefinition.h"
@@ -268,7 +269,9 @@ ParseResult spechls::OptimizedFuncOp::parse(OpAsmParser &parser, OperationState 
   if (parser.parseLParen())
     return failure();
 
-  while (failed(parser.parseOptionalRParen())) {
+  bool finished = succeeded(parser.parseOptionalRParen());
+
+  while (!finished) {
     OpAsmParser::UnresolvedOperand operand;
     Type type;
     if (parser.parseOperand(operand) || parser.parseColonType(type))
@@ -276,6 +279,13 @@ ParseResult spechls::OptimizedFuncOp::parse(OpAsmParser &parser, OperationState 
     operandsType.push_back(type);
     if (parser.resolveOperand(operand, type, result.operands))
       return failure();
+
+    if (succeeded(parser.parseOptionalRParen())) {
+      finished = true;
+    } else {
+      if (parser.parseComma())
+        return failure();
+    }
   }
   if (parser.parseColonType(returnType))
     return failure();
