@@ -155,4 +155,15 @@ def InlineOptimizedFuncOptBodyPass : Pass<"inline-optimized-func-opt-body", "spe
   let dependentDialects = ["::spechls::SpecHLSDialect", "::circt::hw::HWDialect", "::circt::comb::CombDialect"];
 }
 
+def InlineRecursiveOptFuncPass: Pass<"inline-recursive-opt-func", "spechls::OptimizedFuncOp"> {
+  let summary = "Inline recursive optimizedFunc ops in the optBody of a optimziedFunct.";
+  let dependentDialects = ["::spechls::SpecHLSDialect", "::circt::hw::HWDialect", "::circt::comb::CombDialect"];
+}
+
+
+def OptFunToTaskPass: Pass<"opt-func-to-task", "spechls::KernelOp"> {
+  let summary = "Transform optimizedfuncOps into TaskOps.";
+  let dependentDialects = ["::spechls::SpecHLSDialect", "::circt::hw::HWDialect", "::circt::comb::CombDialect"];
+}
+
 #endif // SPECHLS_INCLUDED_DIALECT_SPECHLS_TRANSFORMS_PASSES_TD

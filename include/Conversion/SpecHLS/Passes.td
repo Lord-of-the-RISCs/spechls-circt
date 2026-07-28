@@ -27,5 +27,14 @@ def SpecHLSTaskToHWPass : Pass<"spechls-task-to-hw", "spechls::KernelOp"> {
   ];
   let options = [Option<"targetTask", "targetTask", "std::string", "", "Name of task to inline">];
 }
+def SpecHLSOptFunToHWPass : Pass<"spechls-opt-fun-to-hw", "spechls::KernelOp"> {
+  let summary = "Convert SpecHLS optFun to HW and Comb dialect ops";
+  let dependentDialects = [
+    "::spechls::SpecHLSDialect",
+    "::circt::comb::CombDialect",
+    "::circt::hw::HWDialect",
+  ];
+}
+
 
 #endif // SPECHLS_CONVERSION_PASSES_TD
