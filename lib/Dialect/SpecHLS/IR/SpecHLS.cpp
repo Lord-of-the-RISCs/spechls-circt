@@ -848,6 +848,79 @@ void spechls::TaskOp::getCanonicalizationPatterns(RewritePatternSet &patterns, M
   patterns.add<RemoveDuplicateTaskInputsPattern>(context);
 }
 
+llvm::LogicalResult spechls::OptimizedFuncOp::canonicalize(OptimizedFuncOp op, ::mlir::PatternRewriter &rewriter) {
+  // If optimized body is empty: delete the function, it do not do anything.
+  if (op.getOptBodyBlock()->getOperations().size() == 1) {
+    auto yield = llvm::cast<spechls::YieldOp>(op.getOptBodyBlock()->getOperations().front());
+    auto value = yield.getValue();
+    for (auto [operand, arg] : llvm::zip(op.getArgs(), op.getOptBodyBlock()->getArguments())) {
+      if (arg == value) {
+        op.getResult().replaceAllUsesWith(operand);
+        rewriter.eraseOp(op);
+        return llvm::success();
+      }
+    }
+  }
+
+  // If optimized body does not use some operands, they can be removed.
+  llvm::SmallVector<bool> used;
+  bool allUsed = true;
+  used.reserve(op.getArgs().size());
+  for (auto &arg : op.getOptBodyBlock()->getArguments()) {
+    if (arg.getNumUses() == 0) {
+      allUsed = false;
+      used.push_back(false);
+    } else {
+      used.push_back(true);
+    }
+  }
+  if (!allUsed) {
+    auto ip = rewriter.saveInsertionPoint();
+    rewriter.setInsertionPointToStart(op.getBodyBlock());
+    llvm::SmallVector<mlir::Value> newOperands;
+    for (auto [used, operand, arg] : llvm::zip(used, op.getArgs(), op.getBodyBlock()->getArguments())) {
+      if (used) {
+        newOperands.push_back(operand);
+      } else {
+        auto cst = circt::hw::ConstantOp::create(rewriter, rewriter.getUnknownLoc(), arg.getType(), 0);
+        arg.replaceAllUsesWith(cst.getResult());
+      }
+    }
+    rewriter.setInsertionPointAfter(op);
+    auto newOp =
+        spechls::OptimizedFuncOp::create(rewriter, rewriter.getUnknownLoc(), op.getResult().getType(), newOperands);
+
+    size_t j = 0;
+    for (size_t i = 0; i < op.getArgs().size(); ++i) {
+      if (used[i]) {
+        op.getBodyBlock()->getArgument(i).replaceAllUsesWith(newOp.getBodyBlock()->getArgument(j));
+        op.getOptBodyBlock()->getArgument(i).replaceAllUsesWith(newOp.getOptBodyBlock()->getArgument(j++));
+      }
+    }
+    rewriter.setInsertionPointToStart(newOp.getBodyBlock());
+    llvm::SmallVector<mlir::Operation *> opsToMove;
+    for (auto &operation : op.getBodyBlock()->getOperations()) {
+      opsToMove.push_back(&operation);
+    }
+    for (auto *operation : opsToMove) {
+      rewriter.moveOpBefore(operation, newOp.getBodyBlock(), newOp.getBodyBlock()->end());
+    }
+    rewriter.setInsertionPointToStart(newOp.getOptBodyBlock());
+    opsToMove.clear();
+    for (auto &operation : op.getOptBodyBlock()->getOperations()) {
+      opsToMove.push_back(&operation);
+    }
+    for (auto *operation : opsToMove) {
+      rewriter.moveOpBefore(operation, newOp.getOptBodyBlock(), newOp.getOptBodyBlock()->end());
+    }
+    rewriter.replaceOp(op, newOp);
+    rewriter.restoreInsertionPoint(ip);
+    return llvm::success();
+  }
+
+  return llvm::failure();
+}
+
 //===--------------------------------------------------------------------------------------------------------------===//
 // TableGen'd types and op method definitions
 //===--------------------------------------------------------------------------------------------------------------===//
