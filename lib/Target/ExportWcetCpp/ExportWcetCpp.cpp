@@ -17,14 +17,17 @@
 
 #include "circt/Support/LLVM.h"
 #include "mlir/IR/BuiltinOps.h"
+#include "mlir/IR/Operation.h"
 #include "mlir/IR/Value.h"
 // #include "mlir/Support/LLVM.h"
+#include "mlir/Support/LLVM.h"
 #include "mlir/Support/LogicalResult.h"
 #include "mlir/Tools/mlir-translate/Translation.h"
 #include "llvm/ADT/ScopedHashTable.h"
 #include "llvm/ADT/TypeSwitch.h"
 #include "llvm/Support/raw_ostream.h"
 
+#include <cstddef>
 #include <map>
 #include <set>
 #include <string>
@@ -313,6 +316,7 @@ LogicalResult WcetCppEmitter::translateWcetCore(wcet::CoreOp coreOp) {
   emitInFsmStruct();
   emitFsmFunction();
   emitCoreFunction(coreOp);
+  emitCoreNextFunction(coreOp);
   emitSetupAnalysis();
   emitSetupNextState(commitOp);
   emitIsEqual();
@@ -334,14 +338,15 @@ void WcetCppEmitter::emitFileHeader(StringRef className) {
   os << "#include \"compilewcet.h\"\n";
   os << "#include \"abstract_ap_int.h\"\n";
   os << "#include \"spechls_support.h\"\n";
+  os << "#include <map>\n";
   os << "#include <ostream>\n";
   os << "#include <unordered_set>\n";
   os << "#include <vector>\n\n";
   os << "class " << className << " : public CoreAnalysis {\n";
   os << "public:\n\n";
   os << "  std::vector<outState> coreAnalysis(const inState &in) override {\n";
-  os << "    std::vector<outState> outs = _core(*((_inState *)in));\n";
-  os << "    return outs;\n";
+  os << "    _inFSM fsmIn = _core(*((_inState *)in));\n";
+  os << "    return _fsm(*((_inState *)in), fsmIn);\n";
   os << "  }\n\n";
   os << "  unsigned int getPen(const outState &out) override {\n";
   os << "    return ((_outState *)out)->pen;\n";
@@ -592,18 +597,46 @@ static std::vector<Operation *> topoSort(Block &block) {
 // ---------------------------------------------------------------------------
 
 void WcetCppEmitter::emitCoreFunction(wcet::CoreOp coreOp) {
-  os << "  std::vector<outState> _core(_inState &in) {\n";
+  os << "  _inFSM _core(_inState &in) {\n";
 
-  std::vector<Operation *> ops = topoSort(coreOp.getBody().front());
+  // Get the backward cone of all speculation ctrl signals
+
+  std::vector<Operation *> ops;
+  // get the FSM's ctrl
+  spechls::PackOp fsmCtrls;
+  coreOp->walk(
+      [&](spechls::FSMOp fsm) { fsmCtrls = mlir::dyn_cast_or_null<spechls::PackOp>(fsm.getMispec().getDefiningOp()); });
+  if (fsmCtrls == nullptr)
+    return;
+
+  // For each ctrl signals add ops
+  for (auto ctrl : fsmCtrls.getInputs()) {
+    std::vector<mlir::Operation *> stack;
+    stack.push_back(ctrl.getDefiningOp());
+    while (!stack.empty()) {
+      mlir::Operation *cOp = stack.back();
+      stack.pop_back();
+      if (std::find(ops.begin(), ops.end(), cOp) != ops.end())
+        continue;
+      ops.insert(ops.begin(), cOp);
+      for (auto nOp : cOp->getOperands()) {
+        if (nOp.getDefiningOp() != nullptr)
+          stack.insert(stack.begin(), nOp.getDefiningOp());
+      }
+    }
+  }
+
+  // Build logics to compute speculation's ctrl
+  // std::vector<Operation *> ops = topoSort(coreOp.getBody().front());
   for (Operation *op : ops) {
     if (failed(emitOp(op)))
       op->emitWarning("wcet-cpp-export: unhandled op ") << op->getName();
   }
   // Build baseOut from the wcet.commit operands (positionally mapped to outArgs)
-  os << "\n    // Build base output state from wcet.commit\n";
-  os << "    _outState baseOut;\n";
-  for (unsigned i = 0; i < outArgs.size() && i < commitOperands.size(); ++i)
-    os << "    baseOut." << outArgs[i].name << " = " << nameOf(commitOperands[i]) << ";\n";
+  // os << "\n    // Build base output state from wcet.commit\n";
+  // os << "    _outState baseOut;\n";
+  // for (unsigned i = 0; i < outArgs.size() && i < commitOperands.size(); ++i)
+  //   os << "    baseOut." << outArgs[i].name << " = " << nameOf(commitOperands[i]) << ";\n";
 
   // Build _inFSM from the spechls.pack operands
   os << "\n    // Build FSM input from spechls.pack\n";
@@ -612,9 +645,48 @@ void WcetCppEmitter::emitCoreFunction(wcet::CoreOp coreOp) {
     os << "    fsmIn." << fsmInfo.packFieldNames[i] << " = " << nameOf(fsmInfo.packOperandValues[i]) << ";\n";
 
   // Call _fsm and return its result
-  os << "\n    return _fsm(baseOut, fsmIn);\n";
+  os << "\n    return fsmIn;\n";
 
   os << "  }\n\n";
+}
+
+void WcetCppEmitter::emitCoreNextFunction(wcet::CoreOp coreOp) {
+  // Get ctrl signals
+  spechls::PackOp ctrls = nullptr;
+  coreOp->walk(
+      [&](spechls::FSMOp fsm) { ctrls = mlir::dyn_cast_or_null<spechls::PackOp>(fsm.getMispec().getDefiningOp()); });
+
+  if (ctrls == nullptr) {
+    llvm::errs() << "ERROR: Couldn't find packOp\n";
+    return;
+  }
+
+  os << "\t_outState _core_next(_inState &in";
+  std::map<mlir::Operation *, std::string> ctrlOps;
+  for (unsigned i = 0; i < ctrls->getNumOperands(); i++) {
+    mlir::Operation *op = ctrls->getOperand(i).getDefiningOp();
+    os << ", " << mlirTypeToCpp(op->getResultTypes().front()) << " " << valueNames[ctrls.getOperand(i)];
+    ctrlOps[op] = valueNames[ctrls.getOperand(i)];
+  }
+
+  os << ") {\n";
+
+  // Print function Body
+  std::vector<Operation *> ops = topoSort(coreOp.getBody().front());
+  for (Operation *op : ops) {
+    if (ctrlOps.find(op) != ctrlOps.end()) {
+      continue;
+    }
+    if (failed(emitOp(op)))
+      op->emitWarning("wcet-cpp-export: unhandled op ") << op->getName();
+  }
+
+  // Print function footer
+  os << "\t\t_outState baseOut;\n";
+  for (unsigned i = 0; i < outArgs.size() && i < commitOperands.size(); ++i)
+    os << "\t\tbaseOut." << outArgs[i].name << " = " << nameOf(commitOperands[i]) << ";\n";
+  os << "\t\treturn baseOut;\n";
+  os << "\t}\n";
 }
 
 // ---------------------------------------------------------------------------
@@ -1285,7 +1357,7 @@ void WcetCppEmitter::emitClassFooter(StringRef className) {
 // fsm() function
 // ---------------------------------------------------------------------------
 void WcetCppEmitter::emitFsmFunction() {
-  os << "  std::vector<outState> _fsm(_outState baseOut, _inFSM in) {\n";
+  os << "  std::vector<outState> _fsm(_inState inState, _inFSM in) {\n";
 
   // --- Penalty tables ---
   for (unsigned g = 0; g < fsmInfo.gammaNames.size(); ++g) {
@@ -1333,28 +1405,28 @@ void WcetCppEmitter::emitFsmFunction() {
   // "      _outState *out = new _outState();\n";
 
   for (unsigned g = 0; g < fsmInfo.gammaNames.size(); g++) {
-    os << "   for(std::pair<unsigned int, unsigned int> " << fsmInfo.gammaNames[g].substr(0, 3) << " : "
-       << fsmInfo.gammaNames[g] << "{\n";
+    os << "   for(std::pair<unsigned int, unsigned int> " << fsmInfo.gammaNames[g].substr(0, 3) << " : pens_"
+       << fsmInfo.gammaNames[g] << ") {\n";
   }
 
-  os << "unsigned int p = " << fsmInfo.gammaNames[0].substr(0, 3);
+  os << "unsigned int p = " << fsmInfo.gammaNames[0].substr(0, 3) << ".second";
   for (unsigned g = 1; g < fsmInfo.gammaNames.size(); g++) {
     os << " + " << fsmInfo.gammaNames[g].substr(0, 3) << ".second";
   }
   os << ";\n";
-  for (unsigned g = 0; g < fsmInfo.gammaNames.size(); g++) {
-    os << "}\n";
-  }
 
-  // Build a sorted list of input delay args by delayPos
+  os << "_outState baseOut = _core_next(inState";
+  for (unsigned g = 0; g < fsmInfo.gammaNames.size(); g++) {
+    os << ", " << fsmInfo.gammaNames[g].substr(0, 3) << ".first";
+  }
+  os << ");\n";
+  os << "      _outState *out = new _outState();\n";
+
   std::vector<const ArgInfo *> sortedDelayIns;
   for (auto &a : inArgs)
     if (a.isDelay)
       sortedDelayIns.push_back(&a);
-  // They are already in delayPos order since we assigned delayPos sequentially
 
-  // Identify output delay fields (by name pattern "delay*")
-  // and pair them with their corresponding input delay (same positional index)
   unsigned delayOutIdx = 0;
   for (auto &out : outArgs) {
     bool isDelayOut = (out.name.rfind("delay", 0) == 0);
@@ -1407,10 +1479,20 @@ void WcetCppEmitter::emitFsmFunction() {
     ++delayOutIdx;
   }
 
-  os << "      out->pen = p;\n"
-        "      res.push_back(out);\n"
-        "    }\n"
-        "    return res;\n"
+  os << "out->pen = p;\n"
+     << "res.push_back(out);\n";
+
+  for (unsigned g = 0; g < fsmInfo.gammaNames.size(); g++) {
+    os << "}\n";
+  }
+
+  // Build a sorted list of input delay args by delayPos
+  // They are already in delayPos order since we assigned delayPos sequentially
+
+  // Identify output delay fields (by name pattern "delay*")
+  // and pair them with their corresponding input delay (same positional index)
+
+  os << "    return res;\n"
         "  }\n\n";
 }
 
