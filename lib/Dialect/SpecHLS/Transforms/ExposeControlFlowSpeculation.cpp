@@ -817,12 +817,12 @@ struct ExposeControlFlowSpeculationPass
         // Big Scotch :(
         mlir::Value lastValue = gamma.getOperand(gamma->getNumOperands() - 1);
         // // recompute input latencies
-        // llvm::SmallVector<unsigned> latencies;
-        // unsigned current = gamma->getNumOperands() - 1;
-        // for (unsigned i = 1; i < gamma.getNumOperands(); ++i) {
-        //   latencies.push_back(current--);
-        // }
-        // inputLatencies[gamma] = latencies;
+        llvm::SmallVector<unsigned> latencies;
+        unsigned current = gamma->getNumOperands() - 1;
+        for (unsigned i = 1; i < gamma.getNumOperands(); ++i) {
+          latencies.push_back(current--);
+        }
+        inputLatencies[gamma] = latencies;
         // rewire inputs
         for (unsigned idx = 1; idx < gamma.getNumOperands() - 1; ++idx) {
           gamma.setOperand(idx, lastValue);
@@ -916,8 +916,8 @@ struct ExposeControlFlowSpeculationPass
         namesId.try_emplace(name, 0);
         name = name + "0";
       } else {
-        int id = namesId[name];
-        namesId.try_emplace(name, id + 1);
+        int id = namesId[name] + 1;
+        namesId.try_emplace(name, id);
         name = name + std::to_string(id);
       }
       gammaNameMap.try_emplace(g, name);
