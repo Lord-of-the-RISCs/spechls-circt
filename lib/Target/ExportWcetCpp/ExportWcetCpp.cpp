@@ -409,17 +409,23 @@ void WcetCppEmitter::emitInFsmStruct() {
 
 void WcetCppEmitter::emitSetupAnalysis() {
   os << "public:\n"
-        "  inState setupAnalysis(unsigned int instr) override {\n"
+        "  inState setupAnalysis(unsigned int instr, unsigned int initPc) override {\n"
         "    _inState *res = new _inState{\n";
   bool first = true;
+  bool skipNext = false;
   for (auto &a : inArgs) {
+    if (skipNext) {
+      skipNext = false;
+      continue;
+    }
     if (!first)
       os << ",\n";
     first = false;
     os << "      ";
-    if (a.isInstr)
-      os << "instr";
-    else if (a.mlirType.isInteger(1))
+    if (a.isInstr) {
+      os << "instr,\ninitPc";
+      skipNext = true;
+    } else if (a.mlirType.isInteger(1))
       os << "abstract_bool(true)";
     else
       os << mlirTypeReset(a.mlirType); // delays/arch fields start unknown
