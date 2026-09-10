@@ -9,6 +9,11 @@
 #include "Dialect/SpecHLS/IR/SpecHLS.h"
 #include "Dialect/SpecHLS/IR/SpecHLSOps.h"
 #include "Dialect/SpecHLS/IR/SpecHLSTypes.h"
+#include "Dialect/SpecHLS/Transforms/Outlining.h"
+#include "mlir/IR/Diagnostics.h"
+#include "mlir/IR/PatternMatch.h"
+#include "mlir/Pass/PassManager.h"
+#include "mlir/Support/WalkResult.h"
 
 #include <circt/Dialect/Comb/CombDialect.h>
 #include <circt/Dialect/Comb/CombOps.h>
@@ -29,6 +34,7 @@
 namespace spechls {
 #define GEN_PASS_DEF_SPECHLSTOHWPASS
 #define GEN_PASS_DEF_SPECHLSTASKTOHWPASS
+#define GEN_PASS_DEF_SPECHLSOPTFUNTOHWPASS
 #include "Conversion/SpecHLS/Passes.h.inc"
 }; // namespace spechls
 
@@ -156,6 +162,19 @@ struct SyncConvesion : OpConversionPattern<spechls::SyncOp> {
   }
 };
 
+struct OptimizedFuncConversion : OpConversionPattern<spechls::OptimizedFuncOp> {
+  using OpConversionPattern<spechls::OptimizedFuncOp>::OpConversionPattern;
+
+  LogicalResult matchAndRewrite(spechls::OptimizedFuncOp func, OpAdaptor adaptor,
+                                ConversionPatternRewriter &rewriter) const override {
+    if (failed(func.inlineOptBody(rewriter))) {
+      llvm::errs() << "Failure?\n";
+      return failure();
+    }
+    return success();
+  }
+};
+
 struct LutConversion : OpConversionPattern<spechls::LUTOp> {
   using OpConversionPattern<spechls::LUTOp>::OpConversionPattern;
 
@@ -211,6 +230,7 @@ struct ConvertSpecHLSToHWPass : public spechls::impl::SpecHLSToHWPassBase<Conver
     patternList1.add<TaskConversion>(ctx);
     patternList1.add<GammaConversion>(ctx);
     patternList1.add<LutConversion>(ctx);
+    patternList1.add<OptimizedFuncConversion>(ctx);
     patterns1 = std::move(patternList1);
     RewritePatternSet patternList2{ctx};
     patternList2.add<KernelConversion>(ctx);
@@ -218,6 +238,7 @@ struct ConvertSpecHLSToHWPass : public spechls::impl::SpecHLSToHWPassBase<Conver
     patternList2.add<GammaConversion>(ctx);
     patternList2.add<LutConversion>(ctx);
     patternList2.add<FieldConversion>(ctx);
+    patternList2.add<OptimizedFuncConversion>(ctx);
     patterns2 = std::move(patternList2);
     return success();
   }
@@ -257,6 +278,7 @@ struct ConvertSpecHLSTaskToHWPass : public spechls::impl::SpecHLSTaskToHWPassBas
     patternList.add<GammaConversion>(ctx);
     patternList.add<LutConversion>(ctx);
     patternList.add<SyncConvesion>(ctx);
+    patternList.add<OptimizedFuncConversion>(ctx);
     patterns = std::move(patternList);
     return success();
   }
@@ -265,12 +287,18 @@ struct ConvertSpecHLSTaskToHWPass : public spechls::impl::SpecHLSTaskToHWPassBas
     ConversionTarget target(getContext());
     auto op = getOperation();
     auto taskSym = targetTask.getValue();
-    spechls::TaskOp task;
+    spechls::TaskOp task = nullptr;
     op.walk([&](spechls::TaskOp t) {
       if (t.getSymName() == taskSym) {
         task = t;
       }
     });
+    if (task == nullptr) {
+      op->dump();
+      llvm::errs() << "task not found: " << taskSym << "\n";
+      exit(1);
+      return signalPassFailure();
+    }
     target.addLegalDialect<circt::hw::HWDialect>();
     target.addLegalDialect<circt::comb::CombDialect>();
     target.addIllegalDialect<spechls::SpecHLSDialect>();
@@ -278,6 +306,44 @@ struct ConvertSpecHLSTaskToHWPass : public spechls::impl::SpecHLSTaskToHWPassBas
 
     if (failed(mlir::applyFullConversion(task, target, patterns)))
       return signalPassFailure();
+  }
+};
+
+struct ConvertSpecHLSOptFunToHWPass : public spechls::impl::SpecHLSOptFunToHWPassBase<ConvertSpecHLSOptFunToHWPass> {
+
+  using SpecHLSOptFunToHWPassBase<ConvertSpecHLSOptFunToHWPass>::SpecHLSOptFunToHWPassBase;
+
+  void runOnOperation() override {
+    ConversionTarget target(getContext());
+    auto op = getOperation();
+    unsigned idx = 0;
+    op.walk([&](spechls::OptimizedFuncOp fun) {
+      mlir::SmallPtrSet<mlir::Operation *, 4> ops;
+      for (auto &op : *fun.getOptBodyBlock()) {
+        if (!llvm::isa<spechls::YieldOp>(op)) {
+          ops.insert(&op);
+        }
+      }
+
+      std::string taskName = "task_" + std::to_string(idx++);
+
+      mlir::IRRewriter rewriter(&getContext());
+      rewriter.setInsertionPointToStart(fun.getOptBodyBlock());
+      spechls::outlineTask(rewriter, rewriter.getUnknownLoc(), taskName, ops);
+      auto pm = mlir::PassManager::on<spechls::KernelOp>(&getContext());
+
+      auto taskToHWPass = spechls::createSpecHLSTaskToHWPass();
+      if (failed(taskToHWPass->initializeOptions("targetTask=" + taskName, [](const Twine &msg) {
+            llvm::errs() << msg << '\n';
+            return failure();
+          })))
+        return signalPassFailure();
+      pm.addPass(std::move(taskToHWPass));
+
+      if (failed(pm.run(op))) {
+        return signalPassFailure();
+      }
+    });
   }
 };
 

@@ -24,6 +24,9 @@ TaskOp outlineControl(mlir::RewriterBase &rewriter, mlir::Location loc, std::str
 TaskOp outlineTask(mlir::RewriterBase &rewriter, mlir::Location loc, std::string name,
                    const mlir::SmallPtrSetImpl<mlir::Operation *> &ops);
 
+OptimizedFuncOp outlineOptFunc(mlir::RewriterBase &rewriter, mlir::Location loc, std::string name,
+                               llvm::DenseSet<mlir::Operation *> &ops, mlir::Value output);
+
 } // namespace spechls
 
 #endif // SPECHLS_INCLUDED_DIALECT_SPECHLS_TRANSFORMS_OUTLINING_H

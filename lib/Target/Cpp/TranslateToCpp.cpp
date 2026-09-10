@@ -8,21 +8,24 @@
 #include "Dialect/SpecHLS/IR/SpecHLSOps.h"
 #include "Dialect/SpecHLS/IR/SpecHLSTypes.h"
 #include "Dialect/SpecHLS/Transforms/TopologicalSort.h"
+#include "Support/TransitiveClosure.h"
 #include "Target/Cpp/Export.h"
-#include "circt/Dialect/HW/HWTypes.h"
-#include "mlir/Dialect/Arith/IR/Arith.h"
-#include "llvm/ADT/SmallSet.h"
+#include "mlir/Transforms/Passes.h"
 
 #include <circt/Dialect/Comb/CombOps.h>
 #include <circt/Dialect/HW/HWOps.h>
+#include <circt/Dialect/HW/HWTypes.h>
 #include <llvm/ADT/STLExtras.h>
 #include <llvm/ADT/ScopedHashTable.h>
+#include <llvm/ADT/SmallSet.h>
+#include <llvm/ADT/SmallVector.h>
 #include <llvm/ADT/Twine.h>
 #include <llvm/ADT/TypeSwitch.h>
 #include <llvm/Support/FormatVariadic.h>
 #include <llvm/Support/LogicalResult.h>
 #include <llvm/Support/raw_ostream.h>
 #include <mlir/Analysis/TopologicalSortUtils.h>
+#include <mlir/Dialect/Arith/IR/Arith.h>
 #include <mlir/IR/Attributes.h>
 #include <mlir/IR/Block.h>
 #include <mlir/IR/BuiltinOps.h>
@@ -31,8 +34,10 @@
 #include <mlir/IR/Location.h>
 #include <mlir/IR/Operation.h>
 #include <mlir/IR/Visitors.h>
+#include <mlir/Pass/PassManager.h>
 #include <mlir/Support/IndentedOstream.h>
 #include <mlir/Support/LLVM.h>
+#include <mlir/Support/WalkResult.h>
 
 #include <algorithm>
 #include <stack>
@@ -238,13 +243,13 @@ LogicalResult printAllVariables(CppEmitter &emitter, spechls::KernelOp &kernelOp
     } else if (auto rollbackOp = dyn_cast<spechls::RollbackOp>(op)) {
       if (failed(emitter.emitType(op->getLoc(), rollbackOp.getType())))
         return failure();
-        
+
       if (rollbackOp.getDepths().empty())
-        os << " " << getRollbackBufferName(emitter, rollbackOp) << "["
-            << 0;
+        os << " " << getRollbackBufferName(emitter, rollbackOp) << "[" << 0;
       else
         os << " " << getRollbackBufferName(emitter, rollbackOp) << "["
-            << *std::max_element(rollbackOp.getDepths().begin(), rollbackOp.getDepths().end()) + 1;
+           << *std::max_element(rollbackOp.getDepths().begin(), rollbackOp.getDepths().end()) + 1;
+
       if (emitter.shouldGenerateCatapultCompatibleCode())
         os << "];\n";
       else
@@ -444,6 +449,7 @@ LogicalResult printOperation(CppEmitter &emitter, ModuleOp moduleOp) {
                 if (!rollbackOp2.getDepths().empty()) 
                   maxRollback = std::max(maxRollback,
                                          *std::max_element(rollbackOp2.getDepths().begin(), rollbackOp2.getDepths().end()));
+
             }
           }
         }
@@ -859,9 +865,11 @@ LogicalResult printOperation(CppEmitter &emitter, spechls::GammaOp gammaOp) {
   if (failed(emitter.emitType(gammaOp.getLoc(), gammaOp.getType())))
     return failure();
   os << ", ";
-  if (gammaOp->getAttrOfType<mlir::IntegerAttr>("spechls.profilingId") != nullptr)
-    emitter.emitAttribute(gammaOp.getLoc(), gammaOp->getAttrOfType<mlir::IntegerAttr>("spechls.profilingId"));
-  else
+  if (gammaOp->getAttrOfType<mlir::IntegerAttr>("spechls.profilingId") != nullptr) {
+    if (failed(
+            emitter.emitAttribute(gammaOp.getLoc(), gammaOp->getAttrOfType<mlir::IntegerAttr>("spechls.profilingId"))))
+      return failure();
+  } else
     os << "0";
   os << ">(";
   if (failed(emitter.emitOperands(*operation)))
@@ -989,14 +997,41 @@ LogicalResult printOperation(CppEmitter &emitter, spechls::RollbackOp rollbackOp
   // Inline the rollback implementation to circumvent bugs in Vitis HLS.
   if (emitter.shouldGenerateVitisHLSCompatibleCode()) {
 
-    if (rollbackOp.getDepths().empty()){
-        //Special case with rollback not yet assigned, and no command
-        os << "\n";
-        os.indent();
-        if (failed(emitter.emitAssignPrefix(*operation)))
-          return failure();
-        if (failed(emitter.emitOperand(rollbackOp.getInput())))
-          return failure();
+
+    size_t maxDepth = 0;
+    if (!rollbackOp.getDepths().empty())
+      maxDepth = *std::max_element(rollbackOp.getDepths().begin(), rollbackOp.getDepths().end());
+
+
+    os << "unsigned int off = ";
+    if (failed(emitter.emitOperand(rollbackOp.getRollback())))
+      return failure();
+    os << " - " << rollbackOp.getOffset() << ";\n";
+    os << "if (";
+    if (failed(emitter.emitOperand(rollbackOp.getWriteCommand())))
+      return failure();
+    os << ") {\n";
+    os.indent();
+    os << "for (unsigned int i = " << maxDepth << "; i > 0; --i) {\n";
+    os.indent();
+    os << getRollbackBufferName(emitter, rollbackOp) << "[i] = " << getRollbackBufferName(emitter, rollbackOp)
+       << "[i - 1];\n";
+    os.unindent();
+    os << "}\n";
+
+    if (failed(emitter.emitAssignPrefix(*operation)))
+      return failure();
+    if (failed(emitter.emitOperand(rollbackOp.getInput())))
+      return failure();
+    os << ";\n";
+    for (auto &&depth : rollbackOp.getDepths()) {
+      os << "if (off == " << depth << ") {\n";
+      os.indent();
+      if (failed(emitter.emitAssignPrefix(*operation)))
+        return failure();
+      os << getRollbackBufferName(emitter, rollbackOp) << "[" << depth << "];\n";
+      os.unindent();
+      os << "}\n";
     }
     else {
         os << "\n{\n";
@@ -1834,4 +1869,32 @@ StringRef CppEmitter::getOrCreateName(Value value) {
 LogicalResult spechls::translateToCpp(Operation *op, raw_ostream &os, TranslationToCppOptions options) {
   CppEmitter emitter(os, std::move(options));
   return emitter.emitOperation(*op, false);
+}
+
+LogicalResult spechls::translateFSMControl(mlir::Operation *op, llvm::raw_ostream &os,
+                                           TranslationToCppOptions options) {
+  bool hasFailed = false;
+  op->walk([&](spechls::FSMOp fsm) {
+    auto rewriter = mlir::IRRewriter(op->getContext());
+    auto kernel = outlineBackwardCone(fsm.getMispec(), rewriter);
+    if (kernel == nullptr) {
+      hasFailed = true;
+      return WalkResult::interrupt();
+    }
+    auto pm = mlir::PassManager::on<mlir::ModuleOp>(kernel->getContext());
+    pm.addPass(mlir::createCanonicalizerPass());
+    pm.addPass(mlir::createCSEPass());
+    if (failed(pm.run(kernel->getParentOp()))) {
+      hasFailed = true;
+      return WalkResult::interrupt();
+    }
+    if (failed(translateToCpp(kernel, os, options))) {
+      hasFailed = true;
+      return WalkResult::interrupt();
+    }
+    return WalkResult::advance();
+  });
+  if (hasFailed)
+    return mlir::failure();
+  return mlir::success();
 }

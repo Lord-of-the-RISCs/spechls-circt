@@ -37,8 +37,15 @@ add_circt_dialect_library(SpecHLSTransforms
     SpeculationExplorationPass.cpp
     LowerDelays.cpp
     AffectProfilingID.cpp
-
-
+    AnnotateTiming.cpp
+    LowerComplexOperations.cpp
+    ExposeControlFlowSpeculation.cpp
+    LinearizeTask.cpp
+    MergeTasks.cpp
+    SplitWithSyncPass.cpp
+    AffectProfilingID.cpp
+    InlineOptimizedFuncPass.cpp
+    OptFunToTask.cpp
     DEPENDS
     SpecHLSTransformsIncGen
     SpecHLSSimplifyLUTsPatternsIncGen

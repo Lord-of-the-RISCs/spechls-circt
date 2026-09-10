@@ -9,7 +9,9 @@
 #include "Dialect/SpecHLS/IR/SpecHLSOps.h"
 #include "Dialect/SpecHLS/Transforms/Outlining.h"
 #include "Dialect/SpecHLS/Transforms/Passes.h"
+#include "Dialect/SpecHLS/Transforms/TopologicalSort.h"
 #include "Dialect/SpecHLS/Transforms/YosysSetup.h"
+#include "mlir/Analysis/TopologicalSortUtils.h"
 
 #include <circt/Conversion/CombToSynth.h>
 #include <circt/Conversion/ExportVerilog.h>
@@ -83,6 +85,24 @@ namespace spechls {
 
 namespace {
 
+void inlineControlTasks(spechls::KernelOp kernel, mlir::IRRewriter &rewriter) {
+  kernel.walk([&](spechls::TaskOp task) {
+    if (task.getSymName().starts_with("ctrl_")) {
+      auto *block = task->getBlock();
+      auto ip = rewriter.saveInsertionPoint();
+      rewriter.setInsertionPointAfter(task);
+      auto pack = spechls::PackOp::create(rewriter, rewriter.getUnknownLoc(), task.getResult().getType(),
+                                          task.getBodyBlock()->getTerminator()->getOperands());
+      task.getResult().replaceAllUsesWith(pack.getResult());
+      rewriter.eraseOp(task.getBodyBlock()->getTerminator());
+      rewriter.inlineBlockBefore(task.getBodyBlock(), task, task.getArgs());
+      rewriter.eraseOp(task);
+      rewriter.restoreInsertionPoint(ip);
+      mlir::sortTopologically(block, spechls::topologicalSortCriterion);
+    }
+  });
+}
+
 class OptimizeControlLogicPass : public spechls::impl::OptimizeControlLogicPassBase<OptimizeControlLogicPass> {
 public:
   using OptimizeControlLogicPassBase::OptimizeControlLogicPassBase;
@@ -109,7 +129,7 @@ llvm::DenseSet<Operation *> OptimizeControlLogicPass::sliceControl(Operation *fi
       result.insert(current);
       for (auto operand : current->getOperands()) {
         auto *nextOp = operand.getDefiningOp();
-        if (nextOp)
+        if (nextOp && !result.contains(nextOp))
           workingList.push_back(nextOp);
       }
     }
@@ -150,11 +170,23 @@ void OptimizeControlLogicPass::runOnOperation() {
       if (failed(spechlsToHwPm.run(kernel))) {
         return signalPassFailure();
       }
+      // std::string funName = "outline_control_" + std::to_string(index++);
+      // spechls::outlineOptFunc(builder, inCast->getLoc(), funName, outlineSet, inCast.getResult());
     };
     // Outline gamma control as HWModule
     kernel.walk([&](spechls::GammaOp gamma) { simplifyControl(gamma, 0); });
     kernel.walk([&](spechls::AlphaOp alpha) { simplifyControl(alpha, 3); });
     kernel.walk([&](spechls::PrintOp print) { simplifyControl(print, 1); });
+
+    // auto spechlsToHwPm = PassManager::on<spechls::KernelOp>(ctx);
+    // spechlsToHwPm.addPass(mlir::createCanonicalizerPass());
+    // spechlsToHwPm.addPass(mlir::createCSEPass());
+    // spechlsToHwPm.addNestedPass<spechls::OptimizedFuncOp>(spechls::createInlineRecursiveOptFuncPass());
+    // spechlsToHwPm.addPass(spechls::createSpecHLSOptFunToHWPass());
+    // if (failed(spechlsToHwPm.run(kernel))) {
+    //   return signalPassFailure();
+    // }
+
     std::string abcPath = YOSYS_PATH "/yosys-abc";
 
     auto lowerMoorePm = PassManager::on<ModuleOp>(ctx);
@@ -184,21 +216,21 @@ void OptimizeControlLogicPass::runOnOperation() {
     Yosys::log_streams.clear();
     Yosys::log_error_stderr = true;
 
-    auto *design = new Yosys::Design;
+    auto design = std::make_unique<Yosys::Design>();
     std::istringstream inputStream(verilog);
-    Yosys::Frontend::frontend_call(design, &inputStream, "", "verilog -sv");
+    Yosys::Frontend::frontend_call(design.get(), &inputStream, "", "verilog -sv");
 
     Yosys::yosys_abc_executable = YOSYS_PATH "/yosys-abc";
 
-    Yosys::Pass::call(design, "proc");
-    Yosys::Pass::call(design, "flatten");
-    Yosys::Pass::call(design, "opt -full");
-    Yosys::Pass::call(design, "synth");
-    Yosys::Pass::call(design, "abc -g AND,OR,XOR");
-    Yosys::Pass::call(design, "opt_clean -purge");
+    Yosys::Pass::call(design.get(), "proc");
+    Yosys::Pass::call(design.get(), "flatten");
+    Yosys::Pass::call(design.get(), "opt -full");
+    Yosys::Pass::call(design.get(), "synth");
+    Yosys::Pass::call(design.get(), "abc -g AND,OR,XOR");
+    Yosys::Pass::call(design.get(), "opt_clean -purge");
     std::ostringstream outputStream;
 
-    Yosys::Backend::backend_call(design, &outputStream, "", "verilog -sv");
+    Yosys::Backend::backend_call(design.get(), &outputStream, "", "verilog -sv");
 
     // regenerated verilog is in outputStream.str()
     llvm::SourceMgr mgr;
@@ -211,17 +243,22 @@ void OptimizeControlLogicPass::runOnOperation() {
     if (failed(lowerMoorePm.run(simplifiedModule)))
       return signalPassFailure();
 
-    simplifiedModule.walk(
-        [&](circt::hw::HWModuleOp mod) { builder.moveOpBefore(mod, operation.getBody(), operation.getBody()->end()); });
+    llvm::SmallVector<circt::hw::HWModuleOp> hwModToMove;
 
-    builder.eraseBlock(newModuleOp.getBody());
+    simplifiedModule.walk([&](circt::hw::HWModuleOp mod) { hwModToMove.push_back(mod); });
+    for (auto &mod : hwModToMove) {
+      builder.moveOpBefore(mod, operation.getBody(), operation.getBody()->end());
+    }
+
+    // builder.eraseBlock(newModuleOp.getBody());
     builder.eraseOp(newModuleOp);
-    builder.eraseBlock(simplifiedModule.getBody());
+    // builder.eraseBlock(simplifiedModule.getBody());
     builder.eraseOp(simplifiedModule);
 
-    llvm::SmallVector<Operation *> toMove, toDelete;
+    llvm::DenseSet<Operation *> toDelete;
+    llvm::DenseMap<Operation *, Block *> toMove;
 
-    llvm::SmallVector<llvm::SmallVector<Operation *>> toOutline;
+    llvm::DenseMap<llvm::SmallVector<Operation *>, Block *> toOutline;
 
     //  Inline HWModules as SpecHLSTask
     kernel->walk([&](circt::hw::InstanceOp instance) {
@@ -252,29 +289,30 @@ void OptimizeControlLogicPass::runOnOperation() {
       }
 
       body.walk([&](Operation *op) {
-        if (llvm::dyn_cast<circt::hw::OutputOp>(op))
-          toDelete.push_back(op);
-        else {
+        if (!llvm::isa<circt::hw::OutputOp>(op)) {
+          //   toDelete.insert(op);
+          // } else {
           nodes.push_back(op);
-          toMove.push_back(op);
+          toMove.try_emplace(op, instance->getBlock());
         }
       });
 
-      toDelete.push_back(module);
-      toDelete.push_back(instance);
-      toOutline.push_back(nodes);
+      toDelete.insert(module);
+      toDelete.insert(instance);
+      toOutline.try_emplace(nodes, instance->getBlock());
     });
-    auto *kernelBody = &kernel.getBody().front();
-    for (auto &&op : toMove)
-      builder.moveOpAfter(op, kernelBody, kernelBody->begin());
-    for (auto &&op : toDelete)
+    for (auto [op, block] : toMove)
+      builder.moveOpAfter(op, block, block->begin());
+    for (auto &&op : toDelete) {
       builder.eraseOp(op);
+    }
 
     unsigned idx = 0;
-    for (auto &nodes : toOutline) {
+    for (auto [nodes, block] : toOutline) {
       if (!nodes.empty()) {
         auto ops = SmallPtrSet<mlir::Operation *, 32>();
         ops.insert(nodes.begin(), nodes.end());
+        builder.setInsertionPointToStart(block);
         auto task = spechls::outlineTask(builder, builder.getUnknownLoc(), "ctrl_" + std::to_string(idx++), ops);
         task->setAttr("spechls.functionTask", builder.getUnitAttr());
       }
@@ -293,7 +331,7 @@ void OptimizeControlLogicPass::runOnOperation() {
     kernel.walk([&](mlir::Operation *op) {
       llvm::SmallVector<mlir::StringAttr> toRemove;
       for (auto attr : op->getAttrs()) {
-        if (attr.getName().str().substr(0, 3) == "sv.")
+        if (attr.getName().strref().starts_with("sv."))
           toRemove.push_back(attr.getName());
       }
       for (auto &attr : toRemove)
@@ -317,5 +355,7 @@ void OptimizeControlLogicPass::runOnOperation() {
         }
       }
     }
+
+    inlineControlTasks(kernel, builder);
   });
 }

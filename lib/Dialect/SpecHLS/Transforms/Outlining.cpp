@@ -8,7 +8,11 @@
 #include "Dialect/SpecHLS/Transforms/Outlining.h"
 #include "Dialect/SpecHLS/IR/SpecHLSOps.h"
 #include "Dialect/SpecHLS/IR/SpecHLSTypes.h"
+#include "Dialect/SpecHLS/Transforms/TopologicalSort.h"
 #include "circt/Support/LLVM.h"
+#include "mlir/Analysis/TopologicalSortUtils.h"
+#include "mlir/IR/BuiltinTypes.h"
+#include "mlir/IR/IRMapping.h"
 #include "llvm/Support/LogicalResult.h"
 
 #include <circt/Dialect/HW/HWOps.h>
@@ -95,6 +99,95 @@ spechls::TaskOp spechls::outlineControl(RewriterBase &rewriter, Location loc, st
   }
   rewriter.restoreInsertionPoint(ip);
   return task;
+}
+
+spechls::OptimizedFuncOp spechls::outlineOptFunc(RewriterBase &rewriter, Location loc, std::string name,
+                                                 llvm::DenseSet<mlir::Operation *> &ops, Value output) {
+  auto ip = rewriter.saveInsertionPoint();
+  SmallVector<Value> inputs;
+  llvm::SmallVector<mlir::Operation *> casts;
+  for (auto &&op : ops) {
+    for (auto &&operand : op->getOperands()) {
+      if (!ops.contains(operand.getDefiningOp())) {
+        bool needInsert = true;
+        for (auto &in : inputs) {
+          if (in == operand) {
+            needInsert = false;
+            break;
+          }
+        }
+        if (needInsert) {
+          if (auto intType = llvm::dyn_cast<mlir::IntegerType>(operand.getType())) {
+            if (!intType.isSignless()) {
+              if (operand.getDefiningOp()) {
+                rewriter.setInsertionPointAfter(operand.getDefiningOp());
+              } else {
+                rewriter.setInsertionPointToStart(operand.getParentBlock());
+              }
+              auto signlessType = rewriter.getIntegerType(intType.getWidth());
+              auto cast1 = circt::hw::BitcastOp::create(rewriter, rewriter.getUnknownLoc(), signlessType, operand);
+              auto cast2 = circt::hw::BitcastOp::create(rewriter, rewriter.getUnknownLoc(), intType, cast1.getResult());
+              operand.replaceAllUsesExcept(cast2.getResult(), cast1);
+              inputs.push_back(cast1.getResult());
+              casts.push_back(cast2);
+              continue;
+            }
+          }
+          inputs.push_back(operand);
+        }
+      }
+    }
+  }
+  for (auto *cast : casts) {
+    ops.insert(cast);
+  }
+
+  if (auto intType = llvm::dyn_cast<mlir::IntegerType>(output.getType())) {
+    if (!intType.isSignless()) {
+      rewriter.setInsertionPointAfter(output.getDefiningOp());
+      auto signlessType = rewriter.getIntegerType(intType.getWidth());
+      auto cast1 = circt::hw::BitcastOp::create(rewriter, rewriter.getUnknownLoc(), signlessType, output);
+      auto cast2 = circt::hw::BitcastOp::create(rewriter, rewriter.getUnknownLoc(), intType, cast1.getResult());
+      output.replaceAllUsesExcept(cast2.getResult(), cast1);
+      ops.insert(cast1);
+      output = cast2.getResult();
+    }
+  }
+
+  auto optFun = spechls::OptimizedFuncOp::create(rewriter, loc, output.getType(), inputs);
+  output.replaceAllUsesWith(optFun.getResult());
+  auto fillBody = [&](mlir::Block *block) {
+    rewriter.setInsertionPointToStart(block);
+    IRMapping mapping;
+    for (auto [from, to] : llvm::zip(inputs, block->getArguments())) {
+      mapping.map(from, to);
+    }
+    llvm::SmallVector<mlir::Operation *> cloned;
+    for (auto *op : ops) {
+      cloned.push_back(rewriter.clone(*op, mapping));
+    }
+    for (auto *op : cloned) {
+      for (size_t i = 0; i < op->getNumOperands(); ++i) {
+        auto operand = op->getOperand(i);
+        if (mapping.contains(operand)) {
+          op->setOperand(i, mapping.lookup(operand));
+        }
+      }
+    }
+    rewriter.create<spechls::YieldOp>(loc, mapping.lookup(output));
+  };
+  fillBody(optFun.getBodyBlock());
+  fillBody(optFun.getOptBodyBlock());
+
+  rewriter.setInsertionPointAfter(optFun);
+
+  rewriter.restoreInsertionPoint(ip);
+  optFun->setAttr("sym_name", rewriter.getStringAttr(name));
+
+  mlir::sortTopologically(optFun.getBodyBlock(), spechls::topologicalSortCriterion);
+  mlir::sortTopologically(optFun.getOptBodyBlock(), spechls::topologicalSortCriterion);
+
+  return optFun;
 }
 
 spechls::TaskOp spechls::outlineTask(RewriterBase &rewriter, Location loc, std::string name,

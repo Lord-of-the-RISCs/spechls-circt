@@ -9,6 +9,7 @@
 
 #include "circt/Dialect/HW/HWOps.h"
 #include "circt/Support/LLVM.h"
+#include "mlir/IR/BuiltinTypeInterfaces.h"
 #include "mlir/IR/OpDefinition.h"
 #include <llvm/ADT/STLExtras.h>
 #include <llvm/ADT/TypeSwitch.h>
@@ -25,6 +26,7 @@
 #include "Dialect/SpecHLS/IR/SpecHLSDialect.cpp.inc"
 #include "Dialect/SpecHLS/IR/SpecHLSTypes.h"
 #include "Utils.h"
+#include "mlir/IR/PatternMatch.h"
 #include "llvm/Support/LogicalResult.h"
 #include "llvm/Support/raw_ostream.h"
 
@@ -89,6 +91,16 @@ LogicalResult spechls::StructType::verify(function_ref<InFlightDiagnostic()> emi
   if (fieldNames.size() != fieldTypes.size())
     return emitError() << "field name and field type count mismatch";
   return success();
+}
+
+unsigned spechls::StructType::getBitWidth() {
+  unsigned width = 0;
+  for (auto field : getFieldTypes()) {
+    width += llvm::TypeSwitch<mlir::Type, unsigned>(field)
+                 .Case<mlir::IntegerType, mlir::FloatType>([](mlir::Type t) { return t.getIntOrFloatBitWidth(); })
+                 .Case<spechls::StructType>([&](auto t) { return t.getBitWidth(); });
+  }
+  return width;
 }
 
 ParseResult spechls::KernelOp::parse(OpAsmParser &parser, OperationState &result) {
@@ -249,6 +261,105 @@ LogicalResult spechls::CommitOp::verify() {
   return success();
 }
 
+ParseResult spechls::OptimizedFuncOp::parse(OpAsmParser &parser, OperationState &result) {
+
+  SmallVector<OpAsmParser::Argument, 4> bodyArgs, optBodyArgs;
+  SmallVector<Type, 4> operandsType;
+  Type returnType;
+
+  if (parser.parseLParen())
+    return failure();
+
+  bool finished = succeeded(parser.parseOptionalRParen());
+
+  while (!finished) {
+    OpAsmParser::UnresolvedOperand operand;
+    Type type;
+    if (parser.parseOperand(operand) || parser.parseColonType(type))
+      return failure();
+    operandsType.push_back(type);
+    if (parser.resolveOperand(operand, type, result.operands))
+      return failure();
+
+    if (succeeded(parser.parseOptionalRParen())) {
+      finished = true;
+    } else {
+      if (parser.parseComma())
+        return failure();
+    }
+  }
+  if (parser.parseColonType(returnType))
+    return failure();
+  result.addTypes(returnType);
+
+  if (parser.parseOptionalAttrDictWithKeyword(result.attributes))
+    return failure();
+
+  if (parser.parseArgumentList(bodyArgs, OpAsmParser::Delimiter::Paren))
+    return failure();
+
+  if (bodyArgs.size() != operandsType.size())
+    return parser.emitError(parser.getNameLoc(), "Invalid number of optimized function body arguments.");
+
+  for (auto [arg, type] : llvm::zip(bodyArgs, operandsType)) {
+    arg.type = type;
+  }
+  auto *body = result.addRegion();
+
+  if (parser.parseRegion(*body, bodyArgs))
+    return failure();
+
+  if (parser.parseArgumentList(optBodyArgs, OpAsmParser::Delimiter::Paren))
+    return failure();
+
+  if (optBodyArgs.size() != operandsType.size())
+    return parser.emitError(parser.getNameLoc(), "Invalid number of optimized function optBody arguments.");
+
+  for (auto [arg, type] : llvm::zip(optBodyArgs, operandsType)) {
+    arg.type = type;
+  }
+  auto *optBody = result.addRegion();
+  if (parser.parseRegion(*optBody, optBodyArgs))
+    return failure();
+  return success();
+}
+
+void spechls::OptimizedFuncOp::print(OpAsmPrinter &printer) {
+  printer << " (";
+  llvm::interleaveComma(getArgs(), printer, [&](auto arg) { printer << arg << " : " << arg.getType(); });
+  printer << ") : ";
+  printer << getResult().getType() << " ";
+  printer.printOptionalAttrDictWithKeyword(getOperation()->getAttrs());
+  printer << "(";
+  llvm::interleaveComma(getBody().getArguments(), printer, [&](auto arg) { printer << arg; });
+  printer << ")";
+  printer.printRegion(getBody(), false);
+  printer << "(";
+  llvm::interleaveComma(getOptBody().getArguments(), printer, [&](auto arg) { printer << arg; });
+  printer << ")";
+  printer.printRegion(getOptBody(), false);
+}
+
+LogicalResult spechls::OptimizedFuncOp::verify() {
+  if (auto yield = llvm::dyn_cast<spechls::YieldOp>(getBodyBlock()->getTerminator())) {
+    if (yield.getValue().getType() != getResult().getType()) {
+      return emitOpError("Incompatible type between result and body yielded value: ")
+             << getResult().getType() << " vs " << yield.getValue().getType();
+    }
+  } else {
+    return emitOpError("Body terminator should be a YieldOp.");
+  }
+  if (auto yield = llvm::dyn_cast<spechls::YieldOp>(getOptBodyBlock()->getTerminator())) {
+    if (yield.getValue().getType() != getResult().getType()) {
+      return emitOpError("Incompatible type between result and optBody yielded value: ")
+             << getResult().getType() << " vs " << yield.getValue().getType();
+    }
+  } else {
+    return emitOpError("OptBody terminator should be a YieldOp.");
+  }
+  return success();
+}
+
 ParseResult spechls::GammaOp::parse(OpAsmParser &parser, OperationState &result) {
   // Parse the symbol name specifier.
   StringAttr symbolNameAttr;
@@ -295,8 +406,8 @@ void spechls::GammaOp::print(OpAsmPrinter &printer) {
 
 LogicalResult spechls::GammaOp::verify() {
   auto inputs = getInputs();
-  if (inputs.size() < 2)
-    return emitOpError("expects at least two data inputs");
+  // if (inputs.size() < 2)
+  //   return emitOpError("expects at least two data inputs");
 
   unsigned int selectWidth = getSelect().getType().getWidth();
   if (selectWidth < utils::getMinBitwidth(inputs.size() - 1))
@@ -668,6 +779,147 @@ mlir::OpFoldResult spechls::FieldOp::fold(FoldAdaptor adaptor) {
     }
   }
   return nullptr;
+}
+
+llvm::LogicalResult spechls::CallOp::canonicalize(CallOp op, ::mlir::PatternRewriter &rewriter) {
+  if (op->hasAttr("spechls.pure")) {
+    for (auto res : op.getResults())
+      if (res.getNumUses() != 0)
+        return llvm::failure();
+
+    rewriter.eraseOp(op);
+    return llvm::success();
+  }
+  return llvm::failure();
+}
+
+struct RemoveUnusedTaskInputPattern : OpRewritePattern<spechls::TaskOp> {
+  using OpRewritePattern<spechls::TaskOp>::OpRewritePattern;
+  LogicalResult matchAndRewrite(spechls::TaskOp task, PatternRewriter &rewriter) const override {
+    for (unsigned index = 0; index < task.getArgs().size(); ++index) {
+      if (task.getBodyBlock()->getArgument(index).getNumUses() == 0) {
+        rewriter.modifyOpInPlace(task, [&]() {
+          task.getBodyBlock()->eraseArgument(index);
+          task.getArgsMutable().erase(index);
+        });
+        return llvm::success();
+      }
+    }
+    return llvm::failure();
+  }
+};
+
+struct RemoveDuplicateTaskInputsPattern : OpRewritePattern<spechls::TaskOp> {
+  using OpRewritePattern<spechls::TaskOp>::OpRewritePattern;
+  LogicalResult matchAndRewrite(spechls::TaskOp task, PatternRewriter &rewriter) const override {
+
+    llvm::DenseMap<mlir::Value, unsigned> firstPositions;
+    llvm::SmallVector<mlir::Value> newArgs;
+    llvm::BitVector eraseIndices;
+    for (unsigned index = 0; index < task.getArgs().size(); ++index) {
+      auto arg = task.getArgs()[index];
+      if (!firstPositions.contains(arg)) {
+        firstPositions.try_emplace(arg, index);
+        eraseIndices.push_back(false);
+        newArgs.push_back(arg);
+      } else {
+        eraseIndices.push_back(true);
+      }
+    }
+    if (newArgs.size() != task.getArgs().size()) {
+      for (unsigned index = 0; index < task.getArgs().size(); ++index) {
+        auto arg = task.getArgs()[index];
+        if (firstPositions[arg] != index) {
+          task.getBodyBlock()->getArgument(index).replaceAllUsesWith(
+              task.getBodyBlock()->getArgument(firstPositions[arg]));
+        }
+      }
+      rewriter.modifyOpInPlace(task, [&]() {
+        task.getBodyBlock()->eraseArguments(eraseIndices);
+        task.getArgsMutable().assign(newArgs);
+      });
+      return llvm::success();
+    }
+    return llvm::failure();
+  }
+};
+
+void spechls::TaskOp::getCanonicalizationPatterns(RewritePatternSet &patterns, MLIRContext *context) {
+  patterns.add<RemoveUnusedTaskInputPattern>(context);
+  patterns.add<RemoveDuplicateTaskInputsPattern>(context);
+}
+
+llvm::LogicalResult spechls::OptimizedFuncOp::canonicalize(OptimizedFuncOp op, ::mlir::PatternRewriter &rewriter) {
+  // If optimized body is empty: delete the function, it do not do anything.
+  if (op.getOptBodyBlock()->getOperations().size() == 1) {
+    auto yield = llvm::cast<spechls::YieldOp>(op.getOptBodyBlock()->getOperations().front());
+    auto value = yield.getValue();
+    for (auto [operand, arg] : llvm::zip(op.getArgs(), op.getOptBodyBlock()->getArguments())) {
+      if (arg == value) {
+        op.getResult().replaceAllUsesWith(operand);
+        rewriter.eraseOp(op);
+        return llvm::success();
+      }
+    }
+  }
+
+  // If optimized body does not use some operands, they can be removed.
+  llvm::SmallVector<bool> used;
+  bool allUsed = true;
+  used.reserve(op.getArgs().size());
+  for (auto &arg : op.getOptBodyBlock()->getArguments()) {
+    if (arg.getNumUses() == 0) {
+      allUsed = false;
+      used.push_back(false);
+    } else {
+      used.push_back(true);
+    }
+  }
+  if (!allUsed) {
+    auto ip = rewriter.saveInsertionPoint();
+    rewriter.setInsertionPointToStart(op.getBodyBlock());
+    llvm::SmallVector<mlir::Value> newOperands;
+    for (auto [used, operand, arg] : llvm::zip(used, op.getArgs(), op.getBodyBlock()->getArguments())) {
+      if (used) {
+        newOperands.push_back(operand);
+      } else {
+        auto cst = circt::hw::ConstantOp::create(rewriter, rewriter.getUnknownLoc(), arg.getType(), 0);
+        arg.replaceAllUsesWith(cst.getResult());
+      }
+    }
+    rewriter.setInsertionPointAfter(op);
+    auto newOp =
+        spechls::OptimizedFuncOp::create(rewriter, rewriter.getUnknownLoc(), op.getResult().getType(), newOperands);
+
+    size_t j = 0;
+    for (size_t i = 0; i < op.getArgs().size(); ++i) {
+      if (used[i]) {
+        op.getBodyBlock()->getArgument(i).replaceAllUsesWith(newOp.getBodyBlock()->getArgument(j));
+        op.getOptBodyBlock()->getArgument(i).replaceAllUsesWith(newOp.getOptBodyBlock()->getArgument(j++));
+      }
+    }
+    rewriter.setInsertionPointToStart(newOp.getBodyBlock());
+    llvm::SmallVector<mlir::Operation *> opsToMove;
+    for (auto &operation : op.getBodyBlock()->getOperations()) {
+      opsToMove.push_back(&operation);
+    }
+    for (auto *operation : opsToMove) {
+      rewriter.moveOpBefore(operation, newOp.getBodyBlock(), newOp.getBodyBlock()->end());
+    }
+    rewriter.setInsertionPointToStart(newOp.getOptBodyBlock());
+    opsToMove.clear();
+    for (auto &operation : op.getOptBodyBlock()->getOperations()) {
+      opsToMove.push_back(&operation);
+    }
+    for (auto *operation : opsToMove) {
+      rewriter.moveOpBefore(operation, newOp.getOptBodyBlock(), newOp.getOptBodyBlock()->end());
+    }
+    rewriter.replaceOp(op, newOp);
+    rewriter.restoreInsertionPoint(ip);
+    return llvm::success();
+  }
+
+  return llvm::failure();
 }
 
 //===--------------------------------------------------------------------------------------------------------------===//

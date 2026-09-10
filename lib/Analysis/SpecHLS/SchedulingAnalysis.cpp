@@ -61,7 +61,6 @@ circt::scheduling::ChainingCyclicProblem SchedulingAnalysis::constructProblem(sp
       problem.setIncomingDelay(operatorType, combDelay);
       problem.setOutgoingDelay(operatorType, 0);
     }
-
     problem.setLinkedOperatorType(op, operatorType);
   });
 

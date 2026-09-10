@@ -40,11 +40,11 @@ public:
 
   void runOnOperation() override {
     mlir::MLIRContext *ctx = &getContext();
-      int id = 0;
-      getOperation().walk([&](spechls::GammaOp t) {
+    int id = 0;
+    getOperation().walk([&](spechls::GammaOp t) {
       t->setAttr("spechls.profilingId", mlir::IntegerAttr::get(mlir::IntegerType::get(ctx, 32), id));
       id++;
-      });
+    });
   }
 };
 

@@ -1,8 +1,12 @@
-add_circt_library(WcetUtils
-  WcetUtils.cpp
 
+add_circt_library(SpecHLSSupport
+  TransitiveClosure.cpp
   LINK_LIBS PUBLIC
-  CIRCT
+  MLIR
   SpecHLS
+  WcetUtils
+  WcetUtils.cpp
+  CIRCT
+
   Wcet
 )

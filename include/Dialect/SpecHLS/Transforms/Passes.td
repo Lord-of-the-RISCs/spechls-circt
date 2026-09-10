@@ -92,8 +92,82 @@ def LowerDelaysPass: Pass<"lower-spechls-delays", "spechls::KernelOp"> {
 }
 
 
+def AnnotateTimingPass : Pass<"annotate-timing", "spechls::KernelOp"> {
+  let summary = "Add timing annotation to task operations.";
+  let dependentDialects = ["::spechls::SpecHLSDialect", "::circt::hw::HWDialect", "::circt::comb::CombDialect"];
+  let options = [
+    Option<"task", "task", "std::string", "", "Name of task to inline">,
+    Option<"clockPeriod", "clockPeriod", "double", "10.0", "Target clock for scheduling.">,
+    Option<"target", "target", "std::string", "\"xc7a200tisbg484-1L\"", "Target to map timing with.">,
+    Option<"targetsFile", "targetsFile", "std::string", "", "Json file with targets timing.">,
+  ];
+}
+
+
 def AffectProfilingIDPass : Pass<"affect-profilingID", "spechls::KernelOp"> {
   let summary = "Add unique profile ID to each gamma.";
   let dependentDialects = ["::spechls::SpecHLSDialect", "::circt::hw::HWDialect", "::circt::comb::CombDialect"];
 }
+
+
+
+def SplitWithSyncPass : Pass<"split-with-sync", "spechls::KernelOp"> {
+  let summary = "Split operations with a combDelay longer than clock period into fake operations to make them takes at most one cycle.";
+  let dependentDialects = ["::spechls::SpecHLSDialect", "::circt::hw::HWDialect", "::circt::comb::CombDialect"];
+  let options = [
+    Option<"task", "task", "std::string", "", "Name of task to work with">,
+    Option<"clockPeriod", "clockPeriod", "double", "10.0", "Target clock for scheduling.">
+  ];
+}
+
+def LowerComplexOperationsPass: Pass<"lower-complex-operation", "spechls::KernelOp"> {
+  let summary = "Lower complex operations such as division into simpler ones.";
+  let dependentDialects = ["::spechls::SpecHLSDialect", "::circt::hw::HWDialect", "::circt::comb::CombDialect"];
+}
+
+def ExposeControlFlowSpeculationPass: Pass<"expose-control-flow-speculation", "spechls::KernelOp"> {
+  let summary = "Add speculation mechanism into a task.";
+  let dependentDialects = ["::spechls::SpecHLSDialect", "::circt::hw::HWDialect", "::circt::comb::CombDialect", "::circt::ssp::SSPDialect"];
+  let options = [
+    Option<"targetTask", "targetTask", "std::string", "", "Name of task to inline">,
+    Option<"clockPeriod", "clockPeriod", "double", "10.0", "Target clock for scheduling.">,
+    Option<"target", "target", "std::string", "\"xc7a200tisbg484-1L\"", "Target to map timing with.">,
+    Option<"targetsFile", "targetsFile", "std::string", "", "Json file with targets timing.">,
+    Option<"probabilityThreshold", "probabilityThreshold", "double", "0.0", "Minimum probability of speculation configurations">,
+    Option<"traceFileName", "traceFileName", "std::string", "", "Profiling trace file.">,
+    Option<"wcetModel", "wcetModel", "bool", "false", "Stop speculation insertion at the generation of the wcet module.">
+  ];
+}
+
+def LinearizeTaskPass: Pass<"linearize-task", "spechls::KernelOp"> {
+  let summary = "transform the kernel so its only operations are a chain of task";
+  let dependentDialects = ["::spechls::SpecHLSDialect", "::circt::hw::HWDialect", "::circt::comb::CombDialect"];
+}
+
+def MergeTasksPass: Pass<"merge-tasks", "spechls::KernelOp"> {
+  let summary = "Merge not speculative tasks.";
+  let dependentDialects = ["::spechls::SpecHLSDialect", "::circt::hw::HWDialect", "::circt::comb::CombDialect"];
+}
+
+def InlineOptimizedFuncBodyPass : Pass<"inline-optimized-func-body", "spechls::KernelOp"> {
+  let summary = "Inline all optimizedFunc ops body.";
+  let dependentDialects = ["::spechls::SpecHLSDialect", "::circt::hw::HWDialect", "::circt::comb::CombDialect"];
+}
+
+def InlineOptimizedFuncOptBodyPass : Pass<"inline-optimized-func-opt-body", "spechls::KernelOp"> {
+  let summary = "Inline all optimizedFunc ops optBody.";
+  let dependentDialects = ["::spechls::SpecHLSDialect", "::circt::hw::HWDialect", "::circt::comb::CombDialect"];
+}
+
+def InlineRecursiveOptFuncPass: Pass<"inline-recursive-opt-func", "spechls::OptimizedFuncOp"> {
+  let summary = "Inline recursive optimizedFunc ops in the optBody of a optimziedFunct.";
+  let dependentDialects = ["::spechls::SpecHLSDialect", "::circt::hw::HWDialect", "::circt::comb::CombDialect"];
+}
+
+
+def OptFunToTaskPass: Pass<"opt-func-to-task", "spechls::KernelOp"> {
+  let summary = "Transform optimizedfuncOps into TaskOps.";
+  let dependentDialects = ["::spechls::SpecHLSDialect", "::circt::hw::HWDialect", "::circt::comb::CombDialect"];
+}
+
 #endif // SPECHLS_INCLUDED_DIALECT_SPECHLS_TRANSFORMS_PASSES_TD
