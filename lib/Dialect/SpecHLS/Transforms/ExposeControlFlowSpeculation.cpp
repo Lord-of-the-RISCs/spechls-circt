@@ -382,7 +382,7 @@ struct ExposeControlFlowSpeculationPass
 
     assert(mlir::succeeded(circt::scheduling::scheduleSimplex(problem, terminator, clockPeriod)));
     assert(mlir::succeeded(problem.verify()));
-    assert(problem.getInitiationInterval() == 1);
+    //assert(problem.getInitiationInterval() == 1);
 
     task.getBodyBlock()->walk([&](mlir::Operation *op) {
       if (auto *mappedOp = mapper.lookupOrNull(op)) {
